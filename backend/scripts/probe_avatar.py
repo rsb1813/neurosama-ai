@@ -44,11 +44,8 @@ async def main() -> None:
     await avatar.start_speaking()
     for chunk in chunks:
         await avatar.feed_audio(chunk)
-    while not await avatar.buffer_empty():  # 재생 완료까지 대기
-        await asyncio.sleep(0.05)
-    await asyncio.sleep(0.3)  # 마지막 블록 재생 여유
+    await avatar.stop_speaking(drain=True)  # 정상 완료 — 남은 오디오를 끝까지 재생
     mon.cancel()
-    await avatar.stop_speaking()
     await avatar.close()
     print("[probe] done")
 

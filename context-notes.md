@@ -109,7 +109,16 @@
 - **버그 수정**: connect 실패 시 `self._vts.websocket`이 None이라 close()가 크래시 → websocket 존재 시에만 close.
 - **검증(무-VTS)**: `probe_avatar.py` → 재생·입값 추종 확인(amp 0.17→mouth 1.0, 무음→0.0), 깔끔 종료. 테스트 8개 통과.
 - **라이브 확인 필요(사용자)**: VTS 실행(API 켜고 포트 8001) + 최초 연결 시 "허용" 클릭 → 아바타 입 실제 움직임.
-- **M5 연결 시 주의**: 현재 아바타가 오디오 재생을 소유(직접 주입 방식이라 필요). stop_speaking은 즉시 정지(barge-in 적합)이나 정상 완료 시 잔여 버퍼가 잘릴 수 있음 → M5에서 정상완료 drain 경로 필요. 토큰 파일 `pyvts_token.txt`는 gitignore.
+- 토큰 파일 `pyvts_token.txt`는 gitignore.
+
+## M6 리뷰 반영 (code-reviewer + code-health-reviewer)
+- **헬스 F1(p1) 죽은 play_audio 플래그**: False면 콜백 미실행→입 멈춤+버퍼 무한증가. 아무도 안 씀 → 제거(재생은 아바타가 항상 소유).
+- **헬스 F2/F3**: `_drive_mouth` no-op try/except 제거. host/port/gain을 Settings로 승격(`NEURU_VTS_*`, gain은 모델별 라이브 튜닝).
+- **버그 P1(odd-length 콜백 크래시)**: `np.frombuffer(..,'<i2')`가 홀수 바이트에서 ValueError→CallbackAbort로 스트림 사망. 짝수 경계(`& ~1`)만 소비하도록 가드.
+- **버그 P1(정상완료 tail 폐기)**: `stop_speaking(drain: bool=False)` 추가 — drain=True면 버퍼 소진까지 대기 후 종료(정상완료), False면 즉시(barge-in). ABC·LoggingAvatar·probe 반영. **M5: 오케스트레이터가 정상완료 시 `stop_speaking(drain=True)`, barge-in 시 `stop_speaking()` 호출해야 함**(현재 orchestrator는 인자 없이 호출 → 기본 False=abort).
+- **버그 P2**: 중복 start_speaking 시 이전 스트림/태스크 선정리(누수 방지). `_drive_mouth`가 VTS 요청 예외(ConnectionClosed 등)에 죽지 않고 로그 후 계속.
+- 검증: 테스트 8개 통과, drain 프로브 끝까지 재생·정상 종료.
+- **F4(close 계약)**: `close()`가 ABC 밖이고 orchestrator 미호출 → M5에서 teardown 계약 정리(ABC에 추가 또는 orchestrator가 호출).
 
 ## 열린 리스크
 - VTube Studio 립싱크: VB-Cable 오디오 라우팅 우선(kimjammer/Neuro 검증), 대안은 pyvts 입 파라미터 직접 주입.

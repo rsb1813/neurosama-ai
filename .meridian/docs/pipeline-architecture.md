@@ -88,7 +88,9 @@ Direct-injection lip-sync via pyvts (no VB-Cable). `connect()` does the pyvts ha
 
 Chosen over VB-Cable audio routing (which needs an admin install + a running VTS mic pipeline); direct injection is self-contained and controllable. Token file `pyvts_token.txt` is git-ignored.
 
-**M5 caveat:** `stop_speaking()` stops immediately, so on *normal* turn completion trailing buffered audio can be cut — M5 needs a drain-on-completion path distinct from barge-in's immediate stop.
+`stop_speaking(drain=False)` stops immediately (barge-in); `drain=True` waits for the playback buffer to drain first (normal completion). The output callback only consumes whole samples (even byte counts) so a stray odd-length chunk can't crash the audio thread, and the mouth-driver task logs-and-continues on a transient VTS request error instead of dying.
+
+**M5 caveat:** the orchestrator must call `stop_speaking(drain=True)` on normal turn completion and `stop_speaking()` (abort) on barge-in — it currently calls the no-arg form for both. Teardown (`close()`) is also not yet in the `AvatarDriver` ABC / orchestrator path.
 
 ## Language Flow
 

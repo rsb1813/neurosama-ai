@@ -24,5 +24,9 @@ class AvatarDriver(ABC):
         """립싱크 구동을 위해 오디오 청크를 넘긴다(오디오 라우팅 또는 파라미터 주입)."""
 
     @abstractmethod
-    async def stop_speaking(self) -> None:
-        """발화 구간 종료를 아바타에 알린다(입 다물기)."""
+    async def stop_speaking(self, drain: bool = False) -> None:
+        """발화 구간 종료를 아바타에 알린다(입 다물기).
+
+        drain=True면 정상 완료로 남은 오디오를 끝까지 재생 후 종료하고,
+        False면 barge-in처럼 즉시 중단한다.
+        """

@@ -23,5 +23,5 @@ class LoggingAvatar(AvatarDriver):
     async def feed_audio(self, chunk: bytes) -> None:
         self.audio_chunks.append(chunk)
 
-    async def stop_speaking(self) -> None:
+    async def stop_speaking(self, drain: bool = False) -> None:
         self.calls.append("stop_speaking")

@@ -11,6 +11,10 @@ from .base import AvatarDriver
 
 logger = logging.getLogger(__name__)
 
+_DRAIN_POLL = 0.02  # 재생 소진 폴링 간격(초)
+_DRAIN_TIMEOUT = 30.0  # drain 최대 대기(초) — 안전장치
+_TAIL_DELAY = 0.15  # 버퍼 소진 후 PortAudio 내부 링 버퍼가 마저 재생될 여유(초)
+
 
 class VTubeStudioAvatar(AvatarDriver):
     """pyvts로 VTube Studio에 붙어 립싱크를 구동하는 드라이버.
@@ -81,6 +85,8 @@ class VTubeStudioAvatar(AvatarDriver):
     async def start_speaking(self) -> None:
         import sounddevice as sd
 
+        if self._stream is not None or self._mouth_task is not None:
+            await self.stop_speaking()  # 방어적: 이전 세션이 안 닫혔으면 선정리(스트림·태스크 누수 방지)
         self._mouth = 0.0
         with self._lock:
             self._buffer.clear()
@@ -98,8 +104,9 @@ class VTubeStudioAvatar(AvatarDriver):
     def _output_callback(self, outdata, frames, time_info, status) -> None:  # noqa: ANN001
         need = frames * 2  # int16 = 2바이트/샘플
         with self._lock:
-            take = bytes(self._buffer[:need])
-            del self._buffer[:need]
+            # 콜백 스레드에서 크래시(CallbackAbort)하지 않도록 항상 샘플 경계(짝수)로만 소비.
+            take = bytes(self._buffer[: min(need, len(self._buffer) & ~1)])
+            del self._buffer[: len(take)]
         samples = np.frombuffer(take, dtype="<i2")
         if len(samples) < frames:  # 버퍼 부족분은 무음 패딩
             samples = np.concatenate([samples, np.zeros(frames - len(samples), dtype="<i2")])
@@ -119,7 +126,13 @@ class VTubeStudioAvatar(AvatarDriver):
         while True:
             target = min(1.0, self._current_amp * self._gain)
             self._mouth = self._smoothing * self._mouth + (1 - self._smoothing) * target
-            await self._set_param(self._mouth)
+            try:
+                await self._set_param(self._mouth)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # VTS가 세션 중 끊겨도(ConnectionClosed 등) 입 갱신 태스크를 죽이지 않고 계속.
+                logger.exception("MouthOpen 주입 실패 — 다음 프레임 재시도")
             await asyncio.sleep(self._update_interval)
 
     async def _set_param(self, value: float) -> None:
@@ -134,7 +147,18 @@ class VTubeStudioAvatar(AvatarDriver):
         with self._lock:
             return len(self._buffer) == 0
 
-    async def stop_speaking(self) -> None:
+    async def _drain_playback(self) -> None:
+        # 정상 완료: 남은 재생 버퍼가 소진될 때까지 대기 후 tail 여유(마지막 블록 재생 보장).
+        waited = 0.0
+        while waited < _DRAIN_TIMEOUT and not await self.buffer_empty():
+            await asyncio.sleep(_DRAIN_POLL)
+            waited += _DRAIN_POLL
+        await asyncio.sleep(_TAIL_DELAY)
+
+    async def stop_speaking(self, drain: bool = False) -> None:
+        # drain=True: 정상 발화 완료 → 남은 오디오를 끝까지 재생. False: barge-in → 즉시 중단.
+        if drain and self._stream is not None:
+            await self._drain_playback()
         if self._mouth_task is not None:
             self._mouth_task.cancel()
             try:
