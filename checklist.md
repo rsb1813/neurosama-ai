@@ -16,15 +16,17 @@
 - [ ] 마이크 입력 + Silero VAD로 SpeechStarted/Transcript 발행
 - [ ] 검증: 마이크 한국어 발화 → 한국어 텍스트 전사(로그)
 
-## 마일스톤 3 — Claude LLM 연결
-- [ ] `llm/claude.py`: 스트리밍, `{speech_en, subtitle_ko}` 산출
-- [ ] `persona.py`: neru 시스템 프롬프트(영어로 답, 한국어 이해)
-- [ ] Claude 모델 ID/파라미터는 `claude-api` 스킬로 확인 후 사용
-- [ ] 검증: 한국어 입력 → 영어답변+한국어자막 스트리밍
+## 마일스톤 3 — Claude LLM 연결 ✅
+- [x] `config.py`: env 기반 설정(프록시 base_url/모델/키)
+- [x] `persona.py`: neru 시스템 프롬프트(한국어 이해·영어 답변, 문장별 EN:/KO: 형식)
+- [x] `llm/claude.py`: AsyncAnthropic(base_url=프록시), 스트리밍 EN/KO 파싱 → ReplyChunk
+- [x] Claude 모델 ID는 `claude-api` 스킬로 확인 + 프록시 /v1/models로 실측(opus-4-8 없음 → opus-4-7)
+- [x] 검증: `scripts/probe_llm.py`로 한국어 입력 → 영어답변+한국어자막 6청크 스트리밍, 페르소나 반영 확인
 
-## 마일스톤 4 — ElevenLabs TTS
-- [ ] `tts/elevenlabs.py`: 영어 스트리밍 합성
+## 마일스톤 4 — 로컬 TTS (StyleTTS2/XTTSv2/Kokoro)
+- [ ] `tts/local.py`: 영어 스트리밍 합성(RealtimeTTS 등)
 - [ ] 실제 오디오 재생(sounddevice) + 첫 오디오 지연 측정
+- [ ] RTX 5080(Blackwell/sm_120) CUDA 휠 호환성 확인
 - [ ] 검증: 영어 텍스트 → 자연스러운 영어 음성
 
 ## 마일스톤 5 — 전체 파이프라인 + barge-in 실측

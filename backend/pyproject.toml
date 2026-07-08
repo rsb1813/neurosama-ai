@@ -3,7 +3,10 @@ name = "neru"
 version = "0.1.0"
 description = "neru — AI VTuber real-time voice conversation core (backend)"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "anthropic>=0.40",
+    "python-dotenv>=1.0",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]
