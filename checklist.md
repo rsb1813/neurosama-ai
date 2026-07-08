@@ -40,9 +40,12 @@
 - [ ] 실 STT+LLM+TTS 연결, 마이크 VAD가 barge-in 트리거
 - [ ] 검증: 왕복 지연 ~1–3초, 끼어들면 즉시 멈춤
 
-## 마일스톤 6 — VTube Studio 아바타 립싱크
-- [ ] `avatar/vtube_studio.py`: pyvts 연결 + 오디오 라우팅(VB-Cable)
-- [ ] 검증: TTS 음성에 맞춰 아바타 입 움직임
+## 마일스톤 6 — VTube Studio 아바타 립싱크 (라이브 확인은 사용자)
+- [x] 방식 결정: pyvts 직접 주입(VB-Cable 미설치·미실행 확인 후 전환). MouthOpen을 진폭으로 주입
+- [x] `avatar/vtube_studio.py`: pyvts connect/auth + 실시간 재생(sounddevice OutputStream) + MouthOpen 주입
+- [x] 검증(무-VTS): `probe_avatar.py`로 재생·입값 추종 확인(진폭↑→mouth 1.0, 무음→0.0), graceful 종료
+- [x] 회귀 테스트(지연 연결·버퍼링) — 총 8개 통과
+- [ ] 검증(라이브): VTS 실행 + 최초 "허용" 클릭 후 아바타 입이 실제로 움직이는지 — **사용자 확인 필요**
 
 ## 마일스톤 7 — TS 프론트 자막 오버레이
 - [ ] `ws_server.py`: 프론트로 상태/자막 push

@@ -101,6 +101,16 @@
 - 검증: 테스트 6개 통과, 파일 프로브 세그먼트+전사 정상.
 - **M5로 연기(현 시점 speculative)**: (a) TTS 오디오 바이트에 샘플레이트 메타 동반(실 오디오 싱크 붙일 때 필요, 지금 아바타는 mock) (b) 오케스트레이터가 `stt_task`를 큐와 함께 관측해 provider 죽음을 근본 처리(현재는 provider-local Shutdown로 완화).
 
+## 마일스톤 6 메모 (VTube Studio 아바타 립싱크)
+- **환경 점검 결과 계획 변경(§9)**: VB-Cable 미설치(출력장치에 CABLE 없음), VTS 미실행(8001 미개방), pyvts 미설치. 계획의 "VB-Cable 라우팅 우선"에서 **사용자 확정으로 pyvts 직접 주입**으로 전환(VB-Cable 관리자 설치 회피, 제어력↑).
+- **방식**: TTS 오디오를 아바타가 sounddevice `OutputStream`으로 실시간 재생하며, 재생 블록의 RMS 진폭을 VTS `MouthOpen` 파라미터에 주입(`requestSetParameterValue`→InjectParameterDataRequest). 재생 속도가 곧 입 페이싱.
+- pyvts 0.3.3 API: `vts(plugin_info, vts_api_info{host,port:8001})` → `connect()`→`request_authenticate_token()`(최초 VTS 허용 팝업)→`request_authenticate()`→`request(payload)`. `requestSetParameterValue(param, value, mode="set")`.
+- **provider `avatar/vtube_studio.py`**: connect(pyvts auth), start_speaking(OutputStream+입 갱신 태스크 30Hz), feed_audio(버퍼 append), stop_speaking(태스크 취소·스트림 정리·입 닫기), close. 진폭→입: `min(1, rms*gain)` + smoothing(EMA). gain 기본 6.0(포화 완화). VTS 미연결 시 `_set_param`·`close` graceful skip(무-VTS 재생 검증 가능).
+- **버그 수정**: connect 실패 시 `self._vts.websocket`이 None이라 close()가 크래시 → websocket 존재 시에만 close.
+- **검증(무-VTS)**: `probe_avatar.py` → 재생·입값 추종 확인(amp 0.17→mouth 1.0, 무음→0.0), 깔끔 종료. 테스트 8개 통과.
+- **라이브 확인 필요(사용자)**: VTS 실행(API 켜고 포트 8001) + 최초 연결 시 "허용" 클릭 → 아바타 입 실제 움직임.
+- **M5 연결 시 주의**: 현재 아바타가 오디오 재생을 소유(직접 주입 방식이라 필요). stop_speaking은 즉시 정지(barge-in 적합)이나 정상 완료 시 잔여 버퍼가 잘릴 수 있음 → M5에서 정상완료 drain 경로 필요. 토큰 파일 `pyvts_token.txt`는 gitignore.
+
 ## 열린 리스크
 - VTube Studio 립싱크: VB-Cable 오디오 라우팅 우선(kimjammer/Neuro 검증), 대안은 pyvts 입 파라미터 직접 주입.
 - 한국어 STT 저지연: large-v3 정확하나 무거움 → GPU 지연 실측 후 모델/파라미터 조정.

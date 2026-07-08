@@ -83,6 +83,13 @@ CUDA-DLL note: CTranslate2 needs `cublas64_12.dll`/`cudnn64_9.dll`, which torch 
 
 Settings (`config.py`): `NEURU_STT_MODEL_SIZE` (default `large-v3`), `NEURU_STT_DEVICE_INDEX` (mic device; empty = system default input).
 
+### VTubeStudioAvatar (`avatar/vtube_studio.py`)
+Direct-injection lip-sync via pyvts (no VB-Cable). `connect()` does the pyvts handshake + token auth (first run pops an "Allow" dialog in VTS). `start_speaking()` opens a sounddevice `OutputStream` and a 30Hz mouth-driver task; `feed_audio()` appends PCM16 to a playback buffer that the output callback drains in real time. The driver task reads the currently-playing block's RMS amplitude and injects it into the VTS `MouthOpen` parameter (`requestSetParameterValue` → `InjectParameterDataRequest`), scaled by `gain` (default 6.0) and EMA-smoothed. So the avatar owns real-time audio playback *and* lip-sync — the audio's playback rate paces the mouth. `stop_speaking()` stops promptly (good for barge-in); when VTS is not connected, param injection and close are skipped so playback still works headless.
+
+Chosen over VB-Cable audio routing (which needs an admin install + a running VTS mic pipeline); direct injection is self-contained and controllable. Token file `pyvts_token.txt` is git-ignored.
+
+**M5 caveat:** `stop_speaking()` stops immediately, so on *normal* turn completion trailing buffered audio can be cut — M5 needs a drain-on-completion path distinct from barge-in's immediate stop.
+
 ## Language Flow
 
 - STT: Whisper Korean mode → Korean text

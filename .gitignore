@@ -11,6 +11,7 @@ venv/
 .env
 .env.local
 *.key
+pyvts_token.txt
 
 # Node / frontend
 node_modules/
