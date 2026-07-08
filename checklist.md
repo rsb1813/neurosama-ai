@@ -40,12 +40,15 @@
 - [ ] 실 STT+LLM+TTS 연결, 마이크 VAD가 barge-in 트리거
 - [ ] 검증: 왕복 지연 ~1–3초, 끼어들면 즉시 멈춤
 
-## 마일스톤 6 — VTube Studio 아바타 립싱크 (라이브 확인은 사용자)
-- [x] 방식 결정: pyvts 직접 주입(VB-Cable 미설치·미실행 확인 후 전환). MouthOpen을 진폭으로 주입
-- [x] `avatar/vtube_studio.py`: pyvts connect/auth + 실시간 재생(sounddevice OutputStream) + MouthOpen 주입
-- [x] 검증(무-VTS): `probe_avatar.py`로 재생·입값 추종 확인(진폭↑→mouth 1.0, 무음→0.0), graceful 종료
-- [x] 회귀 테스트(지연 연결·버퍼링) — 총 8개 통과
-- [ ] 검증(라이브): VTS 실행 + 최초 "허용" 클릭 후 아바타 입이 실제로 움직이는지 — **사용자 확인 필요**
+## 마일스톤 6 — 아바타 립싱크 (웹 네이티브 Live2D로 전환)
+- [x] (대안) VTubeStudioAvatar(pyvts) 구현·검증 — provider 뒤 대안으로 유지
+- [x] **방식 전환**: 사용자가 VTS 원치 않음 → 웹 네이티브 Live2D(프론트 직접 렌더). M6+M7 통합
+- [x] frontend 스캐폴드: Vite+TS + pixi.js@6.5.10 + pixi-live2d-display@0.4.0
+- [x] neru 마녀 모델 렌더 검증(Playwright): 전신 렌더 + ParamMouthOpenY 여닫힘 확인
+- [x] ★Cubism Core는 **4 버전** 필요(SDK5의 5 Core는 doDrawModel 크래시) — CDN 4 Core로 해결
+- [ ] `WebSocketAvatar`(AvatarDriver) + `ws_server`: 진폭·자막·상태를 프론트로 push
+- [ ] 프론트 WS 클라이언트: MouthOpen 실 립싱크(임시 오실레이션 대체) + idle blink
+- [ ] 검증: TTS 발화에 맞춰 아바타 입 실제 움직임(백엔드→WS→브라우저)
 
 ## 마일스톤 7 — TS 프론트 자막 오버레이
 - [ ] `ws_server.py`: 프론트로 상태/자막 push

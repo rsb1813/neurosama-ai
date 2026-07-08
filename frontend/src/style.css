@@ -1,0 +1,20 @@
+/* neru 프론트 전역 스타일 — 전체화면 투명 캔버스에 아바타 렌더 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #12101a;
+}
+
+#canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}

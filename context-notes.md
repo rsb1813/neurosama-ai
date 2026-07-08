@@ -120,6 +120,15 @@
 - 검증: 테스트 8개 통과, drain 프로브 끝까지 재생·정상 종료.
 - **F4(close 계약)**: `close()`가 ABC 밖이고 orchestrator 미호출 → M5에서 teardown 계약 정리(ABC에 추가 또는 orchestrator가 호출).
 
+## 아바타 방식 전환 — 웹 네이티브 Live2D (사용자 결정, M6 재설계)
+- 사용자가 VTube Studio를 원치 않음("별로"). AI 버튜버는 사람 얼굴 추적이 불필요 → **웹 네이티브 Live2D**로 전환(프론트에 직접 렌더). M6(아바타)+M7(자막)이 하나의 neru 웹앱으로 합쳐짐. AIRI도 이 방식.
+- VTubeStudioAvatar(pyvts) 코드는 provider ABC 뒤 대안으로 유지(삭제 안 함).
+- **환경**: node 24, npm 11. frontend = Vite(vanilla-ts) + pixi.js@6.5.10 + pixi-live2d-display@0.4.0. Cubism Core는 `<script>`로 전역 로드.
+- **모델**: `neru-witch-live2d.zip`(魔女=마녀, Cubism 4 moc3, 5167×9410). model3.json Groups: EyeBlink(ParamEyeLOpen/ROpen), **LipSync(ParamMouthOpenY)**. `frontend/public/models/neru-witch/`에 배치(유니코드 파일명, `encodeURI`로 로드).
+- **★핵심 함정: Cubism Core 버전** — 사용자의 `CubismSdkForWeb-5-r.5`의 Cubism **5 Core**(228KB)를 쓰면 모델 로드는 되나 렌더 시 `CubismRenderer_WebGL.doDrawModel`에서 `undefined[0]` 크래시(pixi-live2d-display 0.4.0의 Cubism 4 프레임워크와 렌더 API 불일치). → 공식 CDN의 **Cubism 4 Core**(`https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js`, 202KB)로 교체하니 정상 렌더.
+- **검증(Playwright MCP로 직접)**: 모델 렌더 성공(마녀 전신), `ParamMouthOpenY` 사인파 구동으로 입이 여닫힘 확인(스크린샷 2프레임 open/closed). 에러 0. claude-in-chrome은 확장 미연결로 사용 불가 → playwright MCP로 검증.
+- **다음(실 데이터 배선)**: 백엔드 `ws_server`(websockets) + `WebSocketAvatar`(AvatarDriver): TTS 오디오 재생하며 진폭·자막·상태를 WS로 push → 프론트 WS 클라이언트가 MouthOpen 적용·자막 표시. 임시 오실레이션을 실 립싱크로 대체. blink 등 idle 애니메이션.
+
 ## 열린 리스크
 - VTube Studio 립싱크: VB-Cable 오디오 라우팅 우선(kimjammer/Neuro 검증), 대안은 pyvts 입 파라미터 직접 주입.
 - 한국어 STT 저지연: large-v3 정확하나 무거움 → GPU 지연 실측 후 모델/파라미터 조정.
