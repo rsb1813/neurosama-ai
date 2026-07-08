@@ -32,12 +32,17 @@ async function main(): Promise<void> {
   fit();
   window.addEventListener("resize", fit);
 
+  // coreModel은 pixi-live2d-display 타입상 object라 파라미터 API를 캐스팅해 쓴다.
+  const core = model.internalModel.coreModel as {
+    setParameterValueById(id: string, value: number): void;
+  };
+
   // 임시 검증: 입을 사인파로 여닫아 렌더·립싱크 파라미터가 동작하는지 확인.
   let t = 0;
   app.ticker.add(() => {
     t += 0.08;
     const value = Math.sin(t) * 0.5 + 0.5; // 0..1
-    model.internalModel.coreModel.setParameterValueById(MOUTH_PARAM, value);
+    core.setParameterValueById(MOUTH_PARAM, value);
   });
 
   (window as any).__model = model; // 디버그용

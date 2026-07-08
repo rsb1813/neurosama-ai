@@ -83,7 +83,12 @@ CUDA-DLL note: CTranslate2 needs `cublas64_12.dll`/`cudnn64_9.dll`, which torch 
 
 Settings (`config.py`): `NEURU_STT_MODEL_SIZE` (default `large-v3`), `NEURU_STT_DEVICE_INDEX` (mic device; empty = system default input).
 
-### VTubeStudioAvatar (`avatar/vtube_studio.py`)
+### Avatar approach: web-native Live2D (current) vs VTube Studio (alternative)
+The avatar is being rendered **web-native**: the `frontend/` (Vite + pixi.js 6 + pixi-live2d-display) renders the neru Live2D model in-browser and drives `ParamMouthOpenY` for lip-sync. This suits an AI VTuber (no human face to track) and merges the avatar with the subtitle frontend into one neru web app. Planned data flow: a `WebSocketAvatar` (AvatarDriver) plays TTS audio and pushes mouth amplitude / subtitle / state over WebSocket; the browser applies them. The `VTubeStudioAvatar` below is retained as an alternative behind the same ABC.
+
+Frontend gotcha: pixi-live2d-display 0.4.0 needs the **Cubism 4** Core — the Cubism 5 Core (SDK5) loads the model but crashes the renderer in `doDrawModel`. The bundled `frontend/public/live2dcubismcore.min.js` is the v4 CDN core. The model (`frontend/public/models/neru-witch/`) is git-ignored (44MB, third-party).
+
+### VTubeStudioAvatar (`avatar/vtube_studio.py`) — alternative
 Direct-injection lip-sync via pyvts (no VB-Cable). `connect()` does the pyvts handshake + token auth (first run pops an "Allow" dialog in VTS). `start_speaking()` opens a sounddevice `OutputStream` and a 30Hz mouth-driver task; `feed_audio()` appends PCM16 to a playback buffer that the output callback drains in real time. The driver task reads the currently-playing block's RMS amplitude and injects it into the VTS `MouthOpen` parameter (`requestSetParameterValue` → `InjectParameterDataRequest`), scaled by `gain` (default 6.0) and EMA-smoothed. So the avatar owns real-time audio playback *and* lip-sync — the audio's playback rate paces the mouth. `stop_speaking()` stops promptly (good for barge-in); when VTS is not connected, param injection and close are skipped so playback still works headless.
 
 Chosen over VB-Cable audio routing (which needs an admin install + a running VTS mic pipeline); direct injection is self-contained and controllable. Token file `pyvts_token.txt` is git-ignored.
