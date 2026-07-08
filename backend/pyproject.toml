@@ -2,14 +2,38 @@
 name = "neru"
 version = "0.1.0"
 description = "neru — AI VTuber real-time voice conversation core (backend)"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "anthropic>=0.40",
     "python-dotenv>=1.0",
+    # 로컬 TTS (Chatterbox) + Blackwell(sm_120)용 CUDA 12.8 torch.
+    "torch>=2.9.0",
+    "torchaudio>=2.9.0",
+    "chatterbox-tts>=0.1.7",
+    "soundfile>=0.13",
+    "sounddevice>=0.5",  # 실제 스피커 재생·지연 측정
+    "setuptools<81",  # perth 워터마커가 pkg_resources를 요구(81+에서 제거됨)
+    # 리졸버가 sdist-only 구버전으로 backtrack하지 않도록 모던 휠 하한 고정.
+    "numba>=0.61",
+    "numpy<2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+# torch/torchaudio를 PyTorch CUDA 12.8 인덱스에서 받도록 라우팅.
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+# chatterbox-tts가 핀한 torch==2.6.0(CPU)를 cu128 빌드로 강제 오버라이드.
+[tool.uv]
+override-dependencies = ["torch==2.9.0+cu128", "torchaudio==2.9.0+cu128"]
 
 [build-system]
 requires = ["hatchling"]

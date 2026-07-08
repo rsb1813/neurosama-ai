@@ -50,6 +50,29 @@
 - **P1 외부취소 시 응답 태스크 고아화**: `run()` finally에서 `_cancel_task(stt_task)`가 sticky `cancelling()>0`로 재-raise → `_cancel_response()` 스킵되어 진행 중 응답 태스크가 pending 방치(경험적 재현됨). inner try/finally로 응답 정리를 반드시 실행하게 수정. 회귀 테스트 `test_external_cancel_does_not_orphan_response_task` 추가(수정 없으면 실패 확인).
 - **P2 관측성**: `_cancel_task`의 `except Exception: pass` → `logger.exception`으로 교체(STT가 조용히 죽으면 로그 남기도록).
 
+## 마일스톤 4 메모 (로컬 TTS = Chatterbox)
+- **엔진 결정 = Chatterbox (Resemble AI)**. 근거: MIT 라이선스(수익화 안전), 5초 제로샷 복제, 영어 SOTA, RTX 5080/sm_120 구동 확인. 대안 XTTSv2는 CPML 비상업+Coqui 폐업으로 기각. 리서치 상세는 서브에이전트 리포트(세션 로그).
+- **사용자 결정**: Chatterbox 확정, 기본 음성으로 먼저 구축(복제 샘플은 나중에 교체).
+- **Blackwell 검증 완료 (probe venv, 스크래치패드/tts-probe)**:
+  - 드라이버 610.47(요구 570+ 상회), CUDA UMD 13.3, 네이티브 Windows(WDDM).
+  - torch **2.9.0+cu128**가 arch list에 `sm_120` 포함, `torch.cuda.get_device_capability()==(12,0)`, GPU matmul 정상.
+  - Chatterbox 로드 6.4초, `generate()` **RTF 0.58**(3.7초 오디오를 2.1초에 생성, 실시간보다 빠름). "no kernel image" 크래시 없음. sr=24000.
+- **설치 레시피 (순서·함정 중요)**:
+  1. `uv pip install torch==2.9.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu128`
+  2. `uv pip install chatterbox-tts` — **주의: torch를 2.6.0(CPU)로 다운그레이드함** → 1을 다시 실행해 cu128 복구.
+  3. `uv pip install "setuptools<81"` — perth(워터마커)가 `pkg_resources`를 import하는데 setuptools 81+는 이를 제거함. <81 필수(아니면 `PerthImplicitWatermarker=None` → TypeError).
+  4. 저장: torchaudio 2.9의 `save`는 torchcodec 요구 → `soundfile.write(path, wav.squeeze(0).cpu().numpy(), sr)` 사용.
+- **provider 설계 주의**: `generate()`는 동기·블로킹(~2초/문장) → asyncio에서 `asyncio.to_thread`로 오프로드 필수(barge-in 응답성). 모델 로드(6.4초)는 시작 시 1회만. 첫 오디오 지연↓ 원하면 추후 chatterbox-streaming 포크/RealtimeTTS(~470ms 첫 청크)로 교체.
+- **메인 env 통합 완료**:
+  - pyproject: `[tool.uv.sources]` torch/torchaudio→`pytorch-cu128` 인덱스, `[tool.uv] override-dependencies`로 chatterbox의 torch 2.6 핀을 2.9.0+cu128로 강제.
+  - **함정: py 버전** — uv 기본 3.13에선 librosa→numba가 sdist-only 구버전(0.53.1)으로 backtrack해 빌드 실패. `requires-python=">=3.11,<3.13"` + `.python-version=3.11` + venv 재생성으로 해결.
+  - **함정: 유니버설 리졸버** — `uv sync`가 numba 0.53.1로 backtrack → `numba>=0.61`, `numpy<2` 하한 명시로 모던 휠 고정(probe는 numba 0.66/llvmlite 0.48).
+  - 결과: torch 2.9.0+cu128 + chatterbox-tts 0.1.7, 기존 mock 테스트 5개 유지 통과.
+- **provider `tts/chatterbox_local.py`**: chatterbox 지연 import(인스턴스화 시 로드 안 함), `_generate_pcm`을 `asyncio.to_thread`로 오프로드, 문장 전체 생성 후 chunk_ms(50ms) PCM16 프레임으로 스트리밍. 출력 24kHz mono PCM16 LE. `audio_prompt_path`로 복제 음성 지정(None=기본).
+- **실측 지연(probe_tts.py, 메인 env)**: cold(모델 로드+첫 gen) 28.8s(시작 1회), **warm 첫 청크 1.74s, RTF 0.45**. sounddevice 재생 성공.
+  - 함의: 문장당 첫 오디오 ~1.74s. LLM 지연과 합치면 첫 발화 왕복이 목표(1–3s) 상단~초과 가능 → M5에서 (a)LLM/TTS 파이프라이닝(첫 문장 나오자마자 합성) (b)chatterbox-streaming 포크로 첫 청크↓ 검토.
+  - torchaudio 2.9 `save`는 torchcodec 필요 → 저장은 soundfile 사용(provider는 raw PCM 바이트만 다룸).
+
 ## 열린 리스크
 - VTube Studio 립싱크: VB-Cable 오디오 라우팅 우선(kimjammer/Neuro 검증), 대안은 pyvts 입 파라미터 직접 주입.
 - 한국어 STT 저지연: large-v3 정확하나 무거움 → GPU 지연 실측 후 모델/파라미터 조정.
