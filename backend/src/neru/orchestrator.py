@@ -50,9 +50,13 @@ class Orchestrator:
         try:
             await self._consume()
         finally:
-            if not stt_task.done():
-                await self._cancel_task(stt_task)
-            await self._cancel_response()
+            # stt_task 취소가 외부 취소를 재전파하며 중단되더라도
+            # 응답 태스크 정리는 반드시 수행되도록 inner finally로 보장한다.
+            try:
+                if not stt_task.done():
+                    await self._cancel_task(stt_task)
+            finally:
+                await self._cancel_response()
 
     async def _consume(self) -> None:
         while True:
@@ -148,8 +152,8 @@ class Orchestrator:
             if current is not None and current.cancelling() > 0:
                 raise
         except Exception:
-            # 자식이 취소 외 예외로 종료된 경우는 무시(원인 로깅은 자식에서 처리).
-            pass
+            # 자식이 취소 외 예외로 종료된 경우: 파이프라인은 유지하되 관측을 위해 로깅.
+            logger.exception("취소 대상 task가 취소 외 예외로 종료됨")
 
     async def _set_state(self, state: State) -> None:
         self._state = state

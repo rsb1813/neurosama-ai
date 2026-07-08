@@ -179,6 +179,37 @@ async def test_provider_error_recovers_and_pipeline_continues():
     assert sink.states[-1] == State.LISTENING
 
 
+async def test_external_cancel_does_not_orphan_response_task():
+    """run()이 외부에서 취소돼도 진행 중인 응답 태스크가 고아로 남지 않아야 한다."""
+    avatar = LoggingAvatar()
+    sink = RecorderSink()
+    llm = GatedLLM()
+    orch = Orchestrator(
+        stt=ScriptedSTT([]),  # 소진 후 유휴 → stt_task가 계속 살아있음(외부 취소 경로 재현)
+        llm=llm,
+        tts=SilentTTS(),
+        avatar=avatar,
+        sink=sink,
+    )
+
+    run_task = asyncio.create_task(orch.run())
+    await orch.submit(Transcript("발화", is_final=True))
+    await asyncio.wait_for(llm.first_yielded.wait(), timeout=2.0)
+
+    # 응답 태스크 참조를 잡아둔 뒤 run()을 외부에서 취소한다.
+    resp = orch._response_task
+    assert resp is not None
+    run_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(run_task, timeout=2.0)
+
+    # 응답 태스크는 pending으로 방치되지 않고 취소·완료되어야 한다.
+    assert resp.done()
+    assert resp.cancelled()
+    # barge-in 정리로 아바타 발화도 종료됨.
+    assert "stop_speaking" in avatar.calls
+
+
 async def test_cleanup_error_during_barge_in_does_not_crash():
     avatar = StopRaisingAvatar()
     sink = RecorderSink()
