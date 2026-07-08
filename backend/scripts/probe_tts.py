@@ -10,6 +10,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from neru.config import load_settings
 from neru.tts.chatterbox_local import ChatterboxTTS
 
 
@@ -37,7 +38,9 @@ async def main() -> None:
         if len(sys.argv) > 1
         else "Hi hi, my favorite human is finally here! What should we play today?"
     )
-    tts = ChatterboxTTS(device="cuda")
+    voice = load_settings().tts_voice_prompt
+    tts = ChatterboxTTS(device="cuda", audio_prompt_path=voice)
+    print(f"[probe] voice_prompt={voice or '(default)'}")
     print("[probe] cold call includes model load...")
     await synth_once(tts, text, "cold")  # 모델 로드 포함
     audio = await synth_once(tts, text, "warm")  # 정상 상태 지연
