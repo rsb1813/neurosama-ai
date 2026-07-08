@@ -12,6 +12,7 @@ from neru.llm.base import LLMProvider
 from neru.llm.echo import EchoLLM
 from neru.orchestrator import Orchestrator
 from neru.stt.scripted import ScriptedSTT
+from neru.tts.base import TTSProvider
 from neru.tts.silent import SilentTTS
 
 
@@ -104,3 +105,101 @@ async def test_barge_in_cancels_response_mid_speech():
     assert sink.states[-1] == State.LISTENING
     # 응답이 완결되지 않았으므로 이력은 비어 있음
     assert orch._history == []
+
+
+class FlakyTTS(TTSProvider):
+    """첫 호출에서만 예외를 던지고 이후엔 정상 동작하는 TTS(오류 복구 검증용)."""
+
+    def __init__(self) -> None:
+        self.count = 0
+
+    async def synthesize(self, text_en: str) -> AsyncIterator[bytes]:
+        self.count += 1
+        if self.count == 1:
+            raise ConnectionError("tts down")
+        for word in text_en.split():
+            yield word.encode("utf-8")
+
+
+async def _drive_turn(orch: Orchestrator, text: str) -> None:
+    """한 발화를 주입하고 그 응답 태스크가 끝날 때까지 결정적으로 기다린다."""
+    prev = orch._response_task
+    await orch.submit(Transcript(text, is_final=True))
+    task = None
+    for _ in range(1000):
+        task = orch._response_task
+        if task is not None and task is not prev:
+            break
+        await asyncio.sleep(0)
+    else:
+        raise AssertionError("응답 태스크가 생성되지 않음")
+    await task
+
+
+class StopRaisingAvatar(LoggingAvatar):
+    """stop_speaking에서 예외를 던지는 아바타(정리 중 오류 상황 재현)."""
+
+    async def stop_speaking(self) -> None:
+        self.calls.append("stop_speaking")
+        raise RuntimeError("avatar cable unplugged")
+
+
+async def test_provider_error_recovers_and_pipeline_continues():
+    avatar = LoggingAvatar()
+    sink = RecorderSink()
+    tts = FlakyTTS()
+    orch = Orchestrator(
+        stt=ScriptedSTT([]),  # 유휴 STT — 턴을 직접 직렬로 주입
+        llm=EchoLLM(),
+        tts=tts,
+        avatar=avatar,
+        sink=sink,
+    )
+    run_task = asyncio.create_task(orch.run())
+
+    await _drive_turn(orch, "첫 발화")  # 턴1: TTS 오류 → 정리 후 청취 복귀
+    await _drive_turn(orch, "둘째 발화")  # 턴2: 정상 완료
+
+    await orch.submit(Shutdown())
+    await asyncio.wait_for(run_task, timeout=2.0)
+
+    # 턴1: SPEAKING 진입 후 오류로 stop / 턴2: 정상 start~stop → run은 크래시 없이 지속
+    assert avatar.calls == [
+        "connect",
+        "start_speaking",
+        "stop_speaking",
+        "start_speaking",
+        "stop_speaking",
+    ]
+    # 턴1은 오류로 이력 없음, 턴2만 커밋됨
+    assert orch._history == [
+        {"role": "user", "content": "둘째 발화"},
+        {"role": "assistant", "content": "You said: 둘째 발화. That's interesting!"},
+    ]
+    assert sink.states[-1] == State.LISTENING
+
+
+async def test_cleanup_error_during_barge_in_does_not_crash():
+    avatar = StopRaisingAvatar()
+    sink = RecorderSink()
+    llm = GatedLLM()
+    orch = Orchestrator(
+        stt=ScriptedSTT([]),
+        llm=llm,
+        tts=SilentTTS(),
+        avatar=avatar,
+        sink=sink,
+    )
+
+    run_task = asyncio.create_task(orch.run())
+    await orch.submit(Transcript("발화", is_final=True))
+    await asyncio.wait_for(llm.first_yielded.wait(), timeout=2.0)
+
+    # 발화 중 끼어들기 → 정리(stop_speaking)에서 예외가 나도 run()은 살아 있어야 한다.
+    await orch.submit(SpeechStarted())
+    await orch.submit(Shutdown())
+    await asyncio.wait_for(run_task, timeout=2.0)
+
+    assert "stop_speaking" in avatar.calls
+    # 정리 예외에도 불구하고 최종 상태는 청취로 복귀(안전망)
+    assert sink.states[-1] == State.LISTENING

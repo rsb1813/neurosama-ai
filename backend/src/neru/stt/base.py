@@ -17,4 +17,3 @@ class STTProvider(ABC):
 
         취소(CancelledError)되면 오디오 자원을 정리하고 종료해야 한다.
         """
-        raise NotImplementedError

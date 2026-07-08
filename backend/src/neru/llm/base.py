@@ -23,4 +23,3 @@ class LLMProvider(ABC):
         history는 [{"role": "user"|"assistant", "content": str}, ...] 형태의 대화 이력.
         구현체는 async generator로 작성한다.
         """
-        raise NotImplementedError

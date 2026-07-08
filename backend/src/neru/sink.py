@@ -8,9 +8,11 @@ from .events import State
 
 @runtime_checkable
 class OutputSink(Protocol):
-    """오케스트레이터가 상태 변화와 자막을 밀어내는 대상.
+    """오케스트레이터가 상태 변화와 자막을 밀어내는 출력 경계(boundary).
 
-    실제 운영에서는 WebSocket 서버, 테스트에서는 기록용 recorder가 구현한다.
+    provider(STT/LLM/TTS/Avatar)는 파이프라인 내부 엔진이라 ABC로 두지만, 싱크는
+    외부 소비자(WebSocket 서버, 테스트 recorder 등)가 구현하는 경계이므로 구조적
+    타이핑(Protocol)이 더 자연스럽다. 이 차이는 의도된 것이며 드리프트가 아니다.
     """
 
     async def on_state(self, state: State) -> None:

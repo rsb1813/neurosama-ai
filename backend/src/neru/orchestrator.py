@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
+import logging
 
 from .avatar.base import AvatarDriver
-from .events import Shutdown, SpeechStarted, State, Transcript
+from .events import Event, Shutdown, SpeechStarted, State, Transcript
 from .llm.base import LLMProvider
 from .sink import OutputSink
 from .stt.base import STTProvider
 from .tts.base import TTSProvider
+
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
@@ -32,13 +34,13 @@ class Orchestrator:
         self._avatar = avatar
         self._sink = sink
 
-        self._queue: asyncio.Queue = asyncio.Queue()
+        self._queue: asyncio.Queue[Event] = asyncio.Queue()
         self._response_task: asyncio.Task | None = None
         self._history: list[dict] = []
         self._state: State = State.LISTENING
 
     # STT를 거치지 않고 이벤트를 직접 주입(테스트/외부 트리거용)
-    async def submit(self, event) -> None:
+    async def submit(self, event: Event) -> None:
         await self._queue.put(event)
 
     async def run(self) -> None:
@@ -48,9 +50,8 @@ class Orchestrator:
         try:
             await self._consume()
         finally:
-            stt_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await stt_task
+            if not stt_task.done():
+                await self._cancel_task(stt_task)
             await self._cancel_response()
 
     async def _consume(self) -> None:
@@ -77,7 +78,11 @@ class Orchestrator:
         self._response_task = asyncio.create_task(self._respond(text))
 
     async def _respond(self, user_text_ko: str) -> None:
-        """한 번의 사용자 발화에 대한 응답 사이클. 취소되면 barge-in으로 간주해 정리한다."""
+        """한 번의 사용자 발화에 대한 응답 사이클.
+
+        - 취소되면 barge-in으로 간주해 정리 후 취소를 재전파한다.
+        - provider 오류 등 그 외 예외는 로깅·정리하고 이번 발화만 버린 뒤 파이프라인을 유지한다.
+        """
         speaking = False
         parts: list[str] = []
         try:
@@ -92,11 +97,16 @@ class Orchestrator:
                     await self._avatar.feed_audio(audio)
                 parts.append(chunk.speech_en)
         except asyncio.CancelledError:
-            # barge-in: 아바타 입을 닫고 청취 상태로 되돌린 뒤 취소를 재전파한다.
-            await self._end_speech(speaking)
+            # barge-in: 예외 안전하게 정리한 뒤 취소를 재전파한다.
+            await self._safe_end_speech(speaking)
             raise
+        except Exception:
+            # provider 오류(네트워크/타임아웃/인증 등): 로깅 후 이번 발화만 버리고 파이프라인 유지.
+            logger.exception("응답 처리 중 오류 — 이번 발화를 건너뜁니다")
+            await self._safe_end_speech(speaking)
+            return
         # 정상 완료: 정리 후 대화 이력 갱신.
-        await self._end_speech(speaking)
+        await self._safe_end_speech(speaking)
         self._history.append({"role": "user", "content": user_text_ko})
         self._history.append({"role": "assistant", "content": " ".join(parts)})
 
@@ -105,21 +115,41 @@ class Orchestrator:
             await self._avatar.stop_speaking()
         await self._set_state(State.LISTENING)
 
+    async def _safe_end_speech(self, speaking: bool) -> None:
+        # 정리 중 오류가 barge-in의 CancelledError를 가리거나 파이프라인을 무너뜨리지 않도록 방어.
+        try:
+            await self._end_speech(speaking)
+        except Exception:
+            logger.exception("발화 종료 정리 중 오류")
+
     async def _drain_response(self) -> None:
-        # 진행 중인 응답을 취소하지 않고 완료될 때까지 기다린다(정상 종료 경로).
+        # 정상 종료 경로: 진행 중 응답을 취소하지 않고 완료를 기다린다.
+        # run()이 외부에서 취소되면 그 취소는 여기서 전파되어야 하므로 CancelledError를 삼키지 않는다.
         task = self._response_task
         if task is not None and not task.done():
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            await task
         self._response_task = None
 
     async def _cancel_response(self) -> None:
         task = self._response_task
         if task is not None and not task.done():
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            await self._cancel_task(task)
         self._response_task = None
+
+    @staticmethod
+    async def _cancel_task(task: asyncio.Task) -> None:
+        # 대상 task를 취소하고 그 CancelledError만 삼킨다.
+        # 단, 현재(부모) task 자신이 취소된 경우엔 그 취소를 보존해 재전파한다.
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None and current.cancelling() > 0:
+                raise
+        except Exception:
+            # 자식이 취소 외 예외로 종료된 경우는 무시(원인 로깅은 자식에서 처리).
+            pass
 
     async def _set_state(self, state: State) -> None:
         self._state = state

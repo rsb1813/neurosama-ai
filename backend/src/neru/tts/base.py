@@ -17,4 +17,3 @@ class TTSProvider(ABC):
 
         첫 청크를 최대한 빨리 내보내 체감 지연을 줄인다. 구현체는 async generator로 작성한다.
         """
-        raise NotImplementedError

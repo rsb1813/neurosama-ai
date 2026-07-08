@@ -37,3 +37,7 @@ class ReplyChunk:
 @dataclass(frozen=True)
 class Shutdown:
     """오케스트레이터 소비 루프를 정상 종료시키는 sentinel 이벤트."""
+
+
+# 오케스트레이터 큐로 흐르는 이벤트 유니온
+Event = SpeechStarted | Transcript | Shutdown

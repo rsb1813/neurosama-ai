@@ -13,18 +13,15 @@ class LoggingAvatar(AvatarDriver):
     def __init__(self) -> None:
         self.calls: list[str] = []
         self.audio_chunks: list[bytes] = []
-        self.speaking: bool = False
 
     async def connect(self) -> None:
         self.calls.append("connect")
 
     async def start_speaking(self) -> None:
-        self.speaking = True
         self.calls.append("start_speaking")
 
     async def feed_audio(self, chunk: bytes) -> None:
         self.audio_chunks.append(chunk)
 
     async def stop_speaking(self) -> None:
-        self.speaking = False
         self.calls.append("stop_speaking")
