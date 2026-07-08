@@ -35,7 +35,6 @@ class VTubeStudioAvatar(AvatarDriver):
         gain: float = 6.0,  # RMS→MouthOpen 배율(실 모델 보며 미세조정)
         smoothing: float = 0.3,
         update_hz: float = 30.0,
-        play_audio: bool = True,
     ) -> None:
         self._sample_rate = sample_rate
         self._host = host
@@ -45,7 +44,6 @@ class VTubeStudioAvatar(AvatarDriver):
         self._gain = gain
         self._smoothing = smoothing
         self._update_interval = 1.0 / update_hz
-        self._play_audio = play_audio
 
         self._vts = None
         self._connected = False
@@ -81,20 +79,20 @@ class VTubeStudioAvatar(AvatarDriver):
         logger.info("VTube Studio 연결·인증 완료")
 
     async def start_speaking(self) -> None:
+        import sounddevice as sd
+
         self._mouth = 0.0
         with self._lock:
             self._buffer.clear()
-        if self._play_audio:
-            import sounddevice as sd
-
-            self._stream = sd.OutputStream(
-                samplerate=self._sample_rate,
-                channels=1,
-                dtype="int16",
-                blocksize=0,
-                callback=self._output_callback,
-            )
-            self._stream.start()
+        # 아바타가 오디오 재생을 소유한다(진폭이 재생 콜백에서 나오므로 재생과 립싱크는 분리 불가).
+        self._stream = sd.OutputStream(
+            samplerate=self._sample_rate,
+            channels=1,
+            dtype="int16",
+            blocksize=0,
+            callback=self._output_callback,
+        )
+        self._stream.start()
         self._mouth_task = asyncio.create_task(self._drive_mouth())
 
     def _output_callback(self, outdata, frames, time_info, status) -> None:  # noqa: ANN001
@@ -118,14 +116,11 @@ class VTubeStudioAvatar(AvatarDriver):
             self._buffer.extend(chunk)
 
     async def _drive_mouth(self) -> None:
-        try:
-            while True:
-                target = min(1.0, self._current_amp * self._gain)
-                self._mouth = self._smoothing * self._mouth + (1 - self._smoothing) * target
-                await self._set_param(self._mouth)
-                await asyncio.sleep(self._update_interval)
-        except asyncio.CancelledError:
-            raise
+        while True:
+            target = min(1.0, self._current_amp * self._gain)
+            self._mouth = self._smoothing * self._mouth + (1 - self._smoothing) * target
+            await self._set_param(self._mouth)
+            await asyncio.sleep(self._update_interval)
 
     async def _set_param(self, value: float) -> None:
         if not self._connected:

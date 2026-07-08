@@ -23,7 +23,12 @@ async def main() -> None:
     total = sum(len(c) for c in chunks)
     print(f"[probe] {total} bytes @ {tts.sample_rate}Hz ({total / 2 / tts.sample_rate:.2f}s)")
 
-    avatar = VTubeStudioAvatar(sample_rate=tts.sample_rate)
+    avatar = VTubeStudioAvatar(
+        sample_rate=tts.sample_rate,
+        host=settings.vts_host,
+        port=settings.vts_port,
+        gain=settings.vts_gain,
+    )
     try:
         await avatar.connect()
         print("[probe] VTube Studio 연결·인증 완료 — 입이 움직입니다.")

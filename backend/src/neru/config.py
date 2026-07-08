@@ -31,6 +31,10 @@ class Settings:
     stt_model_size: str
     # 마이크 입력 장치 인덱스. None이면 시스템 기본 입력.
     stt_device_index: int | None
+    # VTube Studio API 주소와 립싱크 입 벌림 배율(모델별 튜닝).
+    vts_host: str
+    vts_port: int
+    vts_gain: float
 
 
 def load_settings() -> Settings:
@@ -44,6 +48,8 @@ def load_settings() -> Settings:
       레퍼런스. 빈 문자열이면 클로닝 없이 Chatterbox 기본 음성 사용.
     - NEURU_STT_MODEL_SIZE: faster-whisper 모델 크기(기본 large-v3).
     - NEURU_STT_DEVICE_INDEX: 마이크 장치 인덱스(미설정 시 기본 입력).
+    - NEURU_VTS_HOST / NEURU_VTS_PORT: VTube Studio API 주소(기본 localhost:8001).
+    - NEURU_VTS_GAIN: 립싱크 입 벌림 배율(기본 6.0, Live2D 모델별 튜닝).
     """
     voice_prompt = os.getenv("NEURU_TTS_VOICE_PROMPT")
     if voice_prompt is None:
@@ -58,4 +64,7 @@ def load_settings() -> Settings:
         tts_voice_prompt=voice_prompt,
         stt_model_size=os.getenv("NEURU_STT_MODEL_SIZE", "large-v3"),
         stt_device_index=int(mic_env) if mic_env else None,
+        vts_host=os.getenv("NEURU_VTS_HOST", "localhost"),
+        vts_port=int(os.getenv("NEURU_VTS_PORT", "8001")),
+        vts_gain=float(os.getenv("NEURU_VTS_GAIN", "6.0")),
     )
