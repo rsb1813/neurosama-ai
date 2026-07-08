@@ -27,6 +27,10 @@ class Settings:
     llm_model: str
     # TTS 클로닝 대상 음성 샘플 경로. None이면 Chatterbox 기본 음성.
     tts_voice_prompt: str | None
+    # STT faster-whisper 모델 크기.
+    stt_model_size: str
+    # 마이크 입력 장치 인덱스. None이면 시스템 기본 입력.
+    stt_device_index: int | None
 
 
 def load_settings() -> Settings:
@@ -38,15 +42,20 @@ def load_settings() -> Settings:
       sonnet-4-6, haiku-4-5를 서빙(opus-4-8 없음) → 최고 성능인 opus-4-7 기본.
     - NEURU_TTS_VOICE_PROMPT: 클로닝 대상 음성 wav 경로. 기본은 번들된 Neuro-sama
       레퍼런스. 빈 문자열이면 클로닝 없이 Chatterbox 기본 음성 사용.
+    - NEURU_STT_MODEL_SIZE: faster-whisper 모델 크기(기본 large-v3).
+    - NEURU_STT_DEVICE_INDEX: 마이크 장치 인덱스(미설정 시 기본 입력).
     """
     voice_prompt = os.getenv("NEURU_TTS_VOICE_PROMPT")
     if voice_prompt is None:
         voice_prompt = str(_DEFAULT_VOICE_PROMPT)
     elif voice_prompt == "":
         voice_prompt = None  # 명시적 빈 값 = 기본 음성
+    mic_env = os.getenv("NEURU_STT_DEVICE_INDEX")
     return Settings(
         llm_base_url=os.getenv("NEURU_LLM_BASE_URL", "http://localhost:3456"),
         llm_api_key=os.getenv("ANTHROPIC_API_KEY", "sk-local-proxy"),
         llm_model=os.getenv("NEURU_LLM_MODEL", "claude-opus-4-7"),
         tts_voice_prompt=voice_prompt,
+        stt_model_size=os.getenv("NEURU_STT_MODEL_SIZE", "large-v3"),
+        stt_device_index=int(mic_env) if mic_env else None,
     )

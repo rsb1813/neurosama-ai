@@ -10,12 +10,14 @@ dependencies = [
     "torch>=2.9.0",
     "torchaudio>=2.9.0",
     "chatterbox-tts>=0.1.7",
+    "faster-whisper>=1.2",  # 로컬 한국어 STT (CTranslate2 백엔드, torch/lib의 CUDA DLL 재사용)
     "soundfile>=0.13",
     "sounddevice>=0.5",  # 실제 스피커 재생·지연 측정
     "setuptools<81",  # perth 워터마커가 pkg_resources를 요구(81+에서 제거됨)
     # 리졸버가 sdist-only 구버전으로 backtrack하지 않도록 모던 휠 하한 고정.
     "numba>=0.61",
     "numpy<2",
+    "silero-vad>=5",
 ]
 
 [project.optional-dependencies]

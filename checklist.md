@@ -11,10 +11,14 @@
 - [x] 단위 테스트 (정상 경로 + barge-in) — 통과
 - [x] uv 프로젝트/README/.gitignore/.env.example
 
-## 마일스톤 2 — 로컬 STT 실동작
-- [ ] RealtimeSTT 또는 faster-whisper 한국어 스트리밍 구현 (`stt/whisper_local.py`)
-- [ ] 마이크 입력 + Silero VAD로 SpeechStarted/Transcript 발행
-- [ ] 검증: 마이크 한국어 발화 → 한국어 텍스트 전사(로그)
+## 마일스톤 2 — 로컬 STT 실동작 ✅ (라이브 마이크 최종확인은 사용자)
+- [x] Blackwell 검증: CTranslate2가 sm_120 인식, torch/lib CUDA DLL 재사용(별도 nvidia 휠 불필요)
+- [x] `stt/whisper_local.py`: faster-whisper large-v3 + silero VAD, 지연 로드, to_thread 오프로드
+- [x] 마이크 입력(sounddevice) + Silero VADIterator로 SpeechStarted/Transcript 발행
+- [x] config: NEURU_STT_MODEL_SIZE / NEURU_STT_DEVICE_INDEX + condition_on_previous_text=False
+- [x] 검증(오프라인): `probe_stt.py --file`로 VAD 세그먼트+한국어 전사(large-v3, RTF 0.047)
+- [x] 검증(초기화): `probe_stt.py --seconds N` 마이크 스트림 무크래시
+- [ ] 검증(라이브): 실제 마이크 한국어 발화 → 한국어 텍스트 — **사용자가 말해서 확인 필요**
 
 ## 마일스톤 3 — Claude LLM 연결 ✅
 - [x] `config.py`: env 기반 설정(프록시 base_url/모델/키)

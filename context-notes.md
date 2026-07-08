@@ -73,6 +73,25 @@
   - 함의: 문장당 첫 오디오 ~1.74s. LLM 지연과 합치면 첫 발화 왕복이 목표(1–3s) 상단~초과 가능 → M5에서 (a)LLM/TTS 파이프라이닝(첫 문장 나오자마자 합성) (b)chatterbox-streaming 포크로 첫 청크↓ 검토.
   - torchaudio 2.9 `save`는 torchcodec 필요 → 저장은 soundfile 사용(provider는 raw PCM 바이트만 다룸).
 
+## 음성 클로닝 (Neuro-sama, M4 후속)
+- 사용자가 "예전 세션에서 받은 진짜 Neuro-sama 목소리" 클로닝 요청. airi 프로젝트 세션 스크래치패드(`.../C--Users-jolib-Documents-airi/d76a2f8e-.../scratchpad`)에서 발견.
+- 채택: `neuro_ref.wav`(8초, 44.1kHz mono, 깨끗한 자기소개 클립 "My name is Neuro-Sama..."). 임시 경로 유실 대비 `backend/assets/voices/`로 복사·커밋.
+- config `tts_voice_prompt` 추가: 기본=번들 neuro_ref.wav, `NEURU_TTS_VOICE_PROMPT`로 교체, 빈 값이면 기본 음성. 클로닝 합성 1.83s/문장 확인.
+- 주의: 저작권 있는 실제 목소리 — 로컬 전용(원격 remote 없음). 공개/송출 시 재검토 필요.
+
+## 마일스톤 2 메모 (로컬 STT = faster-whisper)
+- **엔진 = faster-whisper(CTranslate2 4.8.1) large-v3 + silero VAD 6.2.1**. RealtimeSTT 래퍼 대신 직접 구성(sounddevice 마이크 + silero VADIterator + faster-whisper) — 제어력↑, 이벤트 모델(SpeechStarted/Transcript)에 직접 매핑.
+- **Blackwell 검증(격리 venv 후 메인 env)**:
+  - CTranslate2가 sm_120 인식(`get_cuda_device_count()==1`), cuda 로드 성공.
+  - **함정: CUDA DLL** — CTranslate2가 `cublas64_12.dll`을 못 찾음. faster-whisper는 CUDA 런타임을 자동설치 안 함. `os.add_dll_directory`만으론 부족(네이티브 delay-load는 PATH 참조) → **import 전에 PATH에 bin 디렉터리 prepend 필요**.
+  - **해법: torch/lib 재사용** — 메인 env의 torch cu128이 `cublas64_12.dll`·`cudnn64_9.dll` 등 전부 번들. `_ensure_cuda_dll_path()`가 torch/lib를 PATH+add_dll_directory에 추가 → 별도 nvidia-* 휠 불필요(1.3GB 절약, 프로세스 내 DLL 중복 회피).
+  - 실측: large-v3 warm transcribe **0.34s / 7.28s 오디오(RTF 0.047)**, base도 정확. lang=ko prob=1.00.
+- **provider `stt/whisper_local.py`**: 지연 로드(`_load`), silero `VADIterator`(512샘플/16kHz 청크)로 발화 온셋→SpeechStarted, 오프셋→버퍼 transcribe→Transcript(is_final). 마이크는 sounddevice InputStream(blocksize=512) 콜백이 `loop.call_soon_threadsafe`로 asyncio 큐에 프레임 전달. transcribe는 `to_thread` 오프로드. 취소·종료 시 stream 정리.
+  - `condition_on_previous_text=False`로 Whisper 반복·환각 억제(합성음성 파일에서 반복 관측 후 추가).
+- **config**: `stt_model_size`(NEURU_STT_MODEL_SIZE, 기본 large-v3), `stt_device_index`(NEURU_STT_DEVICE_INDEX). 마이크 기본=시스템 기본 입력(현재 device 1=Steam Streaming Mic, 실물은 device 20=Realtek).
+- **검증**: `scripts/probe_stt.py --file <wav>`로 VAD 세그먼트+전사 결정적 확인, `--seconds N`로 마이크 초기화 무크래시 확인. **실제 마이크 발화 테스트는 사용자 몫**(라이브).
+- 테스트: 지연 로딩 회귀 테스트 추가(총 6개 통과).
+
 ## 열린 리스크
 - VTube Studio 립싱크: VB-Cable 오디오 라우팅 우선(kimjammer/Neuro 검증), 대안은 pyvts 입 파라미터 직접 주입.
 - 한국어 STT 저지연: large-v3 정확하나 무거움 → GPU 지연 실측 후 모델/파라미터 조정.
