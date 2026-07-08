@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import AsyncIterator
 
 import numpy as np
@@ -17,12 +18,12 @@ class ChatterboxTTS(TTSProvider):
       이벤트 루프(=barge-in 응답성)를 막지 않는다.
     - 문장 단위로 전체를 생성한 뒤 chunk_ms 프레임으로 잘라 스트리밍한다.
       (첫 오디오 지연=문장 생성 시간. 추후 chatterbox-streaming 포크로 더 낮출 여지.)
-    - 출력은 24kHz mono PCM16 little-endian 바이트.
+    - 출력은 모델 고유 샘플레이트(현재 24kHz)의 mono PCM16 little-endian 바이트.
     """
 
     def __init__(
         self,
-        device: str = "cuda",
+        device: str = "cuda",  # 단일 RTX 5080 대상 — device는 CUDA 고정
         chunk_ms: int = 50,
         audio_prompt_path: str | None = None,
     ) -> None:
@@ -31,15 +32,21 @@ class ChatterboxTTS(TTSProvider):
         # 복제 대상 목소리 샘플 경로. None이면 Chatterbox 기본 음성 사용.
         self._audio_prompt_path = audio_prompt_path
         self._model = None
+        # 모델 로드 직렬화 — cold-load 중 barge-in으로 두 번째 합성이 시작돼도
+        # from_pretrained가 동시에 두 번 돌지 않도록(동시 CUDA 초기화 방지).
+        self._model_lock = threading.Lock()
         self.sample_rate: int | None = None
 
     def _ensure_model(self) -> None:
         # chatterbox는 무거운 import라 provider 인스턴스화가 아니라 첫 사용 시 지연 로드.
-        if self._model is None:
-            from chatterbox.tts import ChatterboxTTS as _ChatterboxModel
+        if self._model is not None:
+            return
+        with self._model_lock:
+            if self._model is None:  # 이중검사 — 대기 중 다른 스레드가 이미 로드했을 수 있음
+                from chatterbox.tts import ChatterboxTTS as _ChatterboxModel
 
-            self._model = _ChatterboxModel.from_pretrained(device=self._device)
-            self.sample_rate = self._model.sr
+                self._model = _ChatterboxModel.from_pretrained(device=self._device)
+                self.sample_rate = self._model.sr
 
     def _generate_pcm(self, text_en: str) -> bytes:
         self._ensure_model()

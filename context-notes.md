@@ -92,6 +92,15 @@
 - **검증**: `scripts/probe_stt.py --file <wav>`로 VAD 세그먼트+전사 결정적 확인, `--seconds N`로 마이크 초기화 무크래시 확인. **실제 마이크 발화 테스트는 사용자 몫**(라이브).
 - 테스트: 지연 로딩 회귀 테스트 추가(총 6개 통과).
 
+## M2/M4 리뷰 반영 (code-reviewer + code-health-reviewer)
+- **P1(버그) Chatterbox 모델 이중 로드 레이스**: `_ensure_model`이 락 없이 `to_thread`에서 실행 → cold-load 중 barge-in으로 취소돼도 스레드는 계속 로드 → 다음 합성이 두 번째 `from_pretrained` 동시 실행(CUDA OOM 위험). `threading.Lock` 이중검사로 직렬화.
+- **P2 stream.start() 누수**: `start()`가 try 밖이라 실패 시 장치 핸들 누수 → 시작 전체를 try로 감쌈.
+- **P2 발화 첫 음소 잘림**: VAD start 시 버퍼를 트리거 프레임부터만 담아 speech_pad·트리거 지연 이전 오디오 유실 → `_PREROLL_FRAMES(8=~256ms)` deque pre-roll을 버퍼 앞에 붙임.
+- **P2 시작 실패 무한 대기**: STT run() 시작 실패 시 stt_task에 예외 잠복, 오케스트레이터 `_consume`가 큐에서 영원히 대기 → 시작부를 try로 감싸 실패 시 `Shutdown` 발행 후 전파(소비 루프 종료 보장).
+- **헬스 F1 세그먼트 로직 중복**: provider·probe에 상태머신 복제 → `_VadSegmenter`로 추출, run()·probe가 동일 로직 구동(probe가 실제 로직 검증). F2 명명 통일(`_ensure_model`), F3 device=CUDA 고정 주석, F4 docstring "모델 고유 sr(현재 24kHz)"로 수정, probe off-by-one(+1) 수정.
+- 검증: 테스트 6개 통과, 파일 프로브 세그먼트+전사 정상.
+- **M5로 연기(현 시점 speculative)**: (a) TTS 오디오 바이트에 샘플레이트 메타 동반(실 오디오 싱크 붙일 때 필요, 지금 아바타는 mock) (b) 오케스트레이터가 `stt_task`를 큐와 함께 관측해 provider 죽음을 근본 처리(현재는 provider-local Shutdown로 완화).
+
 ## 열린 리스크
 - VTube Studio 립싱크: VB-Cable 오디오 라우팅 우선(kimjammer/Neuro 검증), 대안은 pyvts 입 파라미터 직접 주입.
 - 한국어 STT 저지연: large-v3 정확하나 무거움 → GPU 지연 실측 후 모델/파라미터 조정.

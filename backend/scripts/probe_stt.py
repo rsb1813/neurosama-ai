@@ -10,19 +10,16 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from neru.events import SpeechStarted, Transcript
-from neru.stt.whisper_local import _SAMPLE_RATE, _VAD_FRAME, WhisperLocalSTT
+from neru.stt.whisper_local import _SAMPLE_RATE, _STARTED, _VAD_FRAME, WhisperLocalSTT
 
 
 def _run_file(path: str, model_size: str) -> None:
-    # 마이크 없이 wav를 VAD로 세그먼트해 전사 — 로직 결정적 검증.
+    # 마이크 없이 wav를 provider와 동일한 _VadSegmenter로 세그먼트해 전사 — 실제 로직 결정적 검증.
     import soundfile as sf
-    import torch
 
     stt = WhisperLocalSTT(model_size=model_size)
-    stt._load()
-    vad = stt._vad_iterator_cls(
-        stt._silero, threshold=0.5, sampling_rate=_SAMPLE_RATE, min_silence_duration_ms=500
-    )
+    stt._ensure_model()
+    segmenter = stt._make_segmenter()
     audio, sr = sf.read(path, dtype="float32")
     if audio.ndim > 1:
         audio = audio[:, 0]
@@ -30,27 +27,20 @@ def _run_file(path: str, model_size: str) -> None:
         idx = (np.arange(int(len(audio) * _SAMPLE_RATE / sr)) * sr / _SAMPLE_RATE).astype(int)
         audio = audio[idx]
 
-    buffer: list[np.ndarray] = []
-    speaking = False
     n_utt = 0
-    for i in range(0, len(audio) - _VAD_FRAME, _VAD_FRAME):
-        frame = audio[i : i + _VAD_FRAME]
-        if speaking:
-            buffer.append(frame)
-        result = vad(torch.from_numpy(frame))
+    for i in range(0, len(audio) - _VAD_FRAME + 1, _VAD_FRAME):
+        result = segmenter.step(np.ascontiguousarray(audio[i : i + _VAD_FRAME]))
         if result is None:
             continue
-        if "start" in result:
-            speaking = True
-            buffer = [frame]
+        if result is _STARTED:
             print("  <SpeechStarted>")
-        elif "end" in result and speaking:
-            speaking = False
-            text = stt._transcribe(np.concatenate(buffer))
+        else:
             n_utt += 1
-            print(f"  KO[{n_utt}]: {text}")
-    if speaking and buffer:  # 파일 끝까지 발화가 이어진 경우
-        print(f"  KO[{n_utt + 1}]: {stt._transcribe(np.concatenate(buffer))}")
+            print(f"  KO[{n_utt}]: {stt._transcribe(result)}")
+    tail = segmenter.flush()  # 파일 끝까지 발화가 이어진 경우
+    if tail is not None:
+        n_utt += 1
+        print(f"  KO[{n_utt}]: {stt._transcribe(tail)}")
     print(f"[probe] done — {n_utt} utterance(s) segmented")
 
 
