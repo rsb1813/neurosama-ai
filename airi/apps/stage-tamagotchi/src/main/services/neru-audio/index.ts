@@ -3,7 +3,7 @@ import type { ChildProcess } from 'node:child_process'
 
 import process from 'node:process'
 
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -73,8 +73,15 @@ function createNeruAudioManager() {
   }
 
   function stop(): void {
-    if (child && !child.killed)
-      child.kill()
+    if (child?.pid && !child.killed) {
+      if (process.platform === 'win32') {
+        // Windows는 부모 종료 시 자식 트리(cmd→uv→python)를 정리하지 않으므로 트리째 kill.
+        execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], () => {})
+      }
+      else {
+        child.kill()
+      }
+    }
     child = undefined
   }
 
