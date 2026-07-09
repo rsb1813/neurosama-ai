@@ -6,7 +6,7 @@ import io
 import logging
 import wave
 
-from fastapi import FastAPI, Form, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from .config import load_settings
@@ -23,6 +23,54 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="neru OpenAI-compatible audio gateway")
 
 _settings = load_settings()
+
+_GATEWAY_HOST = "127.0.0.1"
+_GATEWAY_PORT = 3457
+_ALLOWED_HOSTS = {f"{_GATEWAY_HOST}:{_GATEWAY_PORT}", f"localhost:{_GATEWAY_PORT}"}
+# 오디오 업로드 상한 — 정상 음성 클립엔 넉넉하고, CSRF발 무제한 업로드로 인한 OOM/GPU DoS는 차단.
+_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+@app.middleware("http")
+async def _restrict_to_local_app(request: Request, call_next):
+    # multipart/form-data POST는 CORS "simple request"라 프리플라이트 없이 크로스오리진으로도
+    # 전송된다 — 외부 웹페이지가 사용자가 열어둔 이 게이트웨이로 드라이브바이 요청을 쏠 수 있다.
+    # Host를 강제해 DNS 리바인딩을, Origin 허용목록으로 브라우저發 크로스사이트 요청을 막는다.
+    if request.url.path.startswith("/v1/"):
+        host = request.headers.get("host", "")
+        if host not in _ALLOWED_HOSTS:
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+
+        origin = request.headers.get("origin")
+        if origin is not None and origin != "null":
+            origin_host = origin.split("://", 1)[-1].split(":")[0]
+            if origin_host not in (_GATEWAY_HOST, "localhost"):
+                return JSONResponse({"error": "forbidden"}, status_code=403)
+
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                too_large = int(content_length) > _MAX_UPLOAD_BYTES
+            except ValueError:
+                too_large = False
+            if too_large:
+                return JSONResponse({"error": "payload too large"}, status_code=413)
+
+    return await call_next(request)
+
+
+async def _read_upload_capped(file: UploadFile, limit: int) -> bytes:
+    # Content-Length 없는 청크 전송도 대비해 실제로 읽은 바이트 수를 직접 상한.
+    data = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > limit:
+            raise HTTPException(status_code=413, detail="payload too large")
+    return bytes(data)
+
 
 # 모델은 무거우니 프로세스당 1회 지연 로드 후 재사용.
 _tts = ChatterboxTTS(audio_prompt_path=_settings.tts_voice_prompt)
@@ -103,7 +151,7 @@ async def transcriptions(
     response_format: str = Form(default="json"),
 ) -> Response:
     # OpenAI: multipart {file, model, language?, response_format?} → {text}.
-    data = await file.read()
+    data = await _read_upload_capped(file, _MAX_UPLOAD_BYTES)
     lang = language or "ko"  # neru는 한국어 입력 기본
     whisper = await _get_whisper()
     # BytesIO를 PyAV로 디코드하므로 임의 컨테이너(webm/wav) 수용. 전사 정책은 STT provider와 공유.
@@ -118,7 +166,7 @@ def main() -> None:
     import uvicorn
 
     # 0.0.0.0가 아닌 localhost 바인딩 — 로컬 AIRI만 접근.
-    uvicorn.run(app, host="127.0.0.1", port=3457, log_level="info")
+    uvicorn.run(app, host=_GATEWAY_HOST, port=_GATEWAY_PORT, log_level="info")
 
 
 if __name__ == "__main__":
