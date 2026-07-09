@@ -56,8 +56,9 @@
 - [x] 타깃 확인: `apps/stage-tamagotchi` = Electron(electron-vite + electron-builder)
 - [x] Electron 바이너리 이슈 해결: pnpm 10+가 postinstall 차단 + extract-zip 실패(dist에 dxil.dll만) → `scripts/ensure-electron.mjs`가 캐시 zip을 system tar로 재추출 + path.txt
 - [x] `pnpm desktop`으로 데스크톱 창 기동 확인(override 불필요, 9 프로세스, injeca RUNNING, 내장 WS 서버)
-- [ ] `pnpm desktop:build:unpack` → 실행 가능한 언팩 패키지 산출(진행 중)
-- [ ] (후속) `desktop:build:win` 설치본(NSIS)
+- [x] `pnpm desktop:build:unpack` → `dist/win-unpacked/airi.exe`(212MB)+app.asar(1.08GB), 총 1.7GB 산출. 빌드 성공(exit 0)
+- [x] 검증: 패키지된 `airi.exe` 독립 실행 확인(7 프로세스, 1.75GB) — dev 아님
+- [ ] (후속) `desktop:build:win` 설치본(NSIS) + neru 리브랜딩(현재 productName=airi)
 
 ### M-C — TTS 브릿지 (Chatterbox → OpenAI `/v1/audio/speech`)
 - [ ] 기존 `ChatterboxTTS` 재사용해 OpenAI 호환 `/v1/audio/speech` FastAPI 서버 작성
