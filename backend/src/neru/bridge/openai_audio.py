@@ -10,6 +10,7 @@ from fastapi import FastAPI, Form, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from ..config import load_settings
+from ..gpu import ensure_cuda_dll_path, transcribe
 from ..tts.chatterbox_local import ChatterboxTTS
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,9 @@ _settings = load_settings()
 
 # 모델은 무거우니 프로세스당 1회 지연 로드 후 재사용.
 _tts = ChatterboxTTS(audio_prompt_path=_settings.tts_voice_prompt)
+# TTS generate()를 직렬화 — 동시 요청이 같은 CUDA 모델에서 겹치면 오디오가 깨지거나
+# CUDA 오류가 난다(ChatterboxTTS 내부 락은 로드만 보호, generate는 미보호).
+_tts_lock = asyncio.Lock()
 
 # faster-whisper 모델과 로드 직렬화 락(단일 GPU 동시 로드 방지).
 _whisper_model = None
@@ -43,9 +47,7 @@ async def _get_whisper():
 
 def _load_whisper():
     # CTranslate2가 cuBLAS/cuDNN을 찾도록 torch 번들 lib을 PATH에 올린 뒤 로드.
-    from ..stt.whisper_local import _ensure_cuda_dll_path
-
-    _ensure_cuda_dll_path()
+    ensure_cuda_dll_path()
     from faster_whisper import WhisperModel
 
     return WhisperModel(_settings.stt_model_size, device="cuda", compute_type="float16")
@@ -80,8 +82,9 @@ async def speech(body: dict) -> Response:
         return JSONResponse({"error": "input is required"}, status_code=400)
 
     pcm = bytearray()
-    async for chunk in _tts.synthesize(text):
-        pcm.extend(chunk)
+    async with _tts_lock:  # 동시 합성 직렬화(위 _tts_lock 주석 참고)
+        async for chunk in _tts.synthesize(text):
+            pcm.extend(chunk)
 
     sample_rate = _tts.sample_rate or 24000
     fmt = (body.get("response_format") or "wav").lower()
@@ -103,23 +106,12 @@ async def transcriptions(
     data = await file.read()
     lang = language or "ko"  # neru는 한국어 입력 기본
     whisper = await _get_whisper()
-    text = await asyncio.to_thread(_transcribe, whisper, data, lang)
+    # BytesIO를 PyAV로 디코드하므로 임의 컨테이너(webm/wav) 수용. 전사 정책은 STT provider와 공유.
+    text = await asyncio.to_thread(transcribe, whisper, io.BytesIO(data), lang)
 
     if response_format == "text":
         return PlainTextResponse(text)
     return JSONResponse({"text": text})
-
-
-def _transcribe(whisper, audio_bytes: bytes, language: str) -> str:
-    # faster-whisper는 파일 유사 객체를 PyAV로 디코드하므로 임의 컨테이너(webm/wav) 수용.
-    # condition_on_previous_text=False: 반복·환각 억제(STT provider와 동일 설정).
-    segments, _ = whisper.transcribe(
-        io.BytesIO(audio_bytes),
-        language=language,
-        vad_filter=False,
-        condition_on_previous_text=False,
-    )
-    return "".join(seg.text for seg in segments).strip()
 
 
 def main() -> None:

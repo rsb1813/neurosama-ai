@@ -4,11 +4,11 @@ from __future__ import annotations
 import asyncio
 import collections
 import logging
-import os
 
 import numpy as np
 
 from ..events import Shutdown, SpeechStarted, Transcript
+from ..gpu import ensure_cuda_dll_path, transcribe
 from .base import STTProvider
 
 logger = logging.getLogger(__name__)
@@ -19,17 +19,6 @@ _PREROLL_FRAMES = 8  # 발화 시작 직전 ~256ms를 pre-roll로 유지(speech_
 
 # 세그먼터가 "발화 시작"을 알리는 sentinel(전사 대상 오디오와 구분).
 _STARTED = object()
-
-
-def _ensure_cuda_dll_path() -> None:
-    # CTranslate2가 cuBLAS/cuDNN DLL을 찾도록 torch가 번들한 lib 디렉터리를 검색 경로에 추가.
-    # (별도 nvidia-* 휠 없이 torch cu128의 CUDA 런타임을 그대로 재사용)
-    import torch
-
-    lib = os.path.join(os.path.dirname(torch.__file__), "lib")
-    if os.path.isdir(lib):
-        os.add_dll_directory(lib)
-        os.environ["PATH"] = lib + os.pathsep + os.environ.get("PATH", "")
 
 
 class _VadSegmenter:
@@ -118,7 +107,7 @@ class WhisperLocalSTT(STTProvider):
     def _ensure_model(self) -> None:
         # 무거운 import·모델 로드는 첫 실행 시 1회.
         if self._model is None:
-            _ensure_cuda_dll_path()
+            ensure_cuda_dll_path()
             from faster_whisper import WhisperModel
             from silero_vad import VADIterator, load_silero_vad
 
@@ -134,14 +123,8 @@ class WhisperLocalSTT(STTProvider):
         )
 
     def _transcribe(self, audio: np.ndarray) -> str:
-        # condition_on_previous_text=False: Whisper의 반복·환각 루프를 억제.
-        segments, _ = self._model.transcribe(
-            audio,
-            language=self._language,
-            vad_filter=False,
-            condition_on_previous_text=False,
-        )
-        return "".join(seg.text for seg in segments).strip()
+        # 전사 정책(플래그·세그먼트 조인)은 게이트웨이와 공유(gpu.transcribe).
+        return transcribe(self._model, audio, self._language)
 
     async def run(self, out: asyncio.Queue) -> None:
         import sounddevice as sd
