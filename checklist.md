@@ -41,15 +41,16 @@
 사용자 결정: ① **통합 포크**(레포에 vendored, 코어까지 수정 허용) ② **영어 음성 + 한국어 자막** 유지.
 핵심 검증(완료): 프록시 `localhost:3456` = **OpenAI 완전 호환**(`/v1/chat/completions`·`/v1/models` OK, 모델 opus-4-7/sonnet-4-6/haiku-4-5). AIRI OpenAI-compat provider에 주소만 넣으면 LLM 연결. 오디오 엔드포인트는 없음(404) → STT/TTS는 우리가 OpenAI 호환 서버로 래핑.
 
-### M-A — AIRI vendored fork + 실행
-- [ ] AIRI를 레포 `airi/`에 vendored 클론(.git 제거), 우리 커밋에 편입
-- [ ] pnpm install (pnpm 11 vs 지정 10.33 corepack 충돌 주의)
-- [ ] `apps/stage-web` dev 실행 → 브라우저에서 AIRI UI 로드 확인
-- [ ] 자체 `frontend/`(Vite/pixi) 폐기 처리(디렉토리 제거 또는 archived 표시)
+### M-A — AIRI vendored fork + 실행 ✅
+- [x] AIRI를 레포 `airi/`에 vendored 클론(.git 제거, docs/content 450MB 제거), 커밋 편입
+- [x] pnpm install: 전체 설치 필요(필터 설치는 워크스페이스 빌드 깨짐). `.npmrc`로 버전강제·purge 비활성화
+- [x] `apps/stage-web` dev 실행(pnpm 11 표준, CI=true) → Playwright로 AIRI UI+Live2D 로드 확인(에러는 미기동 선택적 서버 WS뿐)
+- [ ] 자체 `frontend/`(Vite/pixi) 폐기 처리 — 후속(정리)
 
-### M-B — LLM 연결
-- [ ] AIRI 설정에서 OpenAI-compat(또는 anthropic) provider baseUrl=`http://localhost:3456/v1/`
-- [ ] 검증: AIRI에 메시지 입력 → Claude 응답 표시
+### M-B — LLM 연결 ✅
+- [x] AIRI 온보딩에서 "OpenAI 호환" provider: baseUrl=`http://localhost:3456/v1/`, key=`sk-local-proxy`, model=`opus-4-7`. Ping 통과, 모델목록 4개 수신
+- [x] 검증: 한국어 입력 → Claude(opus-4-7) 한국어 응답 표시(Playwright). 페르소나는 아직 AIRI 기본 → M-F에서 교체
+- [ ] (후속) provider 설정을 포크에 프리시드해 사용자 브라우저에서도 온보딩 없이 연결
 
 ### M-C — TTS 브릿지 (Chatterbox → OpenAI `/v1/audio/speech`)
 - [ ] 기존 `ChatterboxTTS` 재사용해 OpenAI 호환 `/v1/audio/speech` FastAPI 서버 작성
