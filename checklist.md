@@ -52,6 +52,13 @@
 - [x] 검증: 한국어 입력 → Claude(opus-4-7) 한국어 응답 표시(Playwright). 페르소나는 아직 AIRI 기본 → M-F에서 교체
 - [ ] (후속) provider 설정을 포크에 프리시드해 사용자 브라우저에서도 온보딩 없이 연결
 
+### M-Desktop — 데스크톱 앱 패키징 (사용자 요청: 웹 아닌 데스크톱)
+- [x] 타깃 확인: `apps/stage-tamagotchi` = Electron(electron-vite + electron-builder)
+- [x] Electron 바이너리 이슈 해결: pnpm 10+가 postinstall 차단 + extract-zip 실패(dist에 dxil.dll만) → `scripts/ensure-electron.mjs`가 캐시 zip을 system tar로 재추출 + path.txt
+- [x] `pnpm desktop`으로 데스크톱 창 기동 확인(override 불필요, 9 프로세스, injeca RUNNING, 내장 WS 서버)
+- [ ] `pnpm desktop:build:unpack` → 실행 가능한 언팩 패키지 산출(진행 중)
+- [ ] (후속) `desktop:build:win` 설치본(NSIS)
+
 ### M-C — TTS 브릿지 (Chatterbox → OpenAI `/v1/audio/speech`)
 - [ ] 기존 `ChatterboxTTS` 재사용해 OpenAI 호환 `/v1/audio/speech` FastAPI 서버 작성
 - [ ] AIRI `openai-compatible-audio-speech` provider 연결
