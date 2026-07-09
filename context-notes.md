@@ -133,3 +133,33 @@
 - VTube Studio 립싱크: VB-Cable 오디오 라우팅 우선(kimjammer/Neuro 검증), 대안은 pyvts 입 파라미터 직접 주입.
 - 한국어 STT 저지연: large-v3 정확하나 무거움 → GPU 지연 실측 후 모델/파라미터 조정.
 - 비용: Claude + ElevenLabs 유료. .env 키 관리, 커밋 금지.
+
+---
+
+## 방향 대전환 (2026-07-09) — Project AIRI 기반으로 프론트 전면 교체
+
+**계기**: 자체 Vite+pixi Live2D 프론트(오버레이·설정·움직임까지 구현)에 대해 사용자가 "너무 별로야, 그냥 Project AIRI 포크해서 니 기술만 넣어"라고 방향 변경 지시.
+
+**Project AIRI 조사 결과 (primary source: moeru-ai/airi@main 클론 확인)**:
+- 라이선스 MIT → 포크·수정·상업 음성 얹기 전부 허용.
+- 스택: TypeScript + Vue3(Pinia/UnoCSS), pnpm 모노레포(~60 패키지, packageManager pnpm@10.33.0, node 24.13), Turbo/Vite/Vitest. 데스크톱=Electron(apps/stage-tamagotchi), 웹=apps/stage-web, 모바일=Capacitor.
+- 추론 기본은 클라이언트 사이드(Transformers.js/WebGPU). apps/server는 봇/호스트용, 아바타+음성 루프엔 불필요.
+- **Provider 시스템이 핵심**: `packages/stage-ui/src/libs/providers/providers/<id>/index.ts`, `defineProvider` + xsAI. LLM 35종, anthropic 네이티브(단 xsAI가 OpenAI식 /chat/completions 호출), `openai-compatible` provider는 사용자 baseUrl+apiKey 입력칸 보유.
+- STT/TTS도 `openai-compatible-audio-transcription` / `openai-compatible-audio-speech` provider 존재(사용자 baseUrl). OpenAI `/v1/audio/transcriptions`·`/v1/audio/speech` 형식이면 코드 수정 0.
+- 아바타: Live2D(pixi-live2d-display) + VRM(@pixiv/three-vrm). 립싱크 `packages/model-driver-lipsync`의 wlipsync(오디오 진폭 + AEIOU 모음 가중치) 내장. 자동 눈깜빡임/시선/idle 광고됨.
+
+**우리 프록시 실측 (localhost:3456)**:
+- `/v1/models` → OpenAI list 형식(claude-opus-4-7/sonnet-4-6/haiku-4-5 등). `/v1/chat/completions` → 정상 OpenAI chat.completion 응답(`choices[].message.content`). **완전한 OpenAI 호환 프록시**(LiteLLM류). auth: `Bearer sk-local-proxy`.
+- `/v1/audio/speech`·`/v1/audio/transcriptions` → 404. 오디오는 프록시가 안 함 → 우리가 래핑해야.
+
+**결론(설계)**: AIRI 코어를 크게 안 고치고, 우리 Python 기술을 OpenAI 호환 로컬 서비스로 만들어 AIRI provider에 주소만 연결.
+- LLM: shim 불필요. AIRI OpenAI-compat provider → `http://localhost:3456/v1/`.
+- TTS: 기존 `ChatterboxTTS`를 `/v1/audio/speech` FastAPI로 래핑.
+- STT: 기존 `WhisperLocalSTT`를 `/v1/audio/transcriptions` FastAPI로 래핑.
+
+**사용자 결정 (AskUserQuestion)**:
+1. 포크 범위 = **통합 포크**(레포에 vendored, 코어까지 수정 허용).
+2. 언어 흐름 = **영어 음성 + 한국어 자막**(원래 시그니처 유지 → AIRI 자막/TTS 분기 코어 소폭 수정 필요. 이중 출력 = LLM이 발화(EN)+자막(KO) 함께 산출하도록 캐릭터 카드 지정 후, AIRI가 TTS엔 EN, 화면엔 KO 표시).
+
+**폐기**: 자체 `frontend/`(Vite/pixi), `WebSocketAvatar`+`ws_server` 계획. 백엔드 provider 클래스는 HTTP 래퍼로 재사용(살림).
+**리스크**: pnpm 11(설치본) vs AIRI 지정 10.33 corepack 충돌 가능. 60패키지 모노레포 Windows 설치/native dep 이슈 가능. AIRI 내부 API(store/provider registry)가 alpha라 향후 변동 가능 → 우리 델타는 provider 설정+자막 분기로 최소화해 유지비 절감.

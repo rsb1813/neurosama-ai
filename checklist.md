@@ -36,21 +36,44 @@
 - [x] 검증: `scripts/probe_tts.py` → 영어 텍스트 → 자연스러운 영어 음성 스피커 재생
 - [ ] (후속) 첫 오디오 지연↓: chatterbox-streaming 포크/RealtimeTTS(~470ms 첫 청크)로 교체 여지 — M5에서 검토
 
-## 마일스톤 5 — 전체 파이프라인 + barge-in 실측
-- [ ] 실 STT+LLM+TTS 연결, 마이크 VAD가 barge-in 트리거
-- [ ] 검증: 왕복 지연 ~1–3초, 끼어들면 즉시 멈춤
+## ▶ 방향 전환 — Project AIRI 기반으로 프론트 전면 교체 (자체 Vite/pixi 폐기)
+자체 프론트 완성도 부족 → **Project AIRI**(MIT, Vue3 모노레포, Live2D+VRM+오디오 립싱크 내장) 포크.
+사용자 결정: ① **통합 포크**(레포에 vendored, 코어까지 수정 허용) ② **영어 음성 + 한국어 자막** 유지.
+핵심 검증(완료): 프록시 `localhost:3456` = **OpenAI 완전 호환**(`/v1/chat/completions`·`/v1/models` OK, 모델 opus-4-7/sonnet-4-6/haiku-4-5). AIRI OpenAI-compat provider에 주소만 넣으면 LLM 연결. 오디오 엔드포인트는 없음(404) → STT/TTS는 우리가 OpenAI 호환 서버로 래핑.
 
-## 마일스톤 6 — 아바타 립싱크 (웹 네이티브 Live2D로 전환)
-- [x] (대안) VTubeStudioAvatar(pyvts) 구현·검증 — provider 뒤 대안으로 유지
-- [x] **방식 전환**: 사용자가 VTS 원치 않음 → 웹 네이티브 Live2D(프론트 직접 렌더). M6+M7 통합
-- [x] frontend 스캐폴드: Vite+TS + pixi.js@6.5.10 + pixi-live2d-display@0.4.0
-- [x] neru 마녀 모델 렌더 검증(Playwright): 전신 렌더 + ParamMouthOpenY 여닫힘 확인
-- [x] ★Cubism Core는 **4 버전** 필요(SDK5의 5 Core는 doDrawModel 크래시) — CDN 4 Core로 해결
-- [ ] `WebSocketAvatar`(AvatarDriver) + `ws_server`: 진폭·자막·상태를 프론트로 push
-- [ ] 프론트 WS 클라이언트: MouthOpen 실 립싱크(임시 오실레이션 대체) + idle blink
-- [ ] 검증: TTS 발화에 맞춰 아바타 입 실제 움직임(백엔드→WS→브라우저)
+### M-A — AIRI vendored fork + 실행
+- [ ] AIRI를 레포 `airi/`에 vendored 클론(.git 제거), 우리 커밋에 편입
+- [ ] pnpm install (pnpm 11 vs 지정 10.33 corepack 충돌 주의)
+- [ ] `apps/stage-web` dev 실행 → 브라우저에서 AIRI UI 로드 확인
+- [ ] 자체 `frontend/`(Vite/pixi) 폐기 처리(디렉토리 제거 또는 archived 표시)
 
-## 마일스톤 7 — TS 프론트 자막 오버레이
-- [ ] `ws_server.py`: 프론트로 상태/자막 push
-- [ ] frontend: Vite + 경량 TS, 한국어 자막 오버레이 + 상태 대시보드
-- [ ] 검증: 자막이 발화와 동기되어 화면 표시
+### M-B — LLM 연결
+- [ ] AIRI 설정에서 OpenAI-compat(또는 anthropic) provider baseUrl=`http://localhost:3456/v1/`
+- [ ] 검증: AIRI에 메시지 입력 → Claude 응답 표시
+
+### M-C — TTS 브릿지 (Chatterbox → OpenAI `/v1/audio/speech`)
+- [ ] 기존 `ChatterboxTTS` 재사용해 OpenAI 호환 `/v1/audio/speech` FastAPI 서버 작성
+- [ ] AIRI `openai-compatible-audio-speech` provider 연결
+- [ ] 검증: 응답이 Neuro 복제 음성으로 발화 + 립싱크 입 움직임
+
+### M-D — STT 브릿지 (faster-whisper → OpenAI `/v1/audio/transcriptions`)
+- [ ] 기존 `WhisperLocalSTT`(large-v3) 재사용해 OpenAI 호환 `/v1/audio/transcriptions` 서버 작성
+- [ ] AIRI `openai-compatible-audio-transcription` provider 연결
+- [ ] 검증: 한국어 마이크 발화 → 전사 텍스트
+
+### M-E — neru 마녀 Live2D 모델 AIRI 로드
+- [ ] `frontend/public/models/neru-witch`(Cubism4) → AIRI 모델 로더에 연결
+- [ ] 검증: 우리 마녀 모델이 AIRI에서 렌더 + 자동 눈깜빡임/시선/립싱크
+
+### M-F — 이중언어 (영어 음성 + 한국어 자막) ★코어 수정
+- [ ] 페르소나(캐릭터 카드): 영어 발화 + 한국어 자막 이중 출력 구조 지정
+- [ ] AIRI 메시지 렌더/TTS 피드 분기: 음성=영어 텍스트, 자막=한국어 텍스트
+- [ ] 검증: 한국어 입력 → 영어 음성 + 화면 한국어 자막
+
+### M-G — 전체 루프 + barge-in
+- [ ] STT→LLM→TTS→아바타 엔드투엔드, 끼어들기
+- [ ] 검증: 왕복 ~1–3초, 말하면 답하고 끼어들면 멈춤
+
+### 폐기/보류
+- 자체 Vite 프론트(`frontend/`), `WebSocketAvatar`+`ws_server` 계획 → AIRI가 대체
+- 백엔드 provider 클래스(STT/TTS/LLM)는 HTTP 래퍼 안에서 재사용(폐기 아님)
