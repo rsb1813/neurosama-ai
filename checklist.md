@@ -45,12 +45,12 @@
 - [x] AIRI를 레포 `airi/`에 vendored 클론(.git 제거, docs/content 450MB 제거), 커밋 편입
 - [x] pnpm install: 전체 설치 필요(필터 설치는 워크스페이스 빌드 깨짐). `.npmrc`로 버전강제·purge 비활성화
 - [x] `apps/stage-web` dev 실행(pnpm 11 표준, CI=true) → Playwright로 AIRI UI+Live2D 로드 확인(에러는 미기동 선택적 서버 WS뿐)
-- [ ] 자체 `frontend/`(Vite/pixi) 폐기 처리 — 후속(정리)
+- [x] 자체 `frontend/`(Vite/pixi) 폐기 처리 — Task 2에서 완료(아래 통합 마일스톤 참고)
 
 ### M-B — LLM 연결 ✅
 - [x] AIRI 온보딩에서 "OpenAI 호환" provider: baseUrl=`http://localhost:3456/v1/`, key=`sk-local-proxy`, model=`opus-4-7`. Ping 통과, 모델목록 4개 수신
 - [x] 검증: 한국어 입력 → Claude(opus-4-7) 한국어 응답 표시(Playwright). 페르소나는 아직 AIRI 기본 → M-F에서 교체
-- [ ] (후속) provider 설정을 포크에 프리시드해 사용자 브라우저에서도 온보딩 없이 연결
+- [x] (후속) provider 설정을 포크에 프리시드해 사용자 브라우저에서도 온보딩 없이 연결 — Task 4에서 완료(`neruPreseed.ts`, 아래 통합 마일스톤 참고)
 
 ### M-Desktop — 데스크톱 앱 패키징 (사용자 요청: 웹 아닌 데스크톱)
 - [x] 타깃 확인: `apps/stage-tamagotchi` = Electron(electron-vite + electron-builder)
@@ -60,18 +60,27 @@
 - [x] 검증: 패키지된 `airi.exe` 독립 실행 확인(7 프로세스, 1.75GB) — dev 아님
 - [ ] (후속) `desktop:build:win` 설치본(NSIS) + neru 리브랜딩(현재 productName=airi)
 
-### M-C — TTS 브릿지 (Chatterbox → OpenAI `/v1/audio/speech`)
+### 통합 마일스톤 — AIRI 편입 (Task 1~5) ✅
+M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/services/neru-audio` 게이트웨이 하나로 통합 구현.
+- [x] Task 1: `airi/services/neru-audio` Python 게이트웨이 생성 — Chatterbox `/v1/audio/speech`(Neuro 클론 음성) + faster-whisper large-v3 `/v1/audio/transcriptions`(한국어), OpenAI 호환, `127.0.0.1:3457`. `uv run neru-audio`로 독립 기동
+- [x] Task 2: 루트 `backend/`·`frontend/` 삭제 — AIRI가 오케스트레이션·아바타·자막 전담, GPU 음성 기술만 neru-audio로 이식
+- [x] Task 3: Electron(`apps/stage-tamagotchi`)이 앱 실행 시 neru-audio 자동 spawn(dev 전용)하고 종료 시 프로세스 트리째 kill (`src/main/services/neru-audio/index.ts`)
+- [x] Task 4: AIRI provider 프리시드(`neruPreseed.ts`) — localStorage에 LLM/STT/TTS 3개 provider 기록, 온보딩 없이 연결
+- [x] Task 5: 문서 갱신 (`WORKSPACE.md`, `checklist.md`, `context-notes.md`, `.meridian/docs/pipeline-architecture.md`)
+
+### M-C — TTS 브릿지 (Chatterbox → OpenAI `/v1/audio/speech`) — **대체됨** (기록용, 위 통합 마일스톤 참고)
 - [ ] 기존 `ChatterboxTTS` 재사용해 OpenAI 호환 `/v1/audio/speech` FastAPI 서버 작성
 - [ ] AIRI `openai-compatible-audio-speech` provider 연결
 - [ ] 검증: 응답이 Neuro 복제 음성으로 발화 + 립싱크 입 움직임
 
-### M-D — STT 브릿지 (faster-whisper → OpenAI `/v1/audio/transcriptions`)
+### M-D — STT 브릿지 (faster-whisper → OpenAI `/v1/audio/transcriptions`) — **대체됨** (기록용, 위 통합 마일스톤 참고)
 - [ ] 기존 `WhisperLocalSTT`(large-v3) 재사용해 OpenAI 호환 `/v1/audio/transcriptions` 서버 작성
 - [ ] AIRI `openai-compatible-audio-transcription` provider 연결
 - [ ] 검증: 한국어 마이크 발화 → 전사 텍스트
 
 ### M-E — neru 마녀 Live2D 모델 AIRI 로드
-- [ ] `frontend/public/models/neru-witch`(Cubism4) → AIRI 모델 로더에 연결
+- [ ] ⚠️ `frontend/public/models/neru-witch`(Cubism4)는 gitignore 대상이라 Task 2의 `frontend/` 삭제로 디스크에서도 사라짐(저장소 재검색 확인, 트래킹된 백업 없음) — 모델 파일을 원본에서 재확보해야 진행 가능
+- [ ] 모델 재확보 후 AIRI 모델 로더에 연결
 - [ ] 검증: 우리 마녀 모델이 AIRI에서 렌더 + 자동 눈깜빡임/시선/립싱크
 
 ### M-F — 이중언어 (영어 음성 + 한국어 자막) ★코어 수정
@@ -84,5 +93,5 @@
 - [ ] 검증: 왕복 ~1–3초, 말하면 답하고 끼어들면 멈춤
 
 ### 폐기/보류
-- 자체 Vite 프론트(`frontend/`), `WebSocketAvatar`+`ws_server` 계획 → AIRI가 대체
-- 백엔드 provider 클래스(STT/TTS/LLM)는 HTTP 래퍼 안에서 재사용(폐기 아님)
+- 자체 Vite 프론트(`frontend/`), `WebSocketAvatar`+`ws_server` 계획 → AIRI가 대체. **Task 2에서 루트 `backend/`·`frontend/` 실제 삭제 완료**(위 통합 마일스톤 참고)
+- 백엔드 provider 클래스(STT/TTS/LLM)는 폐기 아님 — Chatterbox TTS·faster-whisper STT는 `airi/services/neru-audio` HTTP 게이트웨이 안에서 재사용됨
