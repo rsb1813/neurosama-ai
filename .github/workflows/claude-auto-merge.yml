@@ -1,0 +1,61 @@
+# 수정 Routine이 만든 claude/* PR을 Claude가 적대적으로 검토 → 승인일 때만 자동 병합
+name: Claude Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review-and-merge:
+    # 자동 수정 PR(claude/* 브랜치)만 대상 — 사람이 연 PR은 수동 병합을 유지한다.
+    if: startsWith(github.head_ref, 'claude/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 병합 + 브랜치 삭제
+      pull-requests: write # 승인 + 병합 + 코멘트
+      issues: read
+      id-token: write
+      actions: read # CI 결과 조회
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 검토 중 테스트 실행을 위해 전체 히스토리
+
+      - name: Adversarial review, merge only on approval
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          # 검토 Claude가 PR 조회·테스트·승인·병합을 수행할 수 있도록 허용.
+          claude_args: '--allowed-tools "Bash(gh *),Bash(pnpm *),Bash(uv *),Bash(git *),Read,Grep,Glob"'
+          prompt: |
+            You are the FINAL gate before this pull request merges into `master`.
+            PR number: ${{ github.event.pull_request.number }}. Head branch: ${{ github.head_ref }}.
+
+            This PR was produced by an automated fix routine. Review it ADVERSARIALLY —
+            assume it may be wrong. Your job is to protect `master`. Default to
+            NEEDS_CHANGES whenever you are uncertain. Never merge on doubt.
+
+            Do this in order:
+            1. Read the PR and the issue it closes:
+               `gh pr view ${{ github.event.pull_request.number }}` and
+               `gh pr diff ${{ github.event.pull_request.number }}`.
+            2. Verify it ACTUALLY fixes the linked issue and adds no new bug, security
+               hole, or out-of-scope change. Check edge cases and error paths.
+            3. Run the checks relevant to the changed area and report exactly what you
+               ran and the result. Do NOT assume a check passes without running it:
+               - TypeScript: `pnpm -F <package> typecheck` and lint the changed files.
+               - Python (airi/services/neru-audio): an import/syntax smoke via `uv`.
+            4. Post ONE review comment via
+               `gh pr comment ${{ github.event.pull_request.number }} --body "..."`
+               starting with exactly one of:
+               `VERDICT: APPROVE`, `VERDICT: NEEDS_CHANGES`, or `VERDICT: REJECT`,
+               then concise reasons and the check results.
+            5. ONLY if your verdict is APPROVE and every check you ran passed:
+               `gh pr review ${{ github.event.pull_request.number }} --approve` then
+               `gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch`.
+               For any other verdict: DO NOT approve, DO NOT merge — leave the comment and stop.
