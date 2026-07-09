@@ -891,10 +891,12 @@ source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "chatterbox-tts" },
+    { name = "fastapi" },
     { name = "faster-whisper" },
     { name = "numba" },
     { name = "numpy" },
     { name = "python-dotenv" },
+    { name = "python-multipart" },
     { name = "pyvts" },
     { name = "setuptools" },
     { name = "silero-vad" },
@@ -902,6 +904,7 @@ dependencies = [
     { name = "soundfile" },
     { name = "torch" },
     { name = "torchaudio" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -914,12 +917,14 @@ dev = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40" },
     { name = "chatterbox-tts", specifier = ">=0.1.7" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "faster-whisper", specifier = ">=1.2" },
     { name = "numba", specifier = ">=0.61" },
     { name = "numpy", specifier = "<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "python-multipart", specifier = ">=0.0.12" },
     { name = "pyvts", specifier = ">=0.3.3" },
     { name = "setuptools", specifier = "<81" },
     { name = "silero-vad", specifier = ">=5" },
@@ -927,6 +932,7 @@ requires-dist = [
     { name = "soundfile", specifier = ">=0.13" },
     { name = "torch", specifier = ">=2.9.0", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torchaudio", specifier = ">=2.9.0", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "uvicorn", specifier = ">=0.34" },
 ]
 provides-extras = ["dev"]
 
