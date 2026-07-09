@@ -1,6 +1,11 @@
 import type { Plugin } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 
+import { preseedNeruProviders } from './neruPreseed'
+
+// Pinia/스토어가 useLocalStorage로 값을 읽기 전에 로컬 provider를 프리시드해야 한다.
+preseedNeruProviders()
+
 import Tres from '@tresjs/core'
 
 import { autoAnimatePlugin } from '@formkit/auto-animate/vue'

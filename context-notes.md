@@ -163,3 +163,34 @@
 
 **폐기**: 자체 `frontend/`(Vite/pixi), `WebSocketAvatar`+`ws_server` 계획. 백엔드 provider 클래스는 HTTP 래퍼로 재사용(살림).
 **리스크**: pnpm 11(설치본) vs AIRI 지정 10.33 corepack 충돌 가능. 60패키지 모노레포 Windows 설치/native dep 이슈 가능. AIRI 내부 API(store/provider registry)가 alpha라 향후 변동 가능 → 우리 델타는 provider 설정+자막 분기로 최소화해 유지비 절감.
+
+---
+
+## AIRI 통합 완료 (Task 1~5, 2026-07-09) — 하나의 시스템
+
+**결정**: 시스템을 하나로 통합 — 자체 `backend/`(오케스트레이터·STT/LLM/TTS/avatar provider ABC)와 `frontend/`(Vite/pixi Live2D)를 **전부 삭제**하고, vendored AIRI 포크(`airi/`)만 유일한 실행 시스템으로 남긴다. AIRI가 마이크 입력·STT 오케스트레이션·LLM 대화·아바타(Live2D)·자막을 전담하고, 우리가 만든 GPU 음성 기술(Chatterbox TTS·faster-whisper STT)만 OpenAI 호환 HTTP 게이트웨이로 남겨 AIRI의 기존 `openai-compatible-audio-*` provider에 연결한다. 개별 TTS/M-C·STT/M-D 브릿지 서버 2개로 나누는 원래 계획 대신 게이트웨이 하나(`neru-audio`)로 통합했다.
+
+**삭제 목록** (커밋 `9ebc01e` "chore: remove parallel self-built backend and frontend"):
+- `backend/` 전체 — `src/neru/{events,persona,config,gpu,main,orchestrator,sink,sinks_console}.py`, `stt/`(whisper_local, scripted, base), `llm/`(claude, echo, base), `tts/`(chatterbox_local, silent, base), `avatar/`(vtube_studio, logging_avatar, base), `bridge/openai_audio.py`, `tests/`, `scripts/probe_*.py`, `pyproject.toml`, `assets/voices/neuro_ref.wav`.
+- `frontend/` 전체 — Vite(vanilla-ts) + pixi.js + pixi-live2d-display 앱, Electron 오버레이 셸, `neru-witch` Live2D 모델 배치 코드, WS 클라이언트.
+- neru 페르소나(영어 음성+한국어 자막 정체성)는 삭제 전에 `docs/superpowers/specs/neru-persona-reference.md`로 보존 — 후속 캐릭터 카드 스펙(M-F 계열)이 이 문서를 근거로 AIRI 페르소나에 이식.
+
+**`neru-audio` 게이트웨이** (`airi/services/neru-audio/`, 커밋 `3ba4381` "feat(neru-audio): relocate GPU audio gateway into the AIRI fork"):
+- `backend/src/neru/{gpu.py, tts/chatterbox_local.py, bridge/openai_audio.py}`를 그대로 이식(`gpu.py`는 바이트 단위 동일, `tts.py`는 ABC 상속만 제거). `whisper_local.py`는 이식하지 않음 — `app.py`가 원래도 `WhisperModel`을 직접 로드하고 `gpu.transcribe`를 호출했지, `whisper_local.py`를 임포트한 적이 없었음(동작 변화 없음).
+- FastAPI 앱(`neru_audio/app.py`)이 `GET /v1/models`, `POST /v1/audio/speech`(Chatterbox, WAV/PCM 응답), `POST /v1/audio/transcriptions`(faster-whisper large-v3, multipart 업로드→PyAV 디코드) 3개 엔드포인트를 `127.0.0.1:3457`에 노출. TTS/STT 각각 `asyncio.Lock`으로 동시 호출 직렬화(같은 CUDA 모델에 겹쳐 호출 시 오디오 손상/OOM 방지). Blackwell DLL 재사용 해법(`_ensure_cuda_dll_path`, torch/lib PATH prepend)을 `gpu.py`에서 그대로 사용.
+- 진입점: `pyproject.toml`의 `[project.scripts] neru-audio = "neru_audio.app:main"` → `uv run neru-audio`. 검증: `/v1/models` 200 + `/v1/audio/speech` 실제 WAV(RIFF 헤더 확인) 생성 완료(Task 1 report).
+- `airi/.gitignore`의 `*.wav` 규칙이 `neuro_ref.wav`를 막아 `git add -f`로 강제 추가(기존 backend에서도 추적되던 우리 자산이라 예외 처리).
+
+**Electron 자동 spawn/kill** (`apps/stage-tamagotchi/src/main/services/neru-audio/index.ts`, 커밋 `04838fe`+`51167d6`+`5d76b20`, Task 3):
+- `app.getAppPath()`에서 위로 올라가며 `pnpm-workspace.yaml`을 찾아 워크스페이스 루트를 잡고, `services/neru-audio`에서 `spawn('uv', ['run', 'neru-audio'], { shell: win32 })` 실행. `dev`(`is.dev`)에서만 자동 기동 — **패키지 배포엔 Python이 없어 자동 기동 안 함**(경고 로그만, 후속 결정 사항으로 남김).
+- 기동 후 `GET http://127.0.0.1:3457/v1/models`를 최대 60초 폴링해 헬스 확인. 종료 시(`onAppBeforeQuit`) Windows는 `taskkill /pid <pid> /T /F`로 프로세스 트리(cmd→uv→python)째 정리(부모만 죽이면 자식이 좀비로 남는 문제 회피), 그 외 플랫폼은 `child.kill()`. spawn 자체 실패(uv 미탐색 등)는 `error` 이벤트로 흡수해 메인 프로세스 크래시 방지.
+
+**Provider 프리시드** (`apps/stage-tamagotchi/src/renderer/neruPreseed.ts`, 커밋 `b7f8331`, Task 4):
+- `main.ts` 최상단(모든 다른 import보다 먼저 텍스트상 배치, Pinia 스토어가 `useLocalStorage`로 읽기 전)에서 `preseedNeruProviders()` 호출.
+- 프리시드 키: `settings/credentials/providers`(provider id별 `{apiKey:'sk-local-proxy', baseUrl}`) — `openai-compatible`→`http://localhost:3456/v1/`(LLM), `openai-compatible-audio-transcription`→`http://localhost:3457/v1/`(STT), `openai-compatible-audio-speech`→`http://localhost:3457/v1/`(TTS). `settings/providers/added`(3개 true). 모듈별 active provider/model: `settings/consciousness/active-provider=openai-compatible`+`active-model=claude-opus-4-7`, `settings/hearing/active-provider=openai-compatible-audio-transcription`+`active-model=large-v3`, `settings/speech/active-provider=openai-compatible-audio-speech`+`active-model=chatterbox`. `onboarding/completed=true`.
+- `seed()` 헬퍼는 키가 `null`일 때만 쓴다 — 사용자가 이후 직접 바꾼 provider 설정을 덮어쓰지 않음.
+- 스토어 하이드레이션 타이밍 리스크 조사: ES import는 호이스팅되므로 `preseedNeruProviders()`가 텍스트상 최상단이어도 다른 모듈의 module-scope 부수효과보다 늦게 실행될 수 있음 — 그러나 `App.vue`의 `use*Store()` 호출은 전부 `<script setup>`(컴포넌트 인스턴스 생성 시 실행, `.mount()` 시점) 안에 있고 `preseedNeruProviders()`는 `createPinia()`·`createApp().mount()`보다 먼저 실행되므로 안전(단, 전이적 import 전체를 100% 검증하진 못함 — Inferred/low-risk로 기록).
+
+**알려진 미해결**: 패키지된 `airi.exe`엔 Python이 없어 `neru-audio` 자동 기동이 dev(`uv run`)에서만 동작 — 패키징 시 게이트웨이를 어떻게 번들링할지(PyInstaller, 별도 설치 스크립트 등)는 후속 결정 사항.
+
+**후속 스펙**: (a) 패키지 Python 번들링 결정, (b) 이중언어(영어 음성+한국어 자막) — `neru-persona-reference.md` 기반 캐릭터 카드 스펙, (c) neru 마녀 Live2D 모델(Cubism4) AIRI 로더 연결, (d) 리브랜딩(productName airi→neru).

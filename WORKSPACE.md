@@ -1,22 +1,20 @@
 # Workspace
 
 ### neru — AI VTuber (Neuro-sama clone)
-Real-time voice conversation core: Korean speech in → English voice out + Korean subtitles.
+Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/services/neru-audio/`.
 
-**Done:** M1 (skeleton), M3 (Claude LLM), M4 (Chatterbox TTS + Neuro clone), M2 (faster-whisper STT). All reviewed (code + health). Avatar pivoted to **web-native Live2D** — renders in Vite frontend (Playwright validated). **Electron overlay** (transparent, frameless, always-on-top, bottom-right corner, draggable) — AIRI style. **HiDPI render + AIRI movement/settings**: devicePixelRatio+autoDensity, cursor look-at, idle motion, auto blink/breath/physics, expression switching, settings panel (localStorage) + click-through IPC bridge (preload).
-
-**Next:** WebSocketAvatar + ws_server → frontend WS client for real lip-sync (drive `window.__setMouth`) + subtitles.
+**In Progress:** `neru-airi-integration` branch — 8 commits (Tasks 1–5 + final-review fix). Final whole-branch review cleared: 1 Critical fixed (preseed VueUse serializer, commit 0f53d33), Minors triaged. Merge-ready; PR pending.
 
 **Known Issues:**
-- Orchestrator `stop_speaking` drain/close wiring needed for M5.
-- STT+TTS CUDA DLL coexistence unverified in single process.
-- Default mic = Steam Streaming (device 1); real mic = Realtek (device 20) → `NEURU_STT_DEVICE_INDEX`.
-
-**Key Decisions:**
-- Avatar = web-native Live2D + Electron overlay (rejected VTS — user preference). Cubism **4** Core required (v5 crashes renderer).
-- Blackwell/sm_120: torch cu128 (TTS) + CTranslate2 reusing torch/lib DLLs (STT).
-- TTS = Chatterbox; STT = faster-whisper large-v3 + silero VAD.
+- Packaged `airi.exe` has no Python — dev-only auto-spawn (`uv run`). Bundling approach undecided.
+- neru-witch Live2D model removed with `frontend/` deletion — recoverable from `~/Downloads/neru-witch-live2d.zip`.
+- README.md stale (still describes old layout).
+- 4 stage-tamagotchi vitest failures are pre-existing Windows symlink-permission (EPERM) errors in `plugins/index.test.ts` + `http-server/static-assets/paths.test.ts` — untouched by this branch, need Developer Mode/admin to pass locally.
+- Integration DoD (real `pnpm desktop` launch: Korean input → Claude reply + gateway auto-spawn) still to be exercised once by the user (GUI + mic + GPU).
 
 **Next Steps:**
-1. WebSocketAvatar + ws_server: push amplitude/subtitle/state → frontend WS client for real lip-sync (call `window.__setMouth`) + subtitles.
-2. M5: full pipeline wiring (STT→LLM→TTS→avatar), drain/close debts.
+1. Merge/PR `neru-airi-integration` (review cleared).
+2. neru persona → AIRI character card (preserved in `docs/superpowers/specs/neru-persona-reference.md`).
+3. English voice + Korean subtitle wiring (AIRI core modification).
+4. neru witch Live2D model → AIRI model loader.
+5. Rebrand productName airi→neru.
