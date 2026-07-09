@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import io
 import logging
 import wave
@@ -29,6 +30,7 @@ _GATEWAY_PORT = 3457
 _ALLOWED_HOSTS = {f"{_GATEWAY_HOST}:{_GATEWAY_PORT}", f"localhost:{_GATEWAY_PORT}"}
 # 오디오 업로드 상한 — 정상 음성 클립엔 넉넉하고, CSRF발 무제한 업로드로 인한 OOM/GPU DoS는 차단.
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+_EXPECTED_AUTHORIZATION = f"Bearer {_settings.api_key}"
 
 
 @app.middleware("http")
@@ -36,13 +38,22 @@ async def _restrict_to_local_app(request: Request, call_next):
     # multipart/form-data POST는 CORS "simple request"라 프리플라이트 없이 크로스오리진으로도
     # 전송된다 — 외부 웹페이지가 사용자가 열어둔 이 게이트웨이로 드라이브바이 요청을 쏠 수 있다.
     # Host를 강제해 DNS 리바인딩을, Origin 허용목록으로 브라우저發 크로스사이트 요청을 막는다.
+    # Origin/Host는 브라우저가 아닌 클라이언트(curl, 로컬의 다른 프로세스)라면 자유롭게 위조
+    # 가능하므로, Authorization: Bearer 토큰을 추가로 요구해 실제 접근 제어로 삼는다 — 이 헤더는
+    # CORS 단순 요청 조건을 깨뜨려 프리플라이트를 강제하는 부수효과도 있다.
     if request.url.path.startswith("/v1/"):
         host = request.headers.get("host", "")
         if host not in _ALLOWED_HOSTS:
             return JSONResponse({"error": "forbidden"}, status_code=403)
 
+        authorization = request.headers.get("authorization", "")
+        if not hmac.compare_digest(authorization, _EXPECTED_AUTHORIZATION):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+
         origin = request.headers.get("origin")
-        if origin is not None and origin != "null":
+        # Origin: null(file:// 페이지, 또는 이를 흉내낸 로컬 공격 페이지)도 차단 — 값을 아는
+        # 대상만 허용목록에 남긴다.
+        if origin is not None:
             origin_host = origin.split("://", 1)[-1].split(":")[0]
             if origin_host not in (_GATEWAY_HOST, "localhost"):
                 return JSONResponse({"error": "forbidden"}, status_code=403)

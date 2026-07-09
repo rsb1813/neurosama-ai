@@ -17,7 +17,8 @@ export function preseedNeruProviders(): void {
   const STT = 'openai-compatible-audio-transcription'
   const TTS = 'openai-compatible-audio-speech'
 
-  // 게이트웨이·프록시는 apiKey를 검사하지 않지만 스키마상 필요 → 더미.
+  // neru-audio 게이트웨이가 이 값을 Authorization: Bearer 토큰으로 검증한다 — 다른 값을
+  // 쓰려면 게이트웨이의 NERU_API_KEY도 함께 맞춰야 한다.
   seed('settings/credentials/providers', {
     [LLM]: { apiKey: 'sk-local-proxy', baseUrl: 'http://localhost:3456/v1/' },
     [STT]: { apiKey: 'sk-local-proxy', baseUrl: 'http://localhost:3457/v1/' },

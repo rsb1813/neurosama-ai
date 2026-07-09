@@ -13,6 +13,9 @@ import { app } from 'electron'
 import { onAppBeforeQuit } from '../../libs/bootkit/lifecycle'
 
 const HEALTH_URL = 'http://127.0.0.1:3457/v1/models'
+// neruPreseed.ts가 심는 apiKey와 동일 — 게이트웨이의 /v1/* 미들웨어가 이 값을
+// Authorization: Bearer 토큰으로 검증하므로 헬스체크에도 실어 보내야 한다.
+const GATEWAY_API_KEY = 'sk-local-proxy'
 
 // app.getAppPath()(=apps/stage-tamagotchi, dev)에서 위로 올라가며 pnpm-workspace.yaml이
 // 있는 airi 루트를 찾는다. ESM/CJS 모듈 형식에 무관(import.meta·__dirname 미사용).
@@ -30,7 +33,7 @@ async function waitForHealth(timeoutMs = 60_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(HEALTH_URL)
+      const res = await fetch(HEALTH_URL, { headers: { Authorization: `Bearer ${GATEWAY_API_KEY}` } })
       if (res.ok)
         return true
     }
