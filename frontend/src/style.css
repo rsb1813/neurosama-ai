@@ -10,11 +10,15 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #12101a;
+  /* 데스크톱 오버레이(Electron)에서 투명하게 띄우기 위해 배경 없음.
+     브라우저에서 단독 확인 시엔 body에 background를 잠깐 줘도 된다. */
+  background: transparent;
 }
 
 #canvas {
   display: block;
   width: 100vw;
   height: 100vh;
+  /* Electron 오버레이에서 아무 곳이나 잡아 창을 옮길 수 있게(드래그 영역). */
+  -webkit-app-region: drag;
 }

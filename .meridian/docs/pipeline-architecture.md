@@ -1,11 +1,14 @@
 ---
-summary: neru voice pipeline architecture — provider interfaces, orchestrator barge-in, event flow
+summary: neru voice pipeline architecture — provider interfaces, orchestrator barge-in, event flow, web-native avatar
 read_when:
   - adding a new provider (STT, LLM, TTS, avatar)
   - modifying the orchestrator or turn-taking logic
   - debugging barge-in or cancellation behavior
   - understanding the pipeline event flow
   - working with ClaudeLLM, persona prompt, or EN/KO streaming format
+  - working on the web-native Live2D avatar or Electron overlay
+  - wiring WebSocket communication between backend and frontend
+  - understanding the VTubeStudioAvatar alternative
 ---
 
 # neru Voice Pipeline Architecture
