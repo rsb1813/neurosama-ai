@@ -22,3 +22,84 @@ body {
   /* Electron 오버레이에서 아무 곳이나 잡아 창을 옮길 수 있게(드래그 영역). */
   -webkit-app-region: drag;
 }
+
+/* 설정 UI는 오버레이에서 클릭 가능해야 하므로 드래그 영역에서 제외. */
+.neru-gear,
+.neru-panel {
+  -webkit-app-region: no-drag;
+  position: fixed;
+  z-index: 10;
+  font-family: system-ui, sans-serif;
+  color: #eee;
+}
+
+.neru-gear {
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(20, 18, 28, 0.55);
+  color: #cbb7ff;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.neru-gear:hover {
+  opacity: 1;
+}
+
+.neru-panel {
+  top: 44px;
+  right: 8px;
+  width: 210px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(20, 18, 28, 0.82);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.neru-panel.neru-hidden {
+  display: none;
+}
+
+.neru-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #cbb7ff;
+  margin-bottom: 2px;
+}
+
+.neru-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.neru-row > span {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+.neru-row input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: #9b7bff;
+}
+.neru-row input[type="checkbox"] {
+  accent-color: #9b7bff;
+}
+.neru-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #eee;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 2px 4px;
+}

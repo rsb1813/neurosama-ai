@@ -1,5 +1,6 @@
 // neru 데스크톱 오버레이 — 투명·프레임리스·항상 위 창을 화면 우하단 코너에 띄운다(AIRI 스타일)
 const { app, BrowserWindow, screen, ipcMain } = require("electron");
+const path = require("path");
 
 // 렌더할 주소: 기본은 Vite 개발 서버. 빌드본을 쓰려면 NERU_OVERLAY_URL로 덮어쓴다.
 const OVERLAY_URL = process.env.NERU_OVERLAY_URL || "http://localhost:5173";
@@ -20,7 +21,10 @@ function createWindow() {
     alwaysOnTop: true,
     skipTaskbar: true,
     hasShadow: false,
-    webPreferences: { contextIsolation: true },
+    webPreferences: {
+      contextIsolation: true,
+      preload: path.join(__dirname, "preload.cjs"),
+    },
   });
   // 전체화면 앱 위에도 뜨도록 최상위 레벨 지정.
   win.setAlwaysOnTop(true, "screen-saver");
