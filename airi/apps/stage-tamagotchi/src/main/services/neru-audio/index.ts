@@ -64,6 +64,11 @@ function createNeruAudioManager() {
       console.warn(`[neru-audio] exited code=${code}`)
       child = undefined
     })
+    child.on('error', (err) => {
+      // spawn 자체 실패(uv 미탐색 등) — 미처리 시 메인 프로세스가 크래시하므로 흡수·로깅.
+      console.error(`[neru-audio] spawn 실패: ${err.message}`)
+      child = undefined
+    })
 
     const healthy = await waitForHealth()
     if (!healthy)
@@ -76,7 +81,10 @@ function createNeruAudioManager() {
     if (child?.pid && !child.killed) {
       if (process.platform === 'win32') {
         // Windows는 부모 종료 시 자식 트리(cmd→uv→python)를 정리하지 않으므로 트리째 kill.
-        execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], () => {})
+        execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], (err) => {
+          if (err)
+            console.warn(`[neru-audio] taskkill 실패: ${err.message}`)
+        })
       }
       else {
         child.kill()
