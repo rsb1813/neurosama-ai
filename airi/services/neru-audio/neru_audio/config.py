@@ -24,6 +24,9 @@ class Settings:
     tts_voice_prompt: str | None
     # faster-whisper 모델 크기.
     stt_model_size: str
+    # /v1/* 요청에 요구하는 Bearer 토큰. 기본값은 neruPreseed.ts가 심는 더미 apiKey와 동일 —
+    # 다른 값을 쓰려면 두 곳(NERU_API_KEY, stage-tamagotchi 프리시드) 모두 맞춰야 한다.
+    api_key: str
 
 
 def load_settings() -> Settings:
@@ -36,4 +39,5 @@ def load_settings() -> Settings:
     return Settings(
         tts_voice_prompt=voice_prompt,
         stt_model_size=os.getenv("NERU_STT_MODEL_SIZE", "large-v3"),
+        api_key=os.getenv("NERU_API_KEY", "sk-local-proxy"),
     )
