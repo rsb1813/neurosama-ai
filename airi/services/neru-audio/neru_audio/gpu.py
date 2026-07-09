@@ -2,9 +2,16 @@
 from __future__ import annotations
 
 import os
+import sys
 
 
 def ensure_cuda_dll_path() -> None:
+    # os.add_dll_directory는 Windows 전용 API — Linux/macOS에는 존재하지 않아 그대로 호출하면
+    # AttributeError로 STT 전체가 500을 반환한다. CTranslate2는 Linux에서 torch가 번들한
+    # CUDA 라이브러리를 일반 로더 경로로 알아서 찾으므로, POSIX에서는 이 셈이 아예 필요 없다.
+    if sys.platform != "win32":
+        return
+
     # CTranslate2가 cuBLAS/cuDNN DLL을 찾도록 torch가 번들한 lib 디렉터리를 검색 경로에 추가.
     # (별도 nvidia-* 휠 없이 torch cu128의 CUDA 런타임을 그대로 재사용)
     # 네이티브 delay-load는 add_dll_directory만으론 부족해 PATH에도 올린다.
