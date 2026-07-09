@@ -12,8 +12,17 @@ import { join } from "node:path";
 const arch = process.arch === "arm64" ? "arm64" : "x64";
 const platform = process.platform; // win32 / darwin / linux
 const exeName = platform === "win32" ? "electron.exe" : "electron";
-const cacheRoot = join(homedir(), "AppData", "Local", "electron", "Cache");
 const pnpmDir = join(process.cwd(), "node_modules", ".pnpm");
+
+// @electron/get 캐시 위치는 플랫폼별로 다르다. ELECTRON_CACHE가 있으면 최우선.
+function electronCacheRoot() {
+  if (process.env.ELECTRON_CACHE) return process.env.ELECTRON_CACHE;
+  if (platform === "win32") return join(homedir(), "AppData", "Local", "electron", "Cache");
+  if (platform === "darwin") return join(homedir(), "Library", "Caches", "electron");
+  const xdg = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
+  return join(xdg, "electron");
+}
+const cacheRoot = electronCacheRoot();
 
 function findElectronPkgs() {
   if (!existsSync(pnpmDir)) return [];
@@ -58,8 +67,15 @@ for (const pkg of findElectronPkgs()) {
   const dist = join(pkg, "dist");
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
-  // 시스템 tar(bsdtar)는 zip을 안정적으로 푼다(Node extract-zip 회피).
-  execFileSync("tar", ["-xf", zip, "-C", dist], { stdio: "ignore" });
+  try {
+    // 시스템 tar(bsdtar)는 zip을 안정적으로 푼다(Node extract-zip 회피).
+    execFileSync("tar", ["-xf", zip, "-C", dist], { stdio: "ignore" });
+  } catch (err) {
+    // tar 부재·추출 실패 시: dist를 이미 비웠으므로 명확히 실패 보고하고 다음 패키지로.
+    console.error(`[ensure-electron] electron@${version} tar 추출 실패: ${err.message}`);
+    process.exitCode = 1;
+    continue;
+  }
   writeFileSync(join(pkg, "path.txt"), exeName);
   console.log(`[ensure-electron] electron@${version} 바이너리 추출 완료`);
 }
