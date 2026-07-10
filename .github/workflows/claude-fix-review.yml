@@ -18,6 +18,7 @@ jobs:
       contents: read # 코드 읽기
       pull-requests: write # 판정 코멘트 게시 전용(승인·병합 권한 아님)
       issues: read # 연결된 이슈 읽기
+      id-token: write # claude-code-action이 OAuth 토큰을 OIDC로 교환하는 데 필요
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
