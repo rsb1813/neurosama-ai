@@ -1,11 +1,13 @@
 ---
-summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP
+summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> markers
 read_when:
   - understanding how AIRI, the local LLM proxy, and the neru-audio gateway fit together
   - adding or modifying the neru-audio FastAPI endpoints (/v1/audio/speech, /v1/audio/transcriptions)
   - debugging the Electron auto-spawn/tree-kill of the neru-audio gateway
   - debugging provider connection/onboarding (neruPreseed.ts localStorage keys)
+  - debugging the bilingual output routing (English voice vs Korean display/subtitle)
   - working on CUDA/Blackwell DLL loading shared by Chatterbox TTS and faster-whisper STT
+  - working on the neru persona card or system prompt
   - looking for the removed self-built backend/frontend (orchestrator, provider ABCs, VTubeStudioAvatar) — see "Removed" section below
 ---
 
@@ -28,7 +30,7 @@ AIRI owns: mic capture, STT orchestration/turn-taking/barge-in, the LLM conversa
 
 ## Providers (AIRI side — config only, no custom code)
 
-All three point at local services via `neruPreseed.ts` (`airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts`), which seeds localStorage before AIRI's stores hydrate so onboarding is skipped:
+All three point at local services via `neruPreseed.ts` (`airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts`), which **authoritatively** seeds localStorage before AIRI's stores hydrate so onboarding is skipped. "Authoritative" means scalar keys (active-provider, active-model) are **overwritten every launch** (not write-only-if-absent), and shared object keys (credentials, providers/added) are **merged** preserving the rest of the catalog. This overcomes stale AIRI defaults in dev localStorage that would otherwise leave providers unbound. Tradeoff: UI provider switches revert next launch — intended for a single-purpose appliance:
 
 | Role | AIRI provider id | Base URL | Backing service |
 |------|------------------|----------|-----------------|
@@ -43,6 +45,12 @@ FastAPI app (`neru_audio/app.py`), binds `127.0.0.1:3457`:
 - `GET /v1/models` — minimal model list for clients that probe it.
 - `POST /v1/audio/speech` — OpenAI Audio Speech shape (`{model, input, response_format?}`) → Chatterbox-synthesized audio (WAV by default; raw PCM16 24kHz on `response_format:"pcm"`). Serialized behind an `asyncio.Lock` — concurrent calls into the same CUDA model would corrupt audio or risk OOM.
 - `POST /v1/audio/transcriptions` — OpenAI Audio Transcriptions shape (multipart `file`, optional `language`/`response_format`) → faster-whisper `large-v3` transcription, decoded via PyAV so any container (webm/wav) works; defaults to `language=ko`. The model lazy-loads once per process behind its own `asyncio.Lock`.
+
+### Security middleware (`_restrict_to_local_app`)
+
+All `/v1/*` endpoints are gated by an HTTP middleware enforcing: **Host allowlist** (DNS-rebinding defense), **Origin allowlist** (localhost/127.0.0.1 only, via `_origin_allowed` — single gate for both preflight and real requests), **Bearer token** (`Authorization: Bearer <NERU_API_KEY>`), and **Content-Length cap** (25 MB).
+
+**CORS preflight**: the AIRI Electron renderer calls the gateway cross-origin (dev origin `http://localhost:<vite-port>` → `127.0.0.1:3457`). Browsers send an `OPTIONS` preflight that cannot carry `Authorization`. The middleware short-circuits `OPTIONS` with `204 + CORS headers` for allowed origins only (else `403`), without requiring auth. Real (non-OPTIONS) requests still require the Bearer token and all other checks. Internet origins are browser-enforced (non-spoofable) and rejected — drive-by defense preserved. Real responses carry only `Access-Control-Allow-Origin` + `Vary: Origin` (other CORS headers are preflight-only).
 
 Both the Chatterbox and faster-whisper models load in the **same process**, so the Blackwell/sm_120 CUDA DLL story applies directly: `gpu.py`'s `_ensure_cuda_dll_path()` prepends `torch/lib` to `PATH` so CTranslate2 finds `cublas64_12.dll`/`cudnn64_9.dll` without a separate nvidia-* wheel (native delay-load consults `PATH`, not `add_dll_directory` alone). This file, plus `tts.py` (from the old `tts/chatterbox_local.py`) and `app.py` (from the old `bridge/openai_audio.py`), were ported near-verbatim from the deleted `backend/`.
 
