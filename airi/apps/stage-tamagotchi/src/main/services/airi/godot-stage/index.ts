@@ -21,7 +21,7 @@ import process from 'node:process'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 
 import { useLogg } from '@guiiai/logg'
 import { defineInvokeHandler } from '@moeru/eventa'
@@ -204,6 +204,18 @@ function pipeProcessLog(stream: Readable, write: (message: string) => void) {
 function normalizeFileName(fileName: string) {
   const normalized = basename(fileName.trim())
   return normalized || 'model.bin'
+}
+
+// `modelId` is renderer-supplied and used to build a filesystem write path
+// (see `applySceneInput`); basename() it the same way `fileName` already is
+// to strip path traversal segments (e.g. `../../../etc`) before it ever
+// reaches `join()`.
+function normalizeModelId(modelId: string) {
+  const normalized = basename(modelId.trim())
+  if (!normalized || normalized === '.' || normalized === '..')
+    throw new Error('Invalid Godot stage model id.')
+
+  return normalized
 }
 
 function parseSocketMessage(message: GodotStageMessage): GodotStageSocketEnvelope {
@@ -870,14 +882,23 @@ export function createGodotStageManager(): GodotStageManager {
         const sceneInputPayload = parseSceneInputPayload(payload)
 
         const fileName = normalizeFileName(sceneInputPayload.fileName)
-        const modelDirectory = join(resolveGodotStageStorageRoot(), 'models', sceneInputPayload.modelId)
+        const modelId = normalizeModelId(sceneInputPayload.modelId)
+        const modelsRoot = join(resolveGodotStageStorageRoot(), 'models')
+        const modelDirectory = join(modelsRoot, modelId)
         const materializedPath = join(modelDirectory, fileName)
+
+        // Defense in depth: normalizeModelId() already strips traversal via
+        // basename(), so this should never trigger — but re-anchoring here
+        // guards against a future change to modelId handling silently
+        // reopening the path traversal.
+        if (!resolve(modelDirectory).startsWith(resolve(modelsRoot) + sep))
+          throw new Error('Resolved Godot stage model path escapes storage root.')
 
         await mkdir(modelDirectory, { recursive: true })
         await writeFile(materializedPath, sceneInputPayload.data)
 
         sendSceneInputToGodot({
-          modelId: sceneInputPayload.modelId,
+          modelId,
           format: sceneInputPayload.format,
           name: sceneInputPayload.name,
           path: materializedPath,
