@@ -36,15 +36,25 @@ _EXPECTED_AUTHORIZATION = f"Bearer {_settings.api_key}"
 _ALLOWED_ORIGIN_HOSTS = {_GATEWAY_HOST, "localhost"}
 
 
-def _cors_headers(origin: str | None) -> dict[str, str]:
-    # 허용 origin(localhost/127.0.0.1)일 때만 CORS 헤더를 반사한다. 인터넷 페이지는 자신의
-    # 실제 origin을 갖고(브라우저가 강제하므로 위조 불가) 여기서 빈 dict를 받아 차단된다.
-    # Authorization은 비단순 헤더라 프리플라이트가 이를 요청하므로 Allow-Headers에 포함한다.
+def _origin_allowed(origin: str | None) -> bool:
+    # scheme://host:port 에서 host만 떼어 허용목록과 정확히 비교한다(브라우저 Origin엔 경로가
+    # 없다). 프리플라이트 응답과 실제 요청 검사가 같은 판정을 쓰도록 이 한 곳에 모은다 —
+    # 두 곳에 흩어지면 허용목록이 조용히 갈라진다.
     if origin is None:
-        return {}
+        return False
     origin_host = origin.split("://", 1)[-1].split(":")[0]
-    if origin_host not in _ALLOWED_ORIGIN_HOSTS:
-        return {}
+    return origin_host in _ALLOWED_ORIGIN_HOSTS
+
+
+def _cors_headers(origin: str) -> dict[str, str]:
+    # 허용 origin으로 확인된 뒤에만 호출한다. Authorization은 비단순 헤더라 프리플라이트가
+    # 이를 요청하므로 Allow-Headers에 포함한다.
+    #
+    # 트레이드오프(의도된 신뢰 경계): 이 diff 이전엔 어떤 크로스오리진 페이지도 응답 본문을
+    # 못 읽었다. 이제 origin이 localhost/127.0.0.1로 파싱되는 페이지(토큰 보유 여부와 무관하게
+    # 로컬 아무 포트의 웹서버)는 ACAO를 반사받아 읽을 수 있다. 로컬에서 페이지를 서빙하려면
+    # 이미 로컬 코드 실행 권한(공개 상수 토큰 + 직접 접근)이 있으므로 수용 가능하다. 인터넷
+    # 페이지는 자신의 실제 origin을 강제당해(위조 불가) 여기 도달하지 못한다.
     return {
         "Access-Control-Allow-Origin": origin,
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -63,16 +73,16 @@ async def _restrict_to_local_app(request: Request, call_next):
     # 가능하므로, Authorization: Bearer 토큰을 추가로 요구해 실제 접근 제어로 삼는다.
     if request.url.path.startswith("/v1/"):
         origin = request.headers.get("origin")
-        cors = _cors_headers(origin)
+        allowed_origin = _origin_allowed(origin)
 
         # CORS 프리플라이트(OPTIONS)는 Authorization을 실을 수 없다 — 브라우저가 절대 붙이지
         # 않으므로 여기서 인증을 요구하면 프리플라이트가 401로 깨져 실제 요청이 못 나간다.
         # 허용 origin이면 인증 없이 CORS 헤더만 돌려주고(비허용이면 403), 실제 요청의 접근
         # 제어는 아래 Bearer 검사가 그대로 담당한다.
         if request.method == "OPTIONS":
-            if not cors:
+            if not allowed_origin:
                 return JSONResponse({"error": "forbidden"}, status_code=403)
-            return Response(status_code=204, headers=cors)
+            return Response(status_code=204, headers=_cors_headers(origin))
 
         host = request.headers.get("host", "")
         if host not in _ALLOWED_HOSTS:
@@ -84,10 +94,8 @@ async def _restrict_to_local_app(request: Request, call_next):
 
         # Origin: null(file:// 페이지, 또는 이를 흉내낸 로컬 공격 페이지)도 차단 — 값을 아는
         # 대상만 허용목록에 남긴다.
-        if origin is not None:
-            origin_host = origin.split("://", 1)[-1].split(":")[0]
-            if origin_host not in (_GATEWAY_HOST, "localhost"):
-                return JSONResponse({"error": "forbidden"}, status_code=403)
+        if origin is not None and not allowed_origin:
+            return JSONResponse({"error": "forbidden"}, status_code=403)
 
         content_length = request.headers.get("content-length")
         if content_length is not None:
@@ -99,10 +107,11 @@ async def _restrict_to_local_app(request: Request, call_next):
                 return JSONResponse({"error": "payload too large"}, status_code=413)
 
         response = await call_next(request)
-        # 실제(비프리플라이트) 응답에도 Access-Control-Allow-Origin을 실어야 브라우저가
-        # 크로스오리진 응답 본문을 스크립트에 넘겨준다.
-        for key, value in cors.items():
-            response.headers[key] = value
+        # 실제(비프리플라이트) 응답엔 ACAO와 Vary만 실으면 브라우저가 본문을 넘겨준다.
+        # Allow-Methods/Headers/Max-Age는 프리플라이트 전용이라 여기선 불필요.
+        if allowed_origin and origin is not None:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
         return response
 
     return await call_next(request)
