@@ -26,8 +26,9 @@ export interface CategorizedResponse {
 }
 
 /**
- * Maps tag names to categories
- * All tags are treated as reasoning (filtered from TTS)
+ * Maps tag names to categories.
+ * `<ko>` is subtitle (Korean shown on screen, kept out of TTS); every other tag
+ * is reasoning (kept out of both TTS and display).
  */
 function mapTagNameToCategory(tagName: string): ResponseCategory {
   // <ko>는 화면 자막(음성 제외), 그 외 태그는 기존대로 reasoning(음성·화면 모두 제외).
