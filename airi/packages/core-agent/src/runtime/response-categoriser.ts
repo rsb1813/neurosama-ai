@@ -7,7 +7,7 @@ import rehypeStringify from 'rehype-stringify'
 import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 
-export type ResponseCategory = 'speech' | 'reasoning' | 'unknown'
+export type ResponseCategory = 'speech' | 'reasoning' | 'subtitle' | 'unknown'
 
 export interface CategorizedSegment {
   category: ResponseCategory
@@ -29,8 +29,10 @@ export interface CategorizedResponse {
  * Maps tag names to categories
  * All tags are treated as reasoning (filtered from TTS)
  */
-function mapTagNameToCategory(_tagName: string): ResponseCategory {
-  // All tags are reasoning - no need to distinguish tag names
+function mapTagNameToCategory(tagName: string): ResponseCategory {
+  // <ko>는 화면 자막(음성 제외), 그 외 태그는 기존대로 reasoning(음성·화면 모두 제외).
+  if (tagName === 'ko')
+    return 'subtitle'
   return 'reasoning'
 }
 

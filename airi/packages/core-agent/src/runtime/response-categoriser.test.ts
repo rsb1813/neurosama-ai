@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createStreamingCategorizer } from './response-categoriser'
+import { categorizeResponse, createStreamingCategorizer } from './response-categoriser'
 
 describe('createStreamingCategorizer', () => {
   it('should handle pure speech without tags', () => {
@@ -347,5 +347,19 @@ describe('createStreamingCategorizer', () => {
 
     const result = categorizer.end()
     expect(result.speech).toBe('Hello world!')
+  })
+})
+
+describe('categorizeResponse <ko> subtitle', () => {
+  it('categorises <ko> as subtitle and keeps English as speech', () => {
+    const r = categorizeResponse('Hello there. <ko>안녕하세요.</ko>')
+    expect(r.speech).toBe('Hello there.')
+    const ko = r.segments.find(s => s.tagName === 'ko')
+    expect(ko?.category).toBe('subtitle')
+    expect(ko?.content).toBe('안녕하세요.')
+  })
+  it('still treats <think> as reasoning', () => {
+    const r = categorizeResponse('Hi. <think>plan</think>')
+    expect(r.segments.find(s => s.tagName === 'think')?.category).toBe('reasoning')
   })
 })
