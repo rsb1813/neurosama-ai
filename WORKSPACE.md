@@ -14,11 +14,10 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - Packaged `airi.exe` has no Python — dev-only auto-spawn (`uv run`). Bundling approach undecided.
 - neru-witch Live2D model removed with `frontend/` deletion — recoverable from `~/Downloads/neru-witch-live2d.zip`.
 - 4 stage-tamagotchi vitest failures are pre-existing Windows symlink-permission (EPERM) errors in `plugins/index.test.ts` + `http-server/static-assets/paths.test.ts` — need Developer Mode/admin to pass locally.
-- Integration DoD (real `pnpm desktop` launch: Korean input → Claude reply + gateway auto-spawn) still to be exercised once by the user (GUI + mic + GPU).
+- Integration DoD **exercised** (2026-07-10): real `pnpm desktop` run drives mic → STT → LLM(:3456) → TTS → avatar end-to-end. Fixed 3 live-loop bugs (PR #17): preseed was inert against stale AIRI localStorage (now authoritative), gateway 401'd CORS preflight (now allows OPTIONS for localhost origins), origin-allowlist duplication. Verified: STT 200, TTS 200, preflight 204.
+- Bilingual output not yet wired: neru currently replies in Korean through the English-cloned voice (garbled). English-voice+Korean-subtitle is the active design (see Next Steps 1).
 
 **Next Steps:**
-1. Exercise the live loop once (`pnpm desktop`): Korean input → English voice + Korean subtitle + gateway auto-spawn.
-2. neru persona → AIRI character card (preserved in `docs/superpowers/specs/neru-persona-reference.md`).
-3. English voice + Korean subtitle wiring (AIRI core modification).
-4. neru witch Live2D model → AIRI model loader.
-5. Rebrand productName airi→neru; packaged build with bundled runtime.
+1. **[active]** Bilingual output: neru card system-prompt emits English + `<ko>` Korean per sentence; extend AIRI response categoriser to route `<ko>` to the caption channel. Design in progress → spec under `docs/superpowers/specs/`.
+2. neru witch Live2D model → AIRI model loader (model in `~/Downloads/neru-witch-live2d.zip`).
+3. Rebrand productName airi→neru; packaged build with bundled runtime.
