@@ -501,7 +501,22 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
         sessionMessages: sessionMessagesForSend,
       })
 
-      const categorizer = createStreamingCategorizer(deps.getActiveProvider())
+      const categorizer = createStreamingCategorizer(deps.getActiveProvider(), (segment) => {
+        if (segment.category !== 'subtitle')
+          return
+        const ko = segment.content.trim()
+        if (!ko)
+          return
+        // 한국어는 화면(채팅 패널)으로 — 영어는 아래 onLiteral에서 TTS로만 간다.
+        buildingMessage.content += (buildingMessage.content ? ' ' : '') + ko
+        const lastSlice = buildingMessage.slices.at(-1)
+        if (lastSlice?.type === 'text')
+          lastSlice.text += ` ${ko}`
+        else
+          buildingMessage.slices.push({ type: 'text', text: ko })
+        patchForegroundStream(sessionId, buildingMessage)
+        void hooks.emitSubtitleHooks(ko, streamingMessageContext)
+      })
       let streamPosition = 0
 
       const parser = useLlmmarkerParser({
@@ -515,21 +530,8 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
           streamPosition += literal.length
 
           if (speechOnly.trim()) {
-            buildingMessage.content += speechOnly
-
+            // 영어(태그 밖)는 음성 채널로만 보낸다. 화면 텍스트는 위 onSegment에서 한국어로 채운다.
             await hooks.emitTokenLiteralHooks(speechOnly, streamingMessageContext)
-
-            const lastSlice = buildingMessage.slices.at(-1)
-            if (lastSlice?.type === 'text') {
-              lastSlice.text += speechOnly
-            }
-            else {
-              buildingMessage.slices.push({
-                type: 'text',
-                text: speechOnly,
-              })
-            }
-            patchForegroundStream(sessionId, buildingMessage)
           }
         },
         onSpecial: async (special) => {

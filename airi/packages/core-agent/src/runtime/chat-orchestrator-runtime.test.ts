@@ -578,10 +578,12 @@ describe('createChatOrchestratorRuntime', () => {
         },
       },
     ])
+    // "visible reply" carries no <ko> tag, so per the English-to-TTS-only routing
+    // it never lands in buildingMessage.content/slices (display stays Korean-only).
     const assistant = harness.sessionMessages['session-1']?.at(-1)
     expect(assistant).toMatchObject({
       role: 'assistant',
-      content: 'visible reply',
+      content: '',
       categorization: {
         reasoning: 'thinking',
       },
@@ -593,10 +595,6 @@ describe('createChatOrchestratorRuntime', () => {
           toolCallId: 'tool-1',
         }),
       }),
-      {
-        type: 'text',
-        text: 'visible reply',
-      },
     ])
     expect((assistant as StreamingAssistantMessage).tool_results).toEqual([
       {
@@ -607,5 +605,39 @@ describe('createChatOrchestratorRuntime', () => {
     ])
     expect(harness.assistantAppended).toHaveLength(1)
     expect(harness.foregroundResets).toHaveLength(1)
+  })
+
+  /**
+   * @example
+   * A streamed reply mixes English speech with a `<ko>` subtitle tag.
+   * English goes to TTS only; Korean fills the chat panel and subtitle hook.
+   */
+  it('routes English to TTS only and Korean subtitle content to the display', async () => {
+    const harness = createHarness()
+    const literalHookCalls: string[] = []
+    const subtitleHookCalls: string[] = []
+    harness.runtime.hooks.onTokenLiteral(async (literal) => {
+      literalHookCalls.push(literal)
+    })
+    harness.runtime.hooks.onSubtitle(async (koText) => {
+      subtitleHookCalls.push(koText)
+    })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'Hello. <ko>안녕.</ko>' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+    })
+
+    await harness.runtime.ingest('hi', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    expect(literalHookCalls.join('')).toContain('Hello')
+    expect(literalHookCalls.join('')).not.toContain('안녕')
+    expect(subtitleHookCalls).toEqual(['안녕.'])
+
+    const assistant = harness.sessionMessages['session-1']?.at(-1) as StreamingAssistantMessage
+    expect(assistant.content).toContain('안녕.')
+    expect(assistant.content).not.toContain('Hello')
   })
 })
