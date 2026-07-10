@@ -31,6 +31,27 @@ _ALLOWED_HOSTS = {f"{_GATEWAY_HOST}:{_GATEWAY_PORT}", f"localhost:{_GATEWAY_PORT
 # 오디오 업로드 상한 — 정상 음성 클립엔 넉넉하고, CSRF발 무제한 업로드로 인한 OOM/GPU DoS는 차단.
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 _EXPECTED_AUTHORIZATION = f"Bearer {_settings.api_key}"
+# CORS를 허용할 origin 호스트 — 로컬 AIRI 렌더러(dev는 http://localhost:<vite포트>,
+# 패키지는 파일 origin이지만 요청은 localhost로 나간다)만 대상으로 한다.
+_ALLOWED_ORIGIN_HOSTS = {_GATEWAY_HOST, "localhost"}
+
+
+def _cors_headers(origin: str | None) -> dict[str, str]:
+    # 허용 origin(localhost/127.0.0.1)일 때만 CORS 헤더를 반사한다. 인터넷 페이지는 자신의
+    # 실제 origin을 갖고(브라우저가 강제하므로 위조 불가) 여기서 빈 dict를 받아 차단된다.
+    # Authorization은 비단순 헤더라 프리플라이트가 이를 요청하므로 Allow-Headers에 포함한다.
+    if origin is None:
+        return {}
+    origin_host = origin.split("://", 1)[-1].split(":")[0]
+    if origin_host not in _ALLOWED_ORIGIN_HOSTS:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "authorization, content-type",
+        "Access-Control-Max-Age": "600",
+        "Vary": "Origin",
+    }
 
 
 @app.middleware("http")
@@ -39,9 +60,20 @@ async def _restrict_to_local_app(request: Request, call_next):
     # 전송된다 — 외부 웹페이지가 사용자가 열어둔 이 게이트웨이로 드라이브바이 요청을 쏠 수 있다.
     # Host를 강제해 DNS 리바인딩을, Origin 허용목록으로 브라우저發 크로스사이트 요청을 막는다.
     # Origin/Host는 브라우저가 아닌 클라이언트(curl, 로컬의 다른 프로세스)라면 자유롭게 위조
-    # 가능하므로, Authorization: Bearer 토큰을 추가로 요구해 실제 접근 제어로 삼는다 — 이 헤더는
-    # CORS 단순 요청 조건을 깨뜨려 프리플라이트를 강제하는 부수효과도 있다.
+    # 가능하므로, Authorization: Bearer 토큰을 추가로 요구해 실제 접근 제어로 삼는다.
     if request.url.path.startswith("/v1/"):
+        origin = request.headers.get("origin")
+        cors = _cors_headers(origin)
+
+        # CORS 프리플라이트(OPTIONS)는 Authorization을 실을 수 없다 — 브라우저가 절대 붙이지
+        # 않으므로 여기서 인증을 요구하면 프리플라이트가 401로 깨져 실제 요청이 못 나간다.
+        # 허용 origin이면 인증 없이 CORS 헤더만 돌려주고(비허용이면 403), 실제 요청의 접근
+        # 제어는 아래 Bearer 검사가 그대로 담당한다.
+        if request.method == "OPTIONS":
+            if not cors:
+                return JSONResponse({"error": "forbidden"}, status_code=403)
+            return Response(status_code=204, headers=cors)
+
         host = request.headers.get("host", "")
         if host not in _ALLOWED_HOSTS:
             return JSONResponse({"error": "forbidden"}, status_code=403)
@@ -50,7 +82,6 @@ async def _restrict_to_local_app(request: Request, call_next):
         if not hmac.compare_digest(authorization, _EXPECTED_AUTHORIZATION):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-        origin = request.headers.get("origin")
         # Origin: null(file:// 페이지, 또는 이를 흉내낸 로컬 공격 페이지)도 차단 — 값을 아는
         # 대상만 허용목록에 남긴다.
         if origin is not None:
@@ -66,6 +97,13 @@ async def _restrict_to_local_app(request: Request, call_next):
                 too_large = False
             if too_large:
                 return JSONResponse({"error": "payload too large"}, status_code=413)
+
+        response = await call_next(request)
+        # 실제(비프리플라이트) 응답에도 Access-Control-Allow-Origin을 실어야 브라우저가
+        # 크로스오리진 응답 본문을 스크립트에 넘겨준다.
+        for key, value in cors.items():
+            response.headers[key] = value
+        return response
 
     return await call_next(request)
 
