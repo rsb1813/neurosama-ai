@@ -501,13 +501,27 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
         sessionMessages: sessionMessagesForSend,
       })
 
+      // 스트리밍 speech 추출 상태. 각 <ko> 세그먼트가 완결되면 그 앞의 영어(태그 밖)를
+      // 잘라 TTS로 보낸다. categorizer.filterToSpeech는 청크 경계가 태그와 겹칠 때 여는 태그
+      // 앞의 영어를 통째로 버리는 버그가 있어(첫 문장 유실) 사용하지 않는다.
+      // rawLiteralBuffer는 categorizer 내부 버퍼와 동일하게 누적되므로 segment 인덱스로 슬라이스할 수 있다.
+      let speechCursor = 0
+      let rawLiteralBuffer = ''
+      const pendingSpeech: string[] = []
+
       const categorizer = createStreamingCategorizer(deps.getActiveProvider(), (segment) => {
         if (segment.category !== 'subtitle')
           return
+        // 이 <ko> 앞의 영어는 음성 채널로 — onLiteral에서 순서대로 flush한다(async 순서 보존).
+        const speechBefore = rawLiteralBuffer.slice(speechCursor, segment.startIndex)
+        speechCursor = segment.endIndex
+        if (speechBefore.trim())
+          pendingSpeech.push(speechBefore)
+
         const ko = segment.content.trim()
         if (!ko)
           return
-        // 한국어는 화면(채팅 패널)으로 — 영어는 아래 onLiteral에서 TTS로만 간다.
+        // 한국어는 화면(채팅 패널)으로.
         buildingMessage.content += (buildingMessage.content ? ' ' : '') + ko
         const lastSlice = buildingMessage.slices.at(-1)
         if (lastSlice?.type === 'text')
@@ -517,21 +531,21 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
         patchForegroundStream(sessionId, buildingMessage)
         void hooks.emitSubtitleHooks(ko, streamingMessageContext)
       })
-      let streamPosition = 0
 
       const parser = useLlmmarkerParser({
         onLiteral: async (literal) => {
           if (shouldAbort())
             return
 
+          // rawLiteralBuffer는 consume 전에 갱신해야 onSegment가 올바른 인덱스로 슬라이스한다.
+          rawLiteralBuffer += literal
           categorizer.consume(literal)
 
-          const speechOnly = categorizer.filterToSpeech(literal, streamPosition)
-          streamPosition += literal.length
-
-          if (speechOnly.trim()) {
-            // 영어(태그 밖)는 음성 채널로만 보낸다. 화면 텍스트는 위 onSegment에서 한국어로 채운다.
-            await hooks.emitTokenLiteralHooks(speechOnly, streamingMessageContext)
+          // consume가 완결된 <ko> 세그먼트마다 그 앞 영어를 pendingSpeech에 쌓았다 — 순서대로 TTS로.
+          while (pendingSpeech.length > 0) {
+            const speech = pendingSpeech.shift()
+            if (speech && speech.trim())
+              await hooks.emitTokenLiteralHooks(speech, streamingMessageContext)
           }
         },
         onSpecial: async (special) => {
@@ -543,6 +557,12 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
         onEnd: async (fullText) => {
           if (isStaleGeneration())
             return
+
+          // 마지막 <ko> 뒤(또는 <ko>가 하나도 없으면 전체)에 남은 영어를 음성으로 flush.
+          const trailingSpeech = rawLiteralBuffer.slice(speechCursor)
+          speechCursor = rawLiteralBuffer.length
+          if (trailingSpeech.trim())
+            await hooks.emitTokenLiteralHooks(trailingSpeech, streamingMessageContext)
 
           const finalCategorization = categorizeResponse(fullText, deps.getActiveProvider())
 
