@@ -11,7 +11,8 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - ⚠️ Do NOT re-introduce auto-merge that lets one model both review untrusted PR content and merge/push (prompt-injection + token-exfil P0; removed in PR #9).
 
 **In Progress:**
-- **Bilingual output** (`feat/neru-bilingual` branch, SDD): neru card system-prompt emits English + `<ko>한국어</ko>` per sentence; AIRI response categoriser routes `<ko>` to display/subtitle, English to TTS only. **Tasks 1-6 of 7 complete, all reviewed clean** (persona constant, card preseed, categoriser, onSubtitle hook, core routing, Stage.vue caption swap → overlay now Korean-only). Only Task 7 (manual E2E) remains; core-agent dist rebuilt for it.
+- **Bilingual output** (`feat/neru-bilingual` branch, SDD): neru card system-prompt emits English + `<ko>한국어</ko>` per sentence; AIRI response categoriser routes `<ko>` to display/subtitle, English to TTS only. **Tasks 1-6 done**; Task 7 (E2E) in progress. E2E verified: English voice ✓, Korean chat panel ✓, gateway STT/TTS 200 ✓.
+- **E2E-found bug, FIXED** (commits 5f11741 + d898ad1): the streaming `categorizer.filterToSpeech` dropped the English preceding an opening `<ko>` when a stream chunk straddled the tag boundary → first 1-2 spoken sentences silently swallowed + tag fragments leaked to TTS. Replaced with `<ko>`-segment-boundary slicing (emit English before each completed segment; skip reasoning-tag content; flush trailing English in onEnd, cut at first `<`). code-reviewed (opus), 74/74 tests pass. Pending final E2E confirmation.
 
 **Known Issues:**
 - Packaged `airi.exe` has no Python — dev-only auto-spawn (`uv run`). Bundling approach undecided.
@@ -19,6 +20,7 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - 4 stage-tamagotchi vitest failures are pre-existing Windows symlink-permission (EPERM) errors.
 - **v1 bilingual persistence gap**: pure-English reply (zero `<ko>`, format violation) leaves `buildingMessage.slices` empty → persistence guard skips saving that assistant turn. Relying on strict prompt; fix with English-fallback + tight audio-sync follow-up.
 - v1 caption sync is generation-timed (caption may lead voice on long replies). Tight audio-synced captions deferred.
+- **Caption overlay window shows nothing (OPEN)**: main window's `postCaption` fires correctly (verified via debug log — `caption-assistant` posted per `<ko>`), but the separate caption overlay window renders no text. Chat panel Korean works; overlay does not. Same-origin in dev (both `http://localhost:5173`), so BroadcastChannel *should* cross. Caption window console isn't piped to the app stdout, blocking observation. Affects both `caption-speaker` and `caption-assistant` → shared caption.vue/BroadcastChannel infra issue, likely pre-existing (not from bilingual work). Next debugging target.
 
 **Next Steps:**
 1. Manual E2E of bilingual output (SDD Task 7): `pnpm desktop`, speak Korean → verify English voice + Korean screen + gateway 200s. Then final whole-branch review + finish branch.
