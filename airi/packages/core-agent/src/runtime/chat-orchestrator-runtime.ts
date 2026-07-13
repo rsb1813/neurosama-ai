@@ -510,18 +510,21 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       const pendingSpeech: string[] = []
 
       const categorizer = createStreamingCategorizer(deps.getActiveProvider(), (segment) => {
-        if (segment.category !== 'subtitle')
-          return
-        // 이 <ko> 앞의 영어는 음성 채널로 — onLiteral에서 순서대로 flush한다(async 순서 보존).
+        // 완결된 모든 세그먼트(<ko> 또는 reasoning 등) 앞의 영어는 음성 채널로 보내고,
+        // cursor를 세그먼트 끝으로 넘겨 세그먼트 내용(한국어 자막·추론)은 음성에서 제외한다.
+        // 카테고리 체크보다 먼저 해야 reasoning 태그가 cursor를 넘겨 그 내용이 TTS로 새지 않는다.
+        // Math.max: 중첩/기형 태그로 세그먼트 endIndex가 역순이어도 cursor가 뒤로 가지 않게 한다.
         const speechBefore = rawLiteralBuffer.slice(speechCursor, segment.startIndex)
-        speechCursor = segment.endIndex
+        speechCursor = Math.max(speechCursor, segment.endIndex)
         if (speechBefore.trim())
           pendingSpeech.push(speechBefore)
 
+        // <ko>만 한국어 화면(채팅 패널) 채널로 — 그 외 태그(추론 등)는 음성·화면 양쪽에서 제외.
+        if (segment.category !== 'subtitle')
+          return
         const ko = segment.content.trim()
         if (!ko)
           return
-        // 한국어는 화면(채팅 패널)으로.
         buildingMessage.content += (buildingMessage.content ? ' ' : '') + ko
         const lastSlice = buildingMessage.slices.at(-1)
         if (lastSlice?.type === 'text')
@@ -558,8 +561,13 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
           if (isStaleGeneration())
             return
 
-          // 마지막 <ko> 뒤(또는 <ko>가 하나도 없으면 전체)에 남은 영어를 음성으로 flush.
-          const trailingSpeech = rawLiteralBuffer.slice(speechCursor)
+          // 마지막 세그먼트 뒤에 남은 영어를 음성으로 flush. cursor 이후의 '<'는 완결 세그먼트가
+          // 아니므로(모두 cursor를 넘겼음) 미완결 태그의 시작이다 — 잘림/기형으로 남은 '<ko...'
+          // 조각이 TTS로 새지 않게 첫 '<'에서 자른다.
+          let trailingSpeech = rawLiteralBuffer.slice(speechCursor)
+          const incompleteTagStart = trailingSpeech.indexOf('<')
+          if (incompleteTagStart !== -1)
+            trailingSpeech = trailingSpeech.slice(0, incompleteTagStart)
           speechCursor = rawLiteralBuffer.length
           if (trailingSpeech.trim())
             await hooks.emitTokenLiteralHooks(trailingSpeech, streamingMessageContext)
