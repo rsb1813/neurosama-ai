@@ -375,11 +375,12 @@ export const useExpressionStore = defineStore('live2d-expressions', () => {
     if (!group)
       return
 
-    // 각 파라미터를 exp3 타깃값으로 활성화하고 hold 후 자동 중립 복귀(applyValue의 duration 타이머 재사용).
+    // 각 파라미터를 exp3 타깃값으로 활성화하고 hold 후 modelDefault(진짜 중립)로 자동 복귀한다.
+    // resetTo=modelDefault를 명시해 즉시-리셋 경로(위, modelDefault)와 타이머 리셋 경로를 일치시킨다.
     for (const param of group.parameters) {
       const entry = expressions.value.get(param.parameterId)
       if (entry)
-        applyValue(entry, param.value, holdSeconds)
+        applyValue(entry, param.value, holdSeconds, entry.modelDefault)
     }
     activeEmotionGroup.value = expressionName
   }
@@ -418,7 +419,7 @@ export const useExpressionStore = defineStore('live2d-expressions', () => {
 
   // ---- private -------------------------------------------------------------
 
-  function applyValue(entry: ExpressionEntry, value: number, duration?: number) {
+  function applyValue(entry: ExpressionEntry, value: number, duration?: number, resetTo?: number) {
     // Cancel existing timer
     if (entry.resetTimer != null) {
       clearTimeout(entry.resetTimer)
@@ -429,9 +430,14 @@ export const useExpressionStore = defineStore('live2d-expressions', () => {
 
     // Schedule auto-reset if duration > 0
     if (duration && duration > 0) {
-      const resetTo = entry.defaultValue
+      // NOTICE:
+      // 자동 복귀 대상은 기본적으로 defaultValue지만, 호출자가 resetTo를 주면 그 값으로 복귀한다.
+      // 감정 표정(applyEmotion)은 항상 modelDefault(진짜 중립)로 복귀해야 하므로 resetTo=modelDefault를 넘긴다.
+      // 이유: saveDefaults()(LLM 도구 expression_save_defaults / 설정 버튼)가 감정 표정이 활성인 동안 호출되면
+      // defaultValue가 비중립 값으로 저장돼, defaultValue에만 의존하면 이후 감정 복귀가 그 값으로 오염된다.
+      const target = resetTo ?? entry.defaultValue
       entry.resetTimer = setTimeout(() => {
-        entry.currentValue = resetTo
+        entry.currentValue = target
         entry.resetTimer = undefined
       }, duration * 1000)
     }
