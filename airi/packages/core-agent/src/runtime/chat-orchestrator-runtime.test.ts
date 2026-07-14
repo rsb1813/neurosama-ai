@@ -640,4 +640,51 @@ describe('createChatOrchestratorRuntime', () => {
     expect(assistant.content).toContain('안녕.')
     expect(assistant.content).not.toContain('Hello')
   })
+
+  /**
+   * @example
+   * A two-sentence bilingual reply streams across deltas, so the marker parser
+   * (24-char emit threshold, 5-char holdback) emits a literal ending on the '<'
+   * of the first `</ko>`. Regression guard for the chunk-boundary categorizer
+   * desync that silently dropped every Korean subtitle and the later English,
+   * and left `slices` empty so the turn was never persisted.
+   * See response-categoriser.test.ts ROOT CAUSE.
+   */
+  it('routes both sentences of a multi-delta bilingual reply and persists the turn', async () => {
+    const harness = createHarness()
+    const literalHookCalls: string[] = []
+    const subtitleHookCalls: string[] = []
+    harness.runtime.hooks.onTokenLiteral(async (literal) => {
+      literalHookCalls.push(literal)
+    })
+    harness.runtime.hooks.onSubtitle(async (koText) => {
+      subtitleHookCalls.push(koText)
+    })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'Hello everyone welcome back to the stream!! <ko>안녕 여러분 스트림 복귀 환영!</ko> ' })
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'How is your day going so far today? <ko>오늘 하루 어때?</ko>' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+    })
+
+    await harness.runtime.ingest('hi', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    // Both English sentences reach TTS; no Korean or tag fragments leak into speech.
+    const spokenEnglish = literalHookCalls.join('')
+    expect(spokenEnglish).toContain('welcome back to the stream')
+    expect(spokenEnglish).toContain('How is your day going so far today')
+    expect(spokenEnglish).not.toContain('안녕')
+    expect(spokenEnglish).not.toContain('<ko>')
+
+    // Both Korean subtitles land, in order.
+    expect(subtitleHookCalls).toEqual(['안녕 여러분 스트림 복귀 환영!', '오늘 하루 어때?'])
+
+    // The turn persists: Korean fills content/slices (empty slices → persistence guard skips saving).
+    const assistant = harness.sessionMessages['session-1']?.at(-1) as StreamingAssistantMessage
+    expect(assistant.content).toContain('안녕 여러분 스트림 복귀 환영!')
+    expect(assistant.content).toContain('오늘 하루 어때?')
+    expect(assistant.slices.length).toBeGreaterThan(0)
+  })
 })
