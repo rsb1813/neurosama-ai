@@ -3,6 +3,8 @@
 ### neru — AI VTuber (Neuro-sama clone)
 Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/services/neru-audio/`.
 
+**Full roadmap → [`ROADMAP.md`](ROADMAP.md)** (9-subproject vision + MVP milestone status). This file tracks only the current-state / next-steps slice.
+
 **Repo:** public `rsb1813/neurosama-ai` on GitHub; `master` is branch-protected (PR required, no direct/force push, 0 required approvals). AIRI integration merged to master (PR #1). neru-audio gateway requires `Authorization: Bearer` token (`NERU_API_KEY`, default `sk-local-proxy`) + host/origin restriction + CORS preflight for localhost origins on `/v1/*`.
 
 **Autonomous dev pipeline (Claude, human-in-the-loop):**

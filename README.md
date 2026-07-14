@@ -127,12 +127,18 @@ merges without a person:
 
 ## Roadmap
 
+Full vision and phase status: **[`ROADMAP.md`](ROADMAP.md)** — 9 subprojects
+(voice core, long-term memory, proactive speech, chat integration, broadcasting,
+game agent, computer control / coding agent, multi-persona "Evil neru", YouTube
+co-watching). The MVP (voice core) at a glance:
+
 - ☑ AIRI fork running as the single system; local LLM via the proxy
 - ☑ `neru-audio` GPU gateway (Chatterbox TTS + faster-whisper STT), auto-spawned
-- ☐ Full live loop end-to-end (mic → STT → LLM → TTS → avatar) with barge-in
-- ☐ Bilingual output wired into AIRI: **English voice + Korean subtitles**
+- ☑ Live loop end-to-end (mic → STT → LLM → TTS → avatar), verified
+- ☑ neru persona / character card (preseeded, active)
+- ◐ Bilingual output — **English voice + Korean subtitles**: voice + chat-panel Korean working; caption overlay in progress
+- ☐ Barge-in (interrupt neru by speaking)
 - ☐ neru's own witch Live2D model in the AIRI loader
-- ☐ neru persona / character card
 - ☐ Rebrand + packaged desktop build with a bundled runtime
 
 ## Credits & license
