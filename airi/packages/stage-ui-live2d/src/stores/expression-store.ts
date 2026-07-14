@@ -113,6 +113,9 @@ export const useExpressionStore = defineStore('live2d-expressions', () => {
   /** Currently loaded model ID (used for persistence scoping). */
   const modelId = ref<string>('')
 
+  // 현재 활성 감정 표정 그룹 이름 — 새 감정이 오면 이전 것을 먼저 리셋해 "한 번에 하나"를 보장한다.
+  const activeEmotionGroup = ref<string | null>(null)
+
   /**
    * Named expression groups parsed from model3.json + exp3.json.
    * Keyed by expression name.
@@ -347,6 +350,41 @@ export const useExpressionStore = defineStore('live2d-expressions', () => {
   }
 
   /**
+   * 감정에 매핑된 표정을 적용한다. 이전 감정 표정을 즉시 중립으로 되돌린 뒤,
+   * 새 그룹의 각 파라미터를 그 그룹의 exp3 타깃값으로 활성화하고 holdSeconds 후 중립 복귀한다.
+   * expressionName이 undefined이거나 미등록이면 이전 표정만 리셋한다(중립). 표정 미등록 모델에선 no-op.
+   */
+  function applyEmotion(expressionName: string | undefined, holdSeconds = 4): void {
+    // 이전 감정 표정을 즉시 modelDefault로 되돌린다(한 번에 하나).
+    if (activeEmotionGroup.value) {
+      const prev = expressionGroups.value.get(activeEmotionGroup.value)
+      if (prev) {
+        for (const param of prev.parameters) {
+          const entry = expressions.value.get(param.parameterId)
+          if (entry)
+            applyValue(entry, entry.modelDefault)
+        }
+      }
+      activeEmotionGroup.value = null
+    }
+
+    // 중립/무매핑/미등록 → 리셋만 하고 종료.
+    if (!expressionName)
+      return
+    const group = expressionGroups.value.get(expressionName)
+    if (!group)
+      return
+
+    // 각 파라미터를 exp3 타깃값으로 활성화하고 hold 후 자동 중립 복귀(applyValue의 duration 타이머 재사용).
+    for (const param of group.parameters) {
+      const entry = expressions.value.get(param.parameterId)
+      if (entry)
+        applyValue(entry, param.value, holdSeconds)
+    }
+    activeEmotionGroup.value = expressionName
+  }
+
+  /**
    * Full cleanup when a model is unloaded.
    */
   function dispose() {
@@ -356,6 +394,7 @@ export const useExpressionStore = defineStore('live2d-expressions', () => {
     llmMode.value = 'none'
     llmExposed.value = new Map()
     modelId.value = ''
+    activeEmotionGroup.value = null
   }
 
   // ---- LLM exposure --------------------------------------------------------
@@ -414,6 +453,7 @@ export const useExpressionStore = defineStore('live2d-expressions', () => {
     toggle,
     saveDefaults,
     resetAll,
+    applyEmotion,
     dispose,
     setLlmMode,
     setLlmExposed,
