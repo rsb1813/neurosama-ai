@@ -29,7 +29,7 @@ jarring.
 | `ku` | Param68=30, distressed brow (ParamBrowLForm=+1, ParamBrowLY=-0.788) | soft gentle face, faintly worried brow | facial | **sad** (best available) |
 | `h`  | Param69=30 | **pink blush** on cheeks, shy downward glance | facial | **awkward** |
 | `yj` | Param66=30 | **round glasses** appear, studious/inquisitive | facial | **think / question** |
-| `hdj`| Param65=30 | calm content soft smile (subtle) | facial | _(unused — mild/neutral)_ |
+| `hdj`| Param65=30 | **shadow cast over the eyes/forehead** — sinister / malicious, a disgust-or-contempt "evil smug" look (user-confirmed) | facial | _(unused — no matching AIRI emotion; reserve for a future "evil/smug" beat or manual trigger)_ |
 | `zs1`| Param61=30, Param62=0 | holds a **game controller** (gamepad) | prop | — (excluded) |
 | `zs2`| Param61=0, Param62=30 | holds a **black microphone** | prop | — (excluded) |
 | `cw` | Param64=30 | cute **ghost companions** float around | prop/fx | — (excluded) |
