@@ -7,15 +7,17 @@ once expression registration works (see below).
 
 ## Why not visually confirmed yet
 
-Phase 1 verified the witch renders with working blink/gaze/lip-sync. But AIRI's
-Live2D **expression** settings panel shows "No expressions available for this
-model" — the witch's 12 `.exp3.json` groups do not register in
-`useExpressionStore`, so they can't be previewed via the UI. This is an AIRI
-expression-system issue (silent early-return in
-`Model.vue:initExpressionController`; no fetch error), independent of the model
-packaging (Task 1 validated all 12 exp3 refs resolve in the zip). It is Phase 2's
-job to fix — Phase 2 (emotion→exp3 wiring) requires expression registration to
-work anyway. Diagnosis lives in `.superpowers/sdd/progress.md` (Task 4 section).
+Phase 1 verified the witch renders with working blink/gaze/lip-sync. The settings
+panel shows "No expressions available for this model" — but runtime evidence
+(2026-07-15) proved the 12 groups **DO register**, just in a different window:
+the Live2D model runs in the **stage window** and registers all 12 exp3 into that
+window's `useExpressionStore` (`registerExpressions groups=12`, all 12 exp3 fetch
+200); the settings panel runs in a **separate settings BrowserWindow** with its
+own empty store. So the panel can't preview them, but registration and per-frame
+application both work in the stage window. Therefore the visual catalog is built
+by applying each expression to the **live stage model** (Phase 2 Part A preview
+harness + `capturePage`), not via the panel. Full diagnosis in
+`.superpowers/sdd/progress.md`.
 
 ## What the parameters tell us
 
@@ -40,11 +42,13 @@ are opaque pinyin abbreviations.
 
 ## For Phase 2
 
-1. Fix expression registration (see progress ledger's suspects: `settings.expressions`
-   vs the zip loader's `_expFiles`; the `live2dExpressionEnabled`-at-load race; OPFS cache).
-   Consider seeding `settings/live2d/expression-enabled = true` in `neruPreseed.ts`.
-2. With expressions previewable, fill the "Visual" column by toggling each in the
-   model-settings UI.
-3. Map AIRI's 9 emotions (happy, sad, angry, think, surprised, awkward, question,
-   curious, neutral) → a subset of these 12 exp3 names, and build the emotion→exp3
-   glue (does not exist in AIRI — Live2D emotions currently map to motion groups only).
+Registration already works in the stage window (no fix needed — see the corrected
+"Why not visually confirmed yet" section above). Plan (per
+`docs/superpowers/specs/2026-07-15-neru-witch-emotion-expression-design.md`):
+
+1. Part A — apply each expression to the **live stage model** via the preview
+   harness + `capturePage`, then fill the "Visual" column below from the captured
+   screenshots (the settings panel is a separate, empty window — do NOT use it).
+2. Part B — fill `EMOTION_Live2DWitchExpressionName_value` (map 9 emotions → a
+   subset of these 12 exp3 names) from the finalized visual catalog, and build the
+   `applyEmotion` glue (Live2D emotions currently map to motion groups only).
