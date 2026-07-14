@@ -11,6 +11,7 @@
 // 다음 기동에 로컬 스택으로 되돌아간다 — 어플라이언스 성격상 의도된 동작이다.
 
 import { NERU_SYSTEM_PROMPT } from '@proj-airi/stage-ui/constants/neru-persona'
+import { NERU_WITCH_PRESET_ID } from '@proj-airi/stage-ui/constants/neru-witch'
 
 // 스칼라 설정 키 — 로컬 스택 지정을 매 기동 단언한다.
 // VueUse useLocalStorage의 문자열('')·불리언 직렬화기는 값을 raw로 저장하므로
@@ -89,6 +90,14 @@ export function preseedNeruProviders(): void {
 
   // 온보딩 위저드 건너뛰기.
   assertRaw('onboarding/completed', 'true')
+
+  // neru의 기본 아바타를 마녀 모델로 최초 1회만 시드한다 — 이후 사용자가 UI에서 바꾼 선택을 존중한다.
+  // 대상 키(settings/stage/model)는 AIRI 스토어가 Hiyori 기본값을 써버려 "없을 때만" 판정이
+  // 무력화되므로, 우리만 쓰는 별도 센티넬 키로 최초 1회 여부를 판정한다.
+  if (!localStorage.getItem('neru/stage-model-seeded')) {
+    assertRaw('settings/stage/model', NERU_WITCH_PRESET_ID)
+    assertRaw('neru/stage-model-seeded', 'true')
+  }
 
   assertNeruCard(NERU_SYSTEM_PROMPT)
   assertRaw('airi-card-active-id', 'neru')

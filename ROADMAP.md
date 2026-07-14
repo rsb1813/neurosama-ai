@@ -58,8 +58,8 @@ subtitles appear on screen; when the user starts talking, neru stops immediately
 | M4 — Local TTS (Chatterbox, English voice on RTX 5080) | ✅ Done |
 | **Pivot** → rebuild the frontend on **Project AIRI** (drop the self-built Vite/pixi front) | ✅ Done |
 | ↳ AIRI vendored fork + run; LLM wired; desktop packaging; audio gateway (`neru-audio`); provider preseed | ✅ Done |
-| **M-E — neru "witch" Live2D model in AIRI** | ⬜ **Not started** — currently uses AIRI's default avatar (Hiyori). Model file was lost with the old `frontend/`; recover from `~/Downloads/neru-witch-live2d.zip`. |
-| **M-F — Bilingual output (English voice + Korean subtitles)** ★core | 🔄 **In progress** — persona card + `<ko>` categoriser + routing done; TTS first-sentence-drop bug fixed; caption-overlay display still under debug (chat-panel Korean works). |
+| **M-E — neru "witch" Live2D model in AIRI** | 🔄 **In progress (Phase 1 planned)** — model recovered (`~/Downloads/neru-witch-live2d.zip`); spec+plan for Phase 1 (render + auto blink/gaze/lip-sync + expression catalog) on `feat/neru-witch-avatar`. Phase 2 = emotion→expression wiring (not built in AIRI yet). |
+| **M-F — Bilingual output (English voice + Korean subtitles)** ★core | ✅ **Done** (PR #18 merged) — persona card + `<ko>` categoriser + routing; two streaming-boundary bugs fixed with regression tests (core-agent 76/76). English voice + Korean chat panel verified. Caption-overlay window is a pre-existing AIRI infra issue, deferred (chat-panel Korean works). |
 | **M-G — Full loop + barge-in** | ⬜ **Not started** — interrupt neru by speaking; verify ~1–3s round-trip. |
 
 ## Current architecture (as built)

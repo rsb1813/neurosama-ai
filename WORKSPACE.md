@@ -13,18 +13,15 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - ⚠️ Do NOT re-introduce auto-merge that lets one model both review untrusted PR content and merge/push (prompt-injection + token-exfil P0; removed in PR #9).
 
 **In Progress:**
-- **Bilingual output** (`feat/neru-bilingual` branch, SDD): neru card system-prompt emits English + `<ko>한국어</ko>` per sentence; AIRI response categoriser routes `<ko>` to display/subtitle, English to TTS only. **Tasks 1-6 done**; E2E verified: English voice ✓, Korean chat panel ✓, gateway STT/TTS 200 ✓. Two streaming-boundary bugs found and fixed with regression tests: (1) `filterToSpeech` dropped English before an opening `<ko>` (5f11741/d898ad1); (2) the categorizer's `tagJustClosed` gate desynced when a chunk ended on the `<` of a closing tag → dropped every `<ko>` subtitle + later English + persistence (found by final whole-branch review, fixed 2ddc720). core-agent suite 76/76. Only caption overlay remains broken (see Known Issues).
-- **Caption overlay (deferred to a separate track)**: the separate caption overlay Electron window renders nothing, but this affects both `caption-speaker` and `caption-assistant` → it is a **pre-existing AIRI caption/BroadcastChannel infra issue, not introduced by the bilingual work**. Bilingual routing does its job (`postCaption` fires per `<ko>`, log-verified); Korean shows in the chat panel. Overlay rendering split out under Known Issues, not a bilingual blocker.
+- **neru witch avatar (M-E Phase 1)** — PR #19 open, pending merge. Witch renders as default with blink/lip-sync. 12 expressions don't register in AIRI's expression store (Phase 2 scope). On `feat/neru-witch-avatar`.
 
 **Known Issues:**
 - Packaged `airi.exe` has no Python — dev-only auto-spawn (`uv run`). Bundling approach undecided.
-- neru-witch Live2D model removed with `frontend/` deletion — recoverable from `~/Downloads/neru-witch-live2d.zip`.
 - 4 stage-tamagotchi vitest failures are pre-existing Windows symlink-permission (EPERM) errors.
-- **v1 bilingual persistence gap**: pure-English reply (zero `<ko>`, format violation) leaves `buildingMessage.slices` empty → persistence guard skips saving that assistant turn. Relying on strict prompt; fix with English-fallback + tight audio-sync follow-up.
-- v1 caption sync is generation-timed (caption may lead voice on long replies). Tight audio-synced captions deferred.
-- **Caption overlay window shows nothing (OPEN)**: main window's `postCaption` fires correctly (verified via debug log — `caption-assistant` posted per `<ko>`), but the separate caption overlay window renders no text. Chat panel Korean works; overlay does not. Same-origin in dev (both `http://localhost:5173`), so BroadcastChannel *should* cross. Caption window console isn't piped to the app stdout, blocking observation. Affects both `caption-speaker` and `caption-assistant` → shared caption.vue/BroadcastChannel infra issue, likely pre-existing (not from bilingual work). Next debugging target.
+- **v1 bilingual persistence gap**: pure-English reply (zero `<ko>`, format violation) leaves `buildingMessage.slices` empty → persistence guard skips saving that assistant turn.
+- **Caption overlay window shows nothing**: pre-existing AIRI infra issue (affects both caption-speaker and caption-assistant). Korean shows in chat panel.
+- **Expression registration (Phase 2)**: witch's 12 exp3 expressions don't register in AIRI's expression store — `initExpressionController` silently early-returns. Suspects: `settings.expressions` vs zip-loader's `_expFiles` mismatch; expression-enabled load-time race; OPFS cache. Diagnosed in `.superpowers/sdd/progress.md`.
 
 **Next Steps:**
-1. Bilingual core (M-F) is functionally done (English voice + Korean chat panel, verified). Caption overlay rendering is a pre-existing AIRI infra issue, split to a separate track — not a bilingual blocker. Proceed to final whole-branch review + finish branch.
-2. neru witch Live2D model → AIRI model loader (M-E).
-3. Barge-in: interrupt neru by speaking (M-G).
+1. Merge PR #19 (witch avatar Phase 1). Then Phase 2: fix expression registration + visual catalog + emotion→exp3 glue.
+2. Barge-in: interrupt neru by speaking (M-G).
