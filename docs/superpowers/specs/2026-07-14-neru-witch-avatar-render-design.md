@@ -106,11 +106,24 @@ Add a preset entry to `display-models.ts` mirroring the Hiyori Pro entry:
 
 ### 3. Make it neru's default (via preseed, not AIRI's global default)
 
-In `neruPreseed.ts`, seed `localStorage['settings/stage/model']` to the witch
-preset id, **only if not already user-set** (respect the store's manual-reset
-semantics — match how the existing provider preseed guards). This keeps AIRI's
-generic default (`stage-model.ts:18`) untouched; neru specifically boots as the
-witch.
+In `neruPreseed.ts`, assert `localStorage['settings/stage/model']` to the witch
+preset id **unconditionally on every boot**, matching the existing provider
+preseed (`assertRaw`, `neruPreseed.ts:83-88`).
+
+> **Correction (codebase evidence supersedes the earlier "only if not set"
+> idea):** `neruPreseed.ts:4-8` documents that the "write only if the key is
+> unset" approach was tried and **failed** — the AIRI store
+> (`useLocalStorageManualReset('settings/stage/model', 'preset-live2d-1')`,
+> `stage-model.ts:18`) writes the Hiyori default into localStorage on first
+> boot, so on every later boot the key is already set to Hiyori and a
+> guarded preseed would skip, leaving neru on Hiyori. Unconditional assert is
+> the file's established, deliberate pattern. Tradeoff (same as providers): a
+> user who switches avatars in the UI reverts to the witch next boot — intended
+> for a single-purpose appliance.
+
+`preseedNeruProviders()` runs at `apps/stage-tamagotchi/src/renderer/main.ts:7`,
+before Pinia/stores init — the correct place to assert. AIRI's generic default
+(`stage-model.ts:18`) is untouched; only neru's boot is affected.
 
 ### 4. Verify auto-behaviors
 
@@ -141,10 +154,11 @@ Live2D rendering is not unit-testable; verification is primarily **visual/manual
 
 - **Manual (primary):** app boots → witch renders as default; eyes blink; TTS
   playback moves the mouth; (gaze if params present). Expression catalog captured.
-- **Unit (where cheap):** the new preset entry exists in the `display-models.ts`
-  catalog; `neruPreseed` selects the witch preset id when no user selection is
-  stored (and does not override an existing user selection). Follow the existing
-  `neruPreseed` test patterns if present.
+- **Unit (where cheap):** `neruPreseed` asserts the witch preset id into
+  `settings/stage/model`, **including overwriting a pre-existing stale value**
+  (jsdom env, `localStorage`). The preset entry itself (`display-models.ts`) is a
+  private const loaded via IndexedDB, so it's verified by typecheck + build +
+  manual render rather than a unit test.
 - **Build:** `pnpm -F @proj-airi/stage-tamagotchi build` succeeds with the +38 MB
   asset (Hiyori Pro at 31.6 MB proves the size is fine).
 
