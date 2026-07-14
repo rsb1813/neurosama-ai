@@ -62,3 +62,19 @@ export interface EmotionPayload {
   name: Emotion
   intensity: number
 }
+
+// neru 마녀 모델 전용 — 9개 감정을 witch exp3 표정 이름으로 매핑한다(undefined = 표정 없음/중립).
+// 값은 M-E Phase 2 Part A 시각 카탈로그(neru-witch-expression-catalog.md)로 확정했다.
+// 마녀는 감정 모션이 없어 exp3 표정이 유일한 감정 표면이다. 표정 미등록 모델에선 applyEmotion이 no-op.
+// 소품 표정(gamepad/mic/ghost/staff/hat-off)과 hdj(사악한 표정)는 대응 감정이 없어 맵에서 제외한다.
+export const EMOTION_Live2DWitchExpressionName_value = {
+  [Emotion.Happy]: 'x',
+  [Emotion.Sad]: 'ku',
+  [Emotion.Angry]: 'sq',
+  [Emotion.Think]: 'yj',
+  [Emotion.Surprise]: 'xx',
+  [Emotion.Awkward]: 'h',
+  [Emotion.Question]: 'yj',
+  [Emotion.Curious]: 'xx',
+  [Emotion.Neutral]: undefined,
+} satisfies Record<Emotion, string | undefined>
