@@ -10,6 +10,8 @@
 // 트레이드오프: active-provider를 매번 단언하므로 사용자가 UI에서 provider를 바꿔도
 // 다음 기동에 로컬 스택으로 되돌아간다 — 어플라이언스 성격상 의도된 동작이다.
 
+import { NERU_SYSTEM_PROMPT } from '@proj-airi/stage-ui/constants/neru-persona'
+
 // 스칼라 설정 키 — 로컬 스택 지정을 매 기동 단언한다.
 // VueUse useLocalStorage의 문자열('')·불리언 직렬화기는 값을 raw로 저장하므로
 // 문자열을 그대로 기록한다(불리언 키는 'true'/'false' 문자열과 일치).
@@ -31,6 +33,35 @@ function mergeObject(key: string, partial: Record<string, unknown>): void {
     }
   }
   localStorage.setItem(key, JSON.stringify({ ...current, ...partial }))
+}
+
+// airi-cards는 VueUse Map 직렬화(엔트리 배열의 JSON)를 쓴다 — neru 카드를 그 형식으로
+// 넣고 기존 카드는 보존한다. 활성 카드도 neru로 단언한다.
+function assertNeruCard(systemPrompt: string): void {
+  const key = 'airi-cards'
+  let entries: [string, unknown][] = []
+  const existing = localStorage.getItem(key)
+  if (existing) {
+    try {
+      entries = JSON.parse(existing) as [string, unknown][]
+      if (!Array.isArray(entries))
+        entries = []
+    }
+    catch {
+      entries = []
+    }
+  }
+  const neruCard = {
+    name: 'neru',
+    version: '1.0.0',
+    description: '',
+    personality: '',
+    systemPrompt,
+    extensions: { airi: { modules: {} } },
+  }
+  const next = entries.filter(([id]) => id !== 'neru')
+  next.push(['neru', neruCard])
+  localStorage.setItem(key, JSON.stringify(next))
 }
 
 export function preseedNeruProviders(): void {
@@ -58,4 +89,7 @@ export function preseedNeruProviders(): void {
 
   // 온보딩 위저드 건너뛰기.
   assertRaw('onboarding/completed', 'true')
+
+  assertNeruCard(NERU_SYSTEM_PROMPT)
+  assertRaw('airi-card-active-id', 'neru')
 }

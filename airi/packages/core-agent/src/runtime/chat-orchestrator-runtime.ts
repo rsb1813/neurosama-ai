@@ -501,35 +501,54 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
         sessionMessages: sessionMessagesForSend,
       })
 
-      const categorizer = createStreamingCategorizer(deps.getActiveProvider())
-      let streamPosition = 0
+      // 스트리밍 speech 추출 상태. 각 <ko> 세그먼트가 완결되면 그 앞의 영어(태그 밖)를
+      // 잘라 TTS로 보낸다. categorizer.filterToSpeech는 청크 경계가 태그와 겹칠 때 여는 태그
+      // 앞의 영어를 통째로 버리는 버그가 있어(첫 문장 유실) 사용하지 않는다.
+      // rawLiteralBuffer는 categorizer 내부 버퍼와 동일하게 누적되므로 segment 인덱스로 슬라이스할 수 있다.
+      let speechCursor = 0
+      let rawLiteralBuffer = ''
+      const pendingSpeech: string[] = []
+
+      const categorizer = createStreamingCategorizer(deps.getActiveProvider(), (segment) => {
+        // 완결된 모든 세그먼트(<ko> 또는 reasoning 등) 앞의 영어는 음성 채널로 보내고,
+        // cursor를 세그먼트 끝으로 넘겨 세그먼트 내용(한국어 자막·추론)은 음성에서 제외한다.
+        // 카테고리 체크보다 먼저 해야 reasoning 태그가 cursor를 넘겨 그 내용이 TTS로 새지 않는다.
+        // Math.max: 중첩/기형 태그로 세그먼트 endIndex가 역순이어도 cursor가 뒤로 가지 않게 한다.
+        const speechBefore = rawLiteralBuffer.slice(speechCursor, segment.startIndex)
+        speechCursor = Math.max(speechCursor, segment.endIndex)
+        if (speechBefore.trim())
+          pendingSpeech.push(speechBefore)
+
+        // <ko>만 한국어 화면(채팅 패널) 채널로 — 그 외 태그(추론 등)는 음성·화면 양쪽에서 제외.
+        if (segment.category !== 'subtitle')
+          return
+        const ko = segment.content.trim()
+        if (!ko)
+          return
+        buildingMessage.content += (buildingMessage.content ? ' ' : '') + ko
+        const lastSlice = buildingMessage.slices.at(-1)
+        if (lastSlice?.type === 'text')
+          lastSlice.text += ` ${ko}`
+        else
+          buildingMessage.slices.push({ type: 'text', text: ko })
+        patchForegroundStream(sessionId, buildingMessage)
+        void hooks.emitSubtitleHooks(ko, streamingMessageContext)
+      })
 
       const parser = useLlmmarkerParser({
         onLiteral: async (literal) => {
           if (shouldAbort())
             return
 
+          // rawLiteralBuffer는 consume 전에 갱신해야 onSegment가 올바른 인덱스로 슬라이스한다.
+          rawLiteralBuffer += literal
           categorizer.consume(literal)
 
-          const speechOnly = categorizer.filterToSpeech(literal, streamPosition)
-          streamPosition += literal.length
-
-          if (speechOnly.trim()) {
-            buildingMessage.content += speechOnly
-
-            await hooks.emitTokenLiteralHooks(speechOnly, streamingMessageContext)
-
-            const lastSlice = buildingMessage.slices.at(-1)
-            if (lastSlice?.type === 'text') {
-              lastSlice.text += speechOnly
-            }
-            else {
-              buildingMessage.slices.push({
-                type: 'text',
-                text: speechOnly,
-              })
-            }
-            patchForegroundStream(sessionId, buildingMessage)
+          // consume가 완결된 <ko> 세그먼트마다 그 앞 영어를 pendingSpeech에 쌓았다 — 순서대로 TTS로.
+          while (pendingSpeech.length > 0) {
+            const speech = pendingSpeech.shift()
+            if (speech && speech.trim())
+              await hooks.emitTokenLiteralHooks(speech, streamingMessageContext)
           }
         },
         onSpecial: async (special) => {
@@ -541,6 +560,17 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
         onEnd: async (fullText) => {
           if (isStaleGeneration())
             return
+
+          // 마지막 세그먼트 뒤에 남은 영어를 음성으로 flush. cursor 이후의 '<'는 완결 세그먼트가
+          // 아니므로(모두 cursor를 넘겼음) 미완결 태그의 시작이다 — 잘림/기형으로 남은 '<ko...'
+          // 조각이 TTS로 새지 않게 첫 '<'에서 자른다.
+          let trailingSpeech = rawLiteralBuffer.slice(speechCursor)
+          const incompleteTagStart = trailingSpeech.indexOf('<')
+          if (incompleteTagStart !== -1)
+            trailingSpeech = trailingSpeech.slice(0, incompleteTagStart)
+          speechCursor = rawLiteralBuffer.length
+          if (trailingSpeech.trim())
+            await hooks.emitTokenLiteralHooks(trailingSpeech, streamingMessageContext)
 
           const finalCategorization = categorizeResponse(fullText, deps.getActiveProvider())
 

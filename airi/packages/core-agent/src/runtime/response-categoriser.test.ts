@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createStreamingCategorizer } from './response-categoriser'
+import { categorizeResponse, createStreamingCategorizer } from './response-categoriser'
 
 describe('createStreamingCategorizer', () => {
   it('should handle pure speech without tags', () => {
@@ -347,5 +347,46 @@ describe('createStreamingCategorizer', () => {
 
     const result = categorizer.end()
     expect(result.speech).toBe('Hello world!')
+  })
+
+  // ROOT CAUSE:
+  //
+  // When a chunk ends exactly on the '<' of a closing tag, processChunkIncrementally
+  // (in-content case) can't look ahead to the next char, so it misclassifies the '<'
+  // as an opening tag. The next chunk's '>' then runs tagStackDepth++ instead of --,
+  // so tagStackDepth is stuck high, tagJustClosed never fires again, and for any
+  // sub-1KB reply shouldRecategorize stays false — `categorized` freezes at the first
+  // (zero-segment) snapshot. onSegment never fires for the now-complete <ko> segments,
+  // silently dropping every Korean subtitle (and, downstream, the saved turn).
+  //
+  // Fixed by also recategorizing whenever a chunk contains a tag char ('<' or '>'),
+  // falling back to the authoritative categorizeResponse instead of the fragile flag.
+  it('emits <ko> segments when a closing tag is split with < at the chunk boundary', () => {
+    const emitted: string[] = []
+    const categorizer = createStreamingCategorizer(undefined, (segment) => {
+      if (segment.category === 'subtitle')
+        emitted.push(segment.content)
+    })
+
+    // The '<' of the first '</ko>' lands at the end of chunk 1; '/ko>' opens chunk 2.
+    categorizer.consume('A <ko>가<')
+    categorizer.consume('/ko> B <ko>나</ko>')
+    categorizer.end()
+
+    expect(emitted).toEqual(['가', '나'])
+  })
+})
+
+describe('categorizeResponse <ko> subtitle', () => {
+  it('categorises <ko> as subtitle and keeps English as speech', () => {
+    const r = categorizeResponse('Hello there. <ko>안녕하세요.</ko>')
+    expect(r.speech).toBe('Hello there.')
+    const ko = r.segments.find(s => s.tagName === 'ko')
+    expect(ko?.category).toBe('subtitle')
+    expect(ko?.content).toBe('안녕하세요.')
+  })
+  it('still treats <think> as reasoning', () => {
+    const r = categorizeResponse('Hi. <think>plan</think>')
+    expect(r.segments.find(s => s.tagName === 'think')?.category).toBe('reasoning')
   })
 })

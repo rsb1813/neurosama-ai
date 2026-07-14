@@ -62,6 +62,7 @@ export type ChatStreamEvent
     | { type: 'before-send', message: string, sessionId: string, context: ChatStreamEventContext }
     | { type: 'after-send', message: string, sessionId: string, context: ChatStreamEventContext }
     | { type: 'token-literal', literal: string, sessionId: string, context: ChatStreamEventContext }
+    | { type: 'subtitle', koText: string, sessionId: string, context: ChatStreamEventContext }
     | { type: 'token-special', special: string, sessionId: string, context: ChatStreamEventContext }
     | { type: 'stream-end', sessionId: string, context: ChatStreamEventContext }
     | { type: 'assistant-end', message: string, sessionId: string, context: ChatStreamEventContext }

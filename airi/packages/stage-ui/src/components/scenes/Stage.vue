@@ -93,7 +93,7 @@ const { audioContext } = useAudioContext()
 const currentAudioSource = ref<AudioBufferSourceNode>()
 const { latestStopRequest } = storeToRefs(useSpeechOutputControlStore())
 
-const { onBeforeMessageComposed, onBeforeSend, onTokenLiteral, onTokenSpecial, onStreamEnd, onAssistantResponseEnd } = useChatOrchestratorStore()
+const { onBeforeMessageComposed, onBeforeSend, onTokenLiteral, onTokenSpecial, onStreamEnd, onAssistantResponseEnd, onSubtitle } = useChatOrchestratorStore()
 const chatHookCleanups: Array<() => void> = []
 // WORKAROUND: clear previous handlers on unmount to avoid duplicate calls when this component remounts.
 //             We keep per-hook disposers instead of wiping the global chat hooks to play nicely with
@@ -543,24 +543,7 @@ bindSpeakingStateToPlaybackManager(playbackManager, {
     else
       nowSpeaking.value = true
   },
-  onStart: ({ item }) => {
-    // NOTICE: postCaption and postPresent may throw errors if the BroadcastChannel is closed
-    // (e.g., when navigating away from the page). We wrap these in try-catch to prevent
-    // breaking playback when the channel is unavailable.
-    assistantCaption.value += ` ${item.text}`
-    try {
-      postCaption({ type: 'caption-assistant', text: item.text })
-    }
-    catch {
-      // BroadcastChannel may be closed - don't break playback
-    }
-    try {
-      postPresent({ type: 'assistant-append', text: item.text })
-    }
-    catch {
-      // BroadcastChannel may be closed - don't break playback
-    }
-  },
+  onStart: () => {},
 })
 
 function startLipSyncLoop() {
@@ -781,6 +764,17 @@ chatHookCleanups.push(onBeforeSend(async () => {
 
 chatHookCleanups.push(onTokenLiteral(async (literal) => {
   currentSession?.appendText(literal)
+}))
+
+chatHookCleanups.push(onSubtitle(async (ko) => {
+  // 한국어 자막을 오버레이 창으로 — 음성(영어)과 분리된 화면 텍스트.
+  assistantCaption.value += ` ${ko}`
+  try {
+    postCaption({ type: 'caption-assistant', text: ko })
+  }
+  catch {
+    // BroadcastChannel may be closed - don't break playback
+  }
 }))
 
 chatHookCleanups.push(onTokenSpecial(async (special) => {

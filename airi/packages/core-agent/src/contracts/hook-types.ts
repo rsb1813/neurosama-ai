@@ -8,6 +8,7 @@ export interface ChatHookRegistry {
   onBeforeSend: (cb: (message: string, context: ChatStreamEventContext) => Promise<void>) => () => void
   onAfterSend: (cb: (message: string, context: ChatStreamEventContext) => Promise<void>) => () => void
   onTokenLiteral: (cb: (literal: string, context: ChatStreamEventContext) => Promise<void>) => () => void
+  onSubtitle: (cb: (koText: string, context: ChatStreamEventContext) => Promise<void>) => () => void
   onTokenSpecial: (cb: (special: string, context: ChatStreamEventContext) => Promise<void>) => () => void
   onStreamEnd: (cb: (context: ChatStreamEventContext) => Promise<void>) => () => void
   onAssistantResponseEnd: (cb: (message: string, context: ChatStreamEventContext) => Promise<void>) => () => void
@@ -18,6 +19,7 @@ export interface ChatHookRegistry {
   emitBeforeSendHooks: (message: string, context: ChatStreamEventContext) => Promise<void>
   emitAfterSendHooks: (message: string, context: ChatStreamEventContext) => Promise<void>
   emitTokenLiteralHooks: (literal: string, context: ChatStreamEventContext) => Promise<void>
+  emitSubtitleHooks: (koText: string, context: ChatStreamEventContext) => Promise<void>
   emitTokenSpecialHooks: (special: string, context: ChatStreamEventContext) => Promise<void>
   emitStreamEndHooks: (context: ChatStreamEventContext) => Promise<void>
   emitAssistantResponseEndHooks: (message: string, context: ChatStreamEventContext) => Promise<void>
@@ -35,6 +37,7 @@ export interface AgentHookRegistry<TContext, TAssistantMessage, TToolCall> {
   onBeforeSend: (cb: (message: string, context: TContext) => Promise<void>) => HookUnsubscribe
   onAfterSend: (cb: (message: string, context: TContext) => Promise<void>) => HookUnsubscribe
   onTokenLiteral: (cb: (literal: string, context: TContext) => Promise<void>) => HookUnsubscribe
+  onSubtitle: (cb: (koText: string, context: TContext) => Promise<void>) => HookUnsubscribe
   onTokenSpecial: (cb: (special: string, context: TContext) => Promise<void>) => HookUnsubscribe
   onStreamEnd: (cb: (context: TContext) => Promise<void>) => HookUnsubscribe
   onAssistantResponseEnd: (cb: (message: string, context: TContext) => Promise<void>) => HookUnsubscribe
@@ -46,6 +49,7 @@ export interface AgentHookRegistry<TContext, TAssistantMessage, TToolCall> {
   emitBeforeSendHooks: (message: string, context: TContext) => Promise<void>
   emitAfterSendHooks: (message: string, context: TContext) => Promise<void>
   emitTokenLiteralHooks: (literal: string, context: TContext) => Promise<void>
+  emitSubtitleHooks: (koText: string, context: TContext) => Promise<void>
   emitTokenSpecialHooks: (special: string, context: TContext) => Promise<void>
   emitStreamEndHooks: (context: TContext) => Promise<void>
   emitAssistantResponseEndHooks: (message: string, context: TContext) => Promise<void>

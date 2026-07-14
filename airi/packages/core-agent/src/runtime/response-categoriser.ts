@@ -7,7 +7,7 @@ import rehypeStringify from 'rehype-stringify'
 import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 
-export type ResponseCategory = 'speech' | 'reasoning' | 'unknown'
+export type ResponseCategory = 'speech' | 'reasoning' | 'subtitle' | 'unknown'
 
 export interface CategorizedSegment {
   category: ResponseCategory
@@ -26,11 +26,14 @@ export interface CategorizedResponse {
 }
 
 /**
- * Maps tag names to categories
- * All tags are treated as reasoning (filtered from TTS)
+ * Maps tag names to categories.
+ * `<ko>` is subtitle (Korean shown on screen, kept out of TTS); every other tag
+ * is reasoning (kept out of both TTS and display).
  */
-function mapTagNameToCategory(_tagName: string): ResponseCategory {
-  // All tags are reasoning - no need to distinguish tag names
+function mapTagNameToCategory(tagName: string): ResponseCategory {
+  // <ko>는 화면 자막(음성 제외), 그 외 태그는 기존대로 reasoning(음성·화면 모두 제외).
+  if (tagName === 'ko')
+    return 'subtitle'
   return 'reasoning'
 }
 
@@ -313,9 +316,14 @@ export function createStreamingCategorizer(
       const tagJustClosed = processChunkIncrementally(chunk)
       buffer += chunk
 
-      // Re-categorize on first chunk, tag closure, or every 1KB (periodic fallback)
+      // Re-categorize on first chunk, tag closure, any tag activity, or every 1KB (periodic fallback).
+      // The tagJustClosed flag desyncs when a '<' lands at a chunk boundary (the incremental
+      // scanner can't look ahead to the next chunk's '/'), so a completed <ko> can be missed.
+      // Reparsing on any tag char falls back to the authoritative categorizeResponse and makes
+      // segment emission robust to arbitrary chunk splits.
       const shouldRecategorize = !categorized
         || tagJustClosed
+        || /[<>]/.test(chunk)
         || buffer.length - lastParsedLength > 1000
 
       if (shouldRecategorize) {

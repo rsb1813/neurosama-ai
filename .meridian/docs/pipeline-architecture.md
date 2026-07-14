@@ -1,11 +1,15 @@
 ---
-summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP
+summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> segment-boundary slicing in chat-orchestrator-runtime
 read_when:
   - understanding how AIRI, the local LLM proxy, and the neru-audio gateway fit together
   - adding or modifying the neru-audio FastAPI endpoints (/v1/audio/speech, /v1/audio/transcriptions)
   - debugging the Electron auto-spawn/tree-kill of the neru-audio gateway
   - debugging provider connection/onboarding (neruPreseed.ts localStorage keys)
+  - debugging the bilingual output routing (English voice vs Korean display/subtitle)
+  - debugging the streaming speech extraction (segment-boundary slicing, filterToSpeech bug history)
+  - debugging the caption overlay BroadcastChannel cross-window delivery
   - working on CUDA/Blackwell DLL loading shared by Chatterbox TTS and faster-whisper STT
+  - working on the neru persona card or system prompt
   - looking for the removed self-built backend/frontend (orchestrator, provider ABCs, VTubeStudioAvatar) — see "Removed" section below
 ---
 
@@ -28,7 +32,7 @@ AIRI owns: mic capture, STT orchestration/turn-taking/barge-in, the LLM conversa
 
 ## Providers (AIRI side — config only, no custom code)
 
-All three point at local services via `neruPreseed.ts` (`airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts`), which seeds localStorage before AIRI's stores hydrate so onboarding is skipped:
+All three point at local services via `neruPreseed.ts` (`airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts`), which **authoritatively** seeds localStorage before AIRI's stores hydrate so onboarding is skipped. "Authoritative" means scalar keys (active-provider, active-model) are **overwritten every launch** (not write-only-if-absent), and shared object keys (credentials, providers/added) are **merged** preserving the rest of the catalog. This overcomes stale AIRI defaults in dev localStorage that would otherwise leave providers unbound. Tradeoff: UI provider switches revert next launch — intended for a single-purpose appliance:
 
 | Role | AIRI provider id | Base URL | Backing service |
 |------|------------------|----------|-----------------|
@@ -44,6 +48,12 @@ FastAPI app (`neru_audio/app.py`), binds `127.0.0.1:3457`:
 - `POST /v1/audio/speech` — OpenAI Audio Speech shape (`{model, input, response_format?}`) → Chatterbox-synthesized audio (WAV by default; raw PCM16 24kHz on `response_format:"pcm"`). Serialized behind an `asyncio.Lock` — concurrent calls into the same CUDA model would corrupt audio or risk OOM.
 - `POST /v1/audio/transcriptions` — OpenAI Audio Transcriptions shape (multipart `file`, optional `language`/`response_format`) → faster-whisper `large-v3` transcription, decoded via PyAV so any container (webm/wav) works; defaults to `language=ko`. The model lazy-loads once per process behind its own `asyncio.Lock`.
 
+### Security middleware (`_restrict_to_local_app`)
+
+All `/v1/*` endpoints are gated by an HTTP middleware enforcing: **Host allowlist** (DNS-rebinding defense), **Origin allowlist** (localhost/127.0.0.1 only, via `_origin_allowed` — single gate for both preflight and real requests), **Bearer token** (`Authorization: Bearer <NERU_API_KEY>`), and **Content-Length cap** (25 MB).
+
+**CORS preflight**: the AIRI Electron renderer calls the gateway cross-origin (dev origin `http://localhost:<vite-port>` → `127.0.0.1:3457`). Browsers send an `OPTIONS` preflight that cannot carry `Authorization`. The middleware short-circuits `OPTIONS` with `204 + CORS headers` for allowed origins only (else `403`), without requiring auth. Real (non-OPTIONS) requests still require the Bearer token and all other checks. Internet origins are browser-enforced (non-spoofable) and rejected — drive-by defense preserved. Real responses carry only `Access-Control-Allow-Origin` + `Vary: Origin` (other CORS headers are preflight-only).
+
 Both the Chatterbox and faster-whisper models load in the **same process**, so the Blackwell/sm_120 CUDA DLL story applies directly: `gpu.py`'s `_ensure_cuda_dll_path()` prepends `torch/lib` to `PATH` so CTranslate2 finds `cublas64_12.dll`/`cudnn64_9.dll` without a separate nvidia-* wheel (native delay-load consults `PATH`, not `add_dll_directory` alone). This file, plus `tts.py` (from the old `tts/chatterbox_local.py`) and `app.py` (from the old `bridge/openai_audio.py`), were ported near-verbatim from the deleted `backend/`.
 
 Run standalone: `uv run neru-audio` (from `airi/services/neru-audio/`; entry point `neru_audio.app:main` via `pyproject.toml`'s `[project.scripts]`).
@@ -58,10 +68,14 @@ The desktop app (`pnpm desktop`, run from `airi/`) spawns `uv run neru-audio` as
 
 The root `backend/` (Python orchestrator with a turn-taking state machine + barge-in cancellation, `STTProvider`/`LLMProvider`/`TTSProvider`/`AvatarDriver` ABCs, `ClaudeLLM`, `WhisperLocalSTT`, `ChatterboxTTS`, `VTubeStudioAvatar` — pyvts direct mouth-parameter injection lip-sync) and `frontend/` (Vite + pixi.js web-native Live2D renderer + Electron overlay) were **deleted** in this integration (commit `9ebc01e`, "chore: remove parallel self-built backend and frontend"). AIRI now performs orchestration, avatar rendering, and subtitles natively, making that code redundant except for the GPU voice tech, which was ported into `neru-audio` (see above). None of the classes, event types, or state-machine behavior described in earlier revisions of this document exist in this repo anymore; they're preserved only in git history.
 
-## Language Flow
+## Language Flow (bilingual routing — implemented)
 
 - STT: faster-whisper (`neru-audio`) transcribes Korean mic input → Korean text.
-- LLM: Claude (via the local proxy) generates the reply.
-- TTS: Chatterbox (`neru-audio`) synthesizes the Neuro-cloned voice.
-- Avatar + subtitles: AIRI's built-in Live2D renderer and chat/subtitle UI.
-- The original neru signature (English voice + Korean subtitle, single LLM call producing both) is **not yet wired into AIRI** — it's a follow-on spec. The identity is preserved in `docs/superpowers/specs/neru-persona-reference.md` pending a character-card implementation.
+- LLM: Claude (via the local proxy) generates the reply. The neru persona card (`packages/stage-ui/src/constants/neru-persona.ts`, preseeded by `neruPreseed.ts`) instructs the LLM to reply in the format `English sentence <ko>한국어 번역</ko>` per sentence.
+- **Bilingual routing** (`packages/core-agent/src/runtime/chat-orchestrator-runtime.ts`): `createStreamingCategorizer` detects completed `<ko>` segments. English text (outside tags) is extracted via segment-boundary slicing (not the broken `filterToSpeech`) and sent to TTS. Korean text (inside `<ko>`) is routed to the chat panel via `buildingMessage.content`/`slices` and to the caption overlay via `emitSubtitleHooks` → `onSubtitle` hook → `Stage.vue` → BroadcastChannel `airi-caption-overlay`.
+- TTS: Chatterbox (`neru-audio`) synthesizes the English speech with the Neuro-cloned voice.
+- Avatar: AIRI's built-in Live2D renderer lip-syncs to audio segments.
+- Chat panel: displays Korean (from `<ko>` content).
+- Caption overlay: separate Electron window subscribing to the same BroadcastChannel. Currently not rendering (known issue under investigation — BroadcastChannel cross-window delivery or window render issue).
+
+The speech extraction was originally `categorizer.filterToSpeech` per stream chunk, which dropped English preceding an opening `<ko>` when a chunk straddled the tag boundary (first 1-2 spoken sentences silently swallowed). Fixed in commits 5f11741 + d898ad1: replaced with segment-boundary slicing that emits English before each completed segment, skips reasoning-tag content, and flushes trailing English in onEnd (cut at first `<` to prevent incomplete tag leakage).

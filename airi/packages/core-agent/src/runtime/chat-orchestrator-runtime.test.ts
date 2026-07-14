@@ -578,10 +578,12 @@ describe('createChatOrchestratorRuntime', () => {
         },
       },
     ])
+    // "visible reply" carries no <ko> tag, so per the English-to-TTS-only routing
+    // it never lands in buildingMessage.content/slices (display stays Korean-only).
     const assistant = harness.sessionMessages['session-1']?.at(-1)
     expect(assistant).toMatchObject({
       role: 'assistant',
-      content: 'visible reply',
+      content: '',
       categorization: {
         reasoning: 'thinking',
       },
@@ -593,10 +595,6 @@ describe('createChatOrchestratorRuntime', () => {
           toolCallId: 'tool-1',
         }),
       }),
-      {
-        type: 'text',
-        text: 'visible reply',
-      },
     ])
     expect((assistant as StreamingAssistantMessage).tool_results).toEqual([
       {
@@ -607,5 +605,86 @@ describe('createChatOrchestratorRuntime', () => {
     ])
     expect(harness.assistantAppended).toHaveLength(1)
     expect(harness.foregroundResets).toHaveLength(1)
+  })
+
+  /**
+   * @example
+   * A streamed reply mixes English speech with a `<ko>` subtitle tag.
+   * English goes to TTS only; Korean fills the chat panel and subtitle hook.
+   */
+  it('routes English to TTS only and Korean subtitle content to the display', async () => {
+    const harness = createHarness()
+    const literalHookCalls: string[] = []
+    const subtitleHookCalls: string[] = []
+    harness.runtime.hooks.onTokenLiteral(async (literal) => {
+      literalHookCalls.push(literal)
+    })
+    harness.runtime.hooks.onSubtitle(async (koText) => {
+      subtitleHookCalls.push(koText)
+    })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'Hello. <ko>안녕.</ko>' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+    })
+
+    await harness.runtime.ingest('hi', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    expect(literalHookCalls.join('')).toContain('Hello')
+    expect(literalHookCalls.join('')).not.toContain('안녕')
+    expect(subtitleHookCalls).toEqual(['안녕.'])
+
+    const assistant = harness.sessionMessages['session-1']?.at(-1) as StreamingAssistantMessage
+    expect(assistant.content).toContain('안녕.')
+    expect(assistant.content).not.toContain('Hello')
+  })
+
+  /**
+   * @example
+   * A two-sentence bilingual reply streams across deltas, so the marker parser
+   * (24-char emit threshold, 5-char holdback) emits a literal ending on the '<'
+   * of the first `</ko>`. Regression guard for the chunk-boundary categorizer
+   * desync that silently dropped every Korean subtitle and the later English,
+   * and left `slices` empty so the turn was never persisted.
+   * See response-categoriser.test.ts ROOT CAUSE.
+   */
+  it('routes both sentences of a multi-delta bilingual reply and persists the turn', async () => {
+    const harness = createHarness()
+    const literalHookCalls: string[] = []
+    const subtitleHookCalls: string[] = []
+    harness.runtime.hooks.onTokenLiteral(async (literal) => {
+      literalHookCalls.push(literal)
+    })
+    harness.runtime.hooks.onSubtitle(async (koText) => {
+      subtitleHookCalls.push(koText)
+    })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'Hello everyone welcome back to the stream!! <ko>안녕 여러분 스트림 복귀 환영!</ko> ' })
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'How is your day going so far today? <ko>오늘 하루 어때?</ko>' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+    })
+
+    await harness.runtime.ingest('hi', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    // Both English sentences reach TTS; no Korean or tag fragments leak into speech.
+    const spokenEnglish = literalHookCalls.join('')
+    expect(spokenEnglish).toContain('welcome back to the stream')
+    expect(spokenEnglish).toContain('How is your day going so far today')
+    expect(spokenEnglish).not.toContain('안녕')
+    expect(spokenEnglish).not.toContain('<ko>')
+
+    // Both Korean subtitles land, in order.
+    expect(subtitleHookCalls).toEqual(['안녕 여러분 스트림 복귀 환영!', '오늘 하루 어때?'])
+
+    // The turn persists: Korean fills content/slices (empty slices → persistence guard skips saving).
+    const assistant = harness.sessionMessages['session-1']?.at(-1) as StreamingAssistantMessage
+    expect(assistant.content).toContain('안녕 여러분 스트림 복귀 환영!')
+    expect(assistant.content).toContain('오늘 하루 어때?')
+    expect(assistant.slices.length).toBeGreaterThan(0)
   })
 })

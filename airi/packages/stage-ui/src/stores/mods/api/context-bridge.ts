@@ -727,6 +727,12 @@ export const useContextBridgeStore = defineStore('mods:api:context-bridge', () =
 
           broadcastStreamEvent({ type: 'token-literal', literal, sessionId: chatSession.activeSessionId, context: structuredClone(normalizeContextSnapshot(context)) })
         }),
+        chatOrchestrator.onSubtitle(async (koText, context) => {
+          if (isProcessingRemoteStream)
+            return
+
+          broadcastStreamEvent({ type: 'subtitle', koText, sessionId: chatSession.activeSessionId, context: structuredClone(normalizeContextSnapshot(context)) })
+        }),
         chatOrchestrator.onTokenSpecial(async (special, context) => {
           if (isProcessingRemoteStream)
             return
@@ -828,6 +834,9 @@ export const useContextBridgeStore = defineStore('mods:api:context-bridge', () =
                 return
               chatStream.appendStreamLiteral(event.literal)
               await chatOrchestrator.emitTokenLiteralHooks(event.literal, event.context)
+              break
+            case 'subtitle':
+              await chatOrchestrator.emitSubtitleHooks(event.koText, event.context)
               break
             case 'token-special':
               await chatOrchestrator.emitTokenSpecialHooks(event.special, event.context)
