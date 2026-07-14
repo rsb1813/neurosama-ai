@@ -1,11 +1,13 @@
 ---
-summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> markers
+summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> segment-boundary slicing in chat-orchestrator-runtime
 read_when:
   - understanding how AIRI, the local LLM proxy, and the neru-audio gateway fit together
   - adding or modifying the neru-audio FastAPI endpoints (/v1/audio/speech, /v1/audio/transcriptions)
   - debugging the Electron auto-spawn/tree-kill of the neru-audio gateway
   - debugging provider connection/onboarding (neruPreseed.ts localStorage keys)
   - debugging the bilingual output routing (English voice vs Korean display/subtitle)
+  - debugging the streaming speech extraction (segment-boundary slicing, filterToSpeech bug history)
+  - debugging the caption overlay BroadcastChannel cross-window delivery
   - working on CUDA/Blackwell DLL loading shared by Chatterbox TTS and faster-whisper STT
   - working on the neru persona card or system prompt
   - looking for the removed self-built backend/frontend (orchestrator, provider ABCs, VTubeStudioAvatar) — see "Removed" section below
@@ -66,10 +68,14 @@ The desktop app (`pnpm desktop`, run from `airi/`) spawns `uv run neru-audio` as
 
 The root `backend/` (Python orchestrator with a turn-taking state machine + barge-in cancellation, `STTProvider`/`LLMProvider`/`TTSProvider`/`AvatarDriver` ABCs, `ClaudeLLM`, `WhisperLocalSTT`, `ChatterboxTTS`, `VTubeStudioAvatar` — pyvts direct mouth-parameter injection lip-sync) and `frontend/` (Vite + pixi.js web-native Live2D renderer + Electron overlay) were **deleted** in this integration (commit `9ebc01e`, "chore: remove parallel self-built backend and frontend"). AIRI now performs orchestration, avatar rendering, and subtitles natively, making that code redundant except for the GPU voice tech, which was ported into `neru-audio` (see above). None of the classes, event types, or state-machine behavior described in earlier revisions of this document exist in this repo anymore; they're preserved only in git history.
 
-## Language Flow
+## Language Flow (bilingual routing — implemented)
 
 - STT: faster-whisper (`neru-audio`) transcribes Korean mic input → Korean text.
-- LLM: Claude (via the local proxy) generates the reply.
-- TTS: Chatterbox (`neru-audio`) synthesizes the Neuro-cloned voice.
-- Avatar + subtitles: AIRI's built-in Live2D renderer and chat/subtitle UI.
-- The original neru signature (English voice + Korean subtitle, single LLM call producing both) is **not yet wired into AIRI** — it's a follow-on spec. The identity is preserved in `docs/superpowers/specs/neru-persona-reference.md` pending a character-card implementation.
+- LLM: Claude (via the local proxy) generates the reply. The neru persona card (`packages/stage-ui/src/constants/neru-persona.ts`, preseeded by `neruPreseed.ts`) instructs the LLM to reply in the format `English sentence <ko>한국어 번역</ko>` per sentence.
+- **Bilingual routing** (`packages/core-agent/src/runtime/chat-orchestrator-runtime.ts`): `createStreamingCategorizer` detects completed `<ko>` segments. English text (outside tags) is extracted via segment-boundary slicing (not the broken `filterToSpeech`) and sent to TTS. Korean text (inside `<ko>`) is routed to the chat panel via `buildingMessage.content`/`slices` and to the caption overlay via `emitSubtitleHooks` → `onSubtitle` hook → `Stage.vue` → BroadcastChannel `airi-caption-overlay`.
+- TTS: Chatterbox (`neru-audio`) synthesizes the English speech with the Neuro-cloned voice.
+- Avatar: AIRI's built-in Live2D renderer lip-syncs to audio segments.
+- Chat panel: displays Korean (from `<ko>` content).
+- Caption overlay: separate Electron window subscribing to the same BroadcastChannel. Currently not rendering (known issue under investigation — BroadcastChannel cross-window delivery or window render issue).
+
+The speech extraction was originally `categorizer.filterToSpeech` per stream chunk, which dropped English preceding an opening `<ko>` when a chunk straddled the tag boundary (first 1-2 spoken sentences silently swallowed). Fixed in commits 5f11741 + d898ad1: replaced with segment-boundary slicing that emits English before each completed segment, skips reasoning-tag content, and flushes trailing English in onEnd (cut at first `<` to prevent incomplete tag leakage).
