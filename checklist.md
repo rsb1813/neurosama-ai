@@ -78,18 +78,20 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [ ] AIRI `openai-compatible-audio-transcription` provider 연결
 - [ ] 검증: 한국어 마이크 발화 → 전사 텍스트
 
-### M-E — neru 마녀 Live2D 모델 AIRI 로드
-- [ ] ⚠️ `frontend/public/models/neru-witch`(Cubism4)는 gitignore 대상이라 Task 2의 `frontend/` 삭제로 디스크에서도 사라짐(저장소 재검색 확인, 트래킹된 백업 없음) — 모델 파일을 원본에서 재확보해야 진행 가능
-- [ ] 모델 재확보 후 AIRI 모델 로더에 연결
-- [ ] 검증: 우리 마녀 모델이 AIRI에서 렌더 + 자동 눈깜빡임/시선/립싱크
+### M-E — neru 마녀 Live2D 모델 AIRI 로드 — 🔄 Phase 1 계획 완료(`feat/neru-witch-avatar`)
+- [x] 모델 재확보: `~/Downloads/neru-witch-live2d.zip`(38MB, Cubism4, EyeBlink/LipSync 그룹 확인)
+- [x] 스펙+계획 작성: `docs/superpowers/specs|plans/2026-07-14-neru-witch-avatar-render*`
+- [ ] **Phase 1 구현**: ASCII 리네임 번들 → 프리셋 등록 → neruPreseed 1회성 시드 → 육안 검증 → 12표정 카탈로그
+- [ ] **Phase 2**(별도 스펙): 감정→exp3 표정 배선 — AIRI에 미구현이라 신규 글루 필요(감정은 현재 모션에만 연결)
 
-### M-F — 이중언어 (영어 음성 + 한국어 자막) ★코어 수정 — 🔄 진행 중
+### M-F — 이중언어 (영어 음성 + 한국어 자막) ★코어 수정 — ✅ 완료 (PR #18 병합)
 - [x] 페르소나(캐릭터 카드): 문장별 `English <ko>한국어</ko>` 이중 출력 지정(`neru-persona.ts`, 프리시드로 활성)
 - [x] AIRI 응답 categoriser가 `<ko>`를 자막 채널로, 태그 밖 영어를 TTS로 분기(`response-categoriser.ts`, `onSubtitle` 훅)
 - [x] 코어 라우팅: `chat-orchestrator-runtime` onLiteral/onSegment — 영어=음성, 한국어=화면
 - [x] E2E 발견 버그 수정: 스트리밍 speech 추출이 여는 `<ko>` 앞 영어를 유실하던 문제(첫 문장 누락) → `<ko>` 세그먼트 경계 기반 추출로 교체(커밋 5f11741 + 리뷰 반영 d898ad1). 로그로 검증(4문장 첫 문장부터 정상 발화)
 - [x] 검증(음성): 한국어 입력 → 영어 음성 첫 문장부터 정상, 채팅 패널 한국어 표시
-- [ ] 자막 오버레이(별도 창): 아직 화면에 안 뜸 — 디버깅 중. 메인 창 `postCaption`은 발사되나 오버레이 창이 렌더 안 함(BroadcastChannel 창 간 전달 또는 렌더링 이슈, caption-speaker도 동일 → 기존 공용 이슈로 추정)
+- [x] E2E 발견 2차 버그 수정: 청크가 닫는 `<` 경계에서 끝나면 categorizer가 세그먼트 발화를 놓쳐 자막·후속 영어·영속화 유실 → 태그 문자 있으면 authoritative 재파싱 폴백(커밋 2ddc720, 회귀 테스트 2개). 최종 전체 브랜치 리뷰가 발견
+- [~] 자막 오버레이(별도 창): 화면에 안 뜸 — `caption-speaker`도 동일하게 안 떠서 **기존 AIRI 공용 인프라 이슈로 판정, 별도 트랙 분리**(이중언어 블로커 아님, 채팅 패널 한국어 정상)
 
 ### M-G — 전체 루프 + barge-in
 - [ ] STT→LLM→TTS→아바타 엔드투엔드, 끼어들기
