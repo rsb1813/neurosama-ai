@@ -29,83 +29,58 @@
 **Interfaces:**
 - Produces: a zip whose entries are `witch.model3.json`, `witch.moc3`, `witch.8192/texture_00.png`, `witch.8192/texture_01.png`, `witch.physics3.json`, `witch.cdi3.json`, `Scene1.motion3.json`, and the 12 `*.exp3.json` files. `witch.model3.json` `FileReferences` point at the ASCII names. Expression `Name`s (`cw, fz, h, hdj, ku, mz, sq, x, xx, yj, zs1, zs2`) are unchanged.
 
-This is a one-time asset-generation task (no unit test — verification is structural validation of the produced zip).
+This is a one-time asset-generation task (no unit test — verification is structural validation of the produced zip). **Do it entirely in Python** (`python3` is available; the `zip` binary is NOT, and shelling `mv` on the `魔女` filenames risks encoding issues). One pass: read the source zip, rewrite every `魔女`-prefixed entry name to `witch`, rewrite the `model3.json` text the same way, write the output zip, then validate.
 
-- [ ] **Step 1: Extract the source zip to a temp working dir**
-
-```bash
-WORK="$(mktemp -d)/witch"
-mkdir -p "$WORK"
-cd "$WORK"
-unzip -o "C:/Users/jolib/Downloads/neru-witch-live2d.zip" -d "$WORK"
-ls -la "$WORK"
-```
-Expected: files `魔女.model3.json`, `魔女.moc3`, `魔女.physics3.json`, `魔女.cdi3.json`, dir `魔女.8192/`, `Scene1.motion3.json`, and 12 `*.exp3.json`.
-
-- [ ] **Step 2: Rename the non-ASCII files/dir to ASCII**
+- [ ] **Step 1: Produce the ASCII-normalized zip from the source, in one pass**
 
 ```bash
-cd "$WORK"
-mv "魔女.moc3"          witch.moc3
-mv "魔女.physics3.json" witch.physics3.json
-mv "魔女.cdi3.json"     witch.cdi3.json
-mv "魔女.8192"          witch.8192
-mv "魔女.model3.json"   witch.model3.json
-ls -la "$WORK"
-```
-Expected: no `魔女*` entries remain; `witch.*` present; `witch.8192/` holds `texture_00.png`, `texture_01.png`.
-
-- [ ] **Step 3: Rewrite `witch.model3.json` FileReferences to the ASCII names**
-
-```bash
-cd "$WORK"
+cd "C:/Users/jolib/Documents/neurosama-ai/airi"
 python3 - <<'PY'
-import json
-p = 'witch.model3.json'
-d = json.load(open(p, encoding='utf-8'))
-fr = d['FileReferences']
-fr['Moc'] = 'witch.moc3'
-fr['Textures'] = ['witch.8192/texture_00.png', 'witch.8192/texture_01.png']
-fr['Physics'] = 'witch.physics3.json'
-fr['DisplayInfo'] = 'witch.cdi3.json'
-json.dump(d, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent='\t')
-print('rewrote', p)
-PY
-cat witch.model3.json
-```
-Expected: `Moc`, `Textures`, `Physics`, `DisplayInfo` all reference `witch.*`. `Motions.idle[0].File` still `Scene1.motion3.json`; `Expressions[*].File` still `*.exp3.json`.
-
-- [ ] **Step 4: Validate every FileReference resolves to a real file**
-
-```bash
-cd "$WORK"
-python3 - <<'PY'
-import json, os
-d = json.load(open('witch.model3.json', encoding='utf-8'))
-fr = d['FileReferences']
-refs = [fr['Moc'], fr['Physics'], fr['DisplayInfo']] + fr['Textures']
-refs += [m['File'] for m in fr['Motions']['idle']]
-refs += [e['File'] for e in fr['Expressions']]
-missing = [r for r in refs if not os.path.exists(r)]
-assert not missing, f'MISSING: {missing}'
-assert not any('魔女' in r for r in refs), 'non-ASCII ref remains'
-print('OK - all', len(refs), 'references resolve, all ASCII')
+import zipfile
+SRC = 'C:/Users/jolib/Downloads/neru-witch-live2d.zip'
+OUT = 'packages/stage-ui/src/assets/live2d/models/neru_witch.zip'
+def norm(name):  # '魔女.moc3'->'witch.moc3', '魔女.8192/x.png'->'witch.8192/x.png'
+    return name.replace('魔女', 'witch')
+with zipfile.ZipFile(SRC) as zin, zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as zout:
+    for item in zin.infolist():
+        if item.is_dir():
+            continue  # entries carry full paths; explicit dir records aren't needed
+        data = zin.read(item.filename)
+        new = norm(item.filename)
+        # The model3.json body references the renamed files by name — rewrite them too.
+        if new.endswith('model3.json'):
+            data = data.decode('utf-8').replace('魔女', 'witch').encode('utf-8')
+        zout.writestr(new, data)
+print('wrote', OUT)
 PY
 ```
-Expected: `OK - all N references resolve, all ASCII`.
+Expected: `wrote packages/stage-ui/src/assets/live2d/models/neru_witch.zip`.
 
-- [ ] **Step 5: Produce the zip into the assets dir**
+- [ ] **Step 2: Validate the output zip — ASCII names + every model3.json reference resolves**
 
 ```bash
-cd "$WORK"
-OUT="C:/Users/jolib/Documents/neurosama-ai/airi/packages/stage-ui/src/assets/live2d/models/neru_witch.zip"
-rm -f "$OUT"
-zip -r "$OUT" witch.model3.json witch.moc3 witch.8192 witch.physics3.json witch.cdi3.json Scene1.motion3.json *.exp3.json
-unzip -l "$OUT"
+cd "C:/Users/jolib/Documents/neurosama-ai/airi"
+python3 - <<'PY'
+import zipfile, json
+OUT = 'packages/stage-ui/src/assets/live2d/models/neru_witch.zip'
+with zipfile.ZipFile(OUT) as z:
+    names = set(z.namelist())
+    assert not any('魔女' in n for n in names), f'non-ASCII entry remains: {[n for n in names if "魔女" in n]}'
+    assert 'witch.model3.json' in names, 'witch.model3.json missing'
+    d = json.loads(z.read('witch.model3.json').decode('utf-8'))
+    fr = d['FileReferences']
+    refs = [fr['Moc'], fr['Physics'], fr['DisplayInfo']] + fr['Textures']
+    refs += [m['File'] for m in fr['Motions']['idle']]
+    refs += [e['File'] for e in fr['Expressions']]
+    missing = [r for r in refs if r not in names]
+    assert not missing, f'unresolved references: {missing}'
+    assert '魔女' not in json.dumps(d, ensure_ascii=False), 'model3.json still contains 魔女'
+    print('OK -', len(names), 'entries, all', len(refs), 'references resolve, all ASCII')
+PY
 ```
-Expected: archive lists the ASCII entries above; total ~38 MB; no `魔女*` entries.
+Expected: `OK - 20 entries, all 17 references resolve, all ASCII` (counts may differ slightly; the assertions are what matter).
 
-- [ ] **Step 6: Commit the asset**
+- [ ] **Step 3: Commit the asset**
 
 ```bash
 cd "C:/Users/jolib/Documents/neurosama-ai"
