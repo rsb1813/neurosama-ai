@@ -62,6 +62,36 @@ subtitles appear on screen; when the user starts talking, neru stops immediately
 | **M-F — Bilingual output (English voice + Korean subtitles)** ★core | 🔄 **In progress** — persona card + `<ko>` categoriser + routing done; TTS first-sentence-drop bug fixed; caption-overlay display still under debug (chat-panel Korean works). |
 | **M-G — Full loop + barge-in** | ⬜ **Not started** — interrupt neru by speaking; verify ~1–3s round-trip. |
 
+## Current architecture (as built)
+
+The original plan described a self-built Python backend (ElevenLabs TTS, VTube
+Studio avatar, Claude cloud API). That was **superseded** by the Project AIRI
+pivot. What actually runs today:
+
+```
+Korean mic
+  → AIRI (Electron desktop app: capture, VAD, turn-taking)
+  → neru-audio gateway (127.0.0.1:3457, OpenAI-compatible)
+      • STT  /v1/audio/transcriptions  — faster-whisper large-v3 (Korean)
+  → LLM proxy (127.0.0.1:3456, OpenAI-compatible, pre-existing — not our code)
+      • neru persona card → streams "English <ko>한국어</ko>" per sentence
+  → AIRI response categoriser splits the stream:
+      • English (outside <ko>) → neru-audio /v1/audio/speech (Chatterbox TTS) → speaker → Live2D lip-sync
+      • Korean (inside <ko>)   → chat panel + caption overlay
+```
+
+| Concern | Original plan | As built |
+|---------|---------------|----------|
+| Frontend / avatar | self-built Vite + VTube Studio (pyvts) | **vendored Project AIRI** (Vue 3, built-in Live2D) |
+| TTS | ElevenLabs (cloud) | **Chatterbox**, local on RTX 5080 |
+| STT | faster-whisper (local) | faster-whisper large-v3 (kept), wrapped in `neru-audio` |
+| LLM | Claude cloud API | pre-existing **local OpenAI-compatible proxy** at `:3456` |
+| Voice/subtitle split | `{speech_en, subtitle_ko}` JSON fields | inline **`<ko>…</ko>`** markers parsed by the categoriser |
+| Packaging | Python `neru/` app | single **Electron** app (`airi/apps/stage-tamagotchi`) + `neru-audio` service |
+
+Deeper detail: [`.meridian/docs/pipeline-architecture.md`](.meridian/docs/pipeline-architecture.md)
+and the README "Architecture" section.
+
 ## Where things live
 
 - **This file** — the vision and phase status (durable).
