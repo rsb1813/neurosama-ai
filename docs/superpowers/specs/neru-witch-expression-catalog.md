@@ -1,54 +1,59 @@
-<!-- neru 마녀 모델 표정 12개 예비 카탈로그(파라미터 기반) — Phase 2 감정→표정 매핑의 시작 입력. 시각 확인은 Phase 2에서 표정 등록을 고친 뒤 채운다. -->
-# neru Witch — Expression Catalog (preliminary, Phase 2 input)
+<!-- neru 마녀 모델 표정 12개 확정 카탈로그 — 라이브 스테이지 모델에 각 exp3를 적용해 capturePage로 시각 확인(2026-07-15). Phase 2 감정→표정 매핑의 확정 입력. -->
+# neru Witch — Expression Catalog (confirmed)
 
-**Status:** PRELIMINARY — derived from each `.exp3.json`'s parameters, NOT yet
-visually confirmed. The visual "Description" column must be filled in Phase 2
-once expression registration works (see below).
+**Status:** CONFIRMED — each of the 12 `.exp3.json` was applied to the live stage
+model and captured via `capturePage` (Phase 2 Part A harness, 2026-07-15). The
+"Visual" column below is from those screenshots.
 
-## Why not visually confirmed yet
+## How the catalog was built
 
-Phase 1 verified the witch renders with working blink/gaze/lip-sync. The settings
-panel shows "No expressions available for this model" — but runtime evidence
-(2026-07-15) proved the 12 groups **DO register**, just in a different window:
-the Live2D model runs in the **stage window** and registers all 12 exp3 into that
-window's `useExpressionStore` (`registerExpressions groups=12`, all 12 exp3 fetch
-200); the settings panel runs in a **separate settings BrowserWindow** with its
-own empty store. So the panel can't preview them, but registration and per-frame
-application both work in the stage window. Therefore the visual catalog is built
-by applying each expression to the **live stage model** (Phase 2 Part A preview
-harness + `capturePage`), not via the panel. Full diagnosis in
-`.superpowers/sdd/progress.md`.
+The 12 exp3 do register in the **stage window's** expression store (runtime-
+verified: `registerExpressions groups=12`). The settings panel is a separate,
+empty BrowserWindow (see `.superpowers/sdd/progress.md`), so the catalog was NOT
+built from the panel — a temporary harness cycled each expression on the live
+model and the main process captured a PNG per expression. The harness was reverted
+after capture.
 
-## What the parameters tell us
+## The 12 expressions (confirmed visuals)
 
-Each expression sets one custom rig parameter (`Param59`–`Param72`) to 30, except
-two that also move the brow — the only interpretable emotional hints today. Names
-are opaque pinyin abbreviations.
+Key finding: only **7** are facial/emotional; **5** are **prop/costume toggles**
+(they add an object or change the outfit) and are intentionally excluded from the
+emotion map — spawning a gamepad or removing the hat on an emotion would be
+jarring.
 
-| exp Name | Parameters set | Param-based hint | Candidate emotion | Visual (Phase 2) |
-|----------|----------------|------------------|-------------------|------------------|
-| `sq` | Param67=30, ParamBrowLForm=-0.879, ParamBrowLY=-0.727 | angry-shaped brow (down + angled) | **angry** (likely) | _tbd_ |
-| `ku` | Param68=30, ParamBrowLForm=+1, ParamBrowLY=-0.788 | distressed brow (down, rounded) | **sad** (likely) | _tbd_ |
-| `x`  | Param59=0, Param60=30 | one of a Param59/60 pair | smile/happy? | _tbd_ |
-| `xx` | Param59=30, Param60=0 | inverse of `x` | smile variant? | _tbd_ |
-| `zs1`| Param61=30, Param62=0 | one of a Param61/62 pair | ? | _tbd_ |
-| `zs2`| Param61=0, Param62=30 | inverse of `zs1` | ? | _tbd_ |
-| `cw` | Param64=30 | single custom param | ? | _tbd_ |
-| `fz` | Param72=30 | single custom param | ? | _tbd_ |
-| `h`  | Param69=30 | single custom param | ? | _tbd_ |
-| `hdj`| Param65=30 | single custom param | ? | _tbd_ |
-| `mz` | Param71=30 | single custom param | ? | _tbd_ |
-| `yj` | Param66=30 | single custom param | ? | _tbd_ |
+| exp Name | Parameters | Visual (confirmed) | Kind | Emotion |
+|----------|------------|--------------------|------|---------|
+| `x`  | Param59=0, Param60=30 | **heart-shaped pupils** (pink/blue), loving | facial | **happy** |
+| `xx` | Param59=30, Param60=0 | **star-shaped pupils** (yellow), sparkling wonder | facial | **surprised / curious** |
+| `sq` | Param67=30, angry brow (ParamBrowLForm=-0.879, ParamBrowLY=-0.727) | angled/lowered brows, half-lidded displeased look | facial | **angry** |
+| `ku` | Param68=30, distressed brow (ParamBrowLForm=+1, ParamBrowLY=-0.788) | soft gentle face, faintly worried brow | facial | **sad** (best available) |
+| `h`  | Param69=30 | **pink blush** on cheeks, shy downward glance | facial | **awkward** |
+| `yj` | Param66=30 | **round glasses** appear, studious/inquisitive | facial | **think / question** |
+| `hdj`| Param65=30 | calm content soft smile (subtle) | facial | _(unused — mild/neutral)_ |
+| `zs1`| Param61=30, Param62=0 | holds a **game controller** (gamepad) | prop | — (excluded) |
+| `zs2`| Param61=0, Param62=30 | holds a **black microphone** | prop | — (excluded) |
+| `cw` | Param64=30 | cute **ghost companions** float around | prop/fx | — (excluded) |
+| `fz` | Param72=30 | holds a glowing **magic staff** with blue flame | prop | — (excluded) |
+| `mz` | Param71=30 | **witch hat removed**, hair down | costume | — (excluded) |
 
-## For Phase 2
+## Finalized emotion → exp3 map (for `EMOTION_Live2DWitchExpressionName_value`)
 
-Registration already works in the stage window (no fix needed — see the corrected
-"Why not visually confirmed yet" section above). Plan (per
-`docs/superpowers/specs/2026-07-15-neru-witch-emotion-expression-design.md`):
+9 AIRI emotions → witch exp3 name (or `undefined` = neutral/relaxed). Only facial
+expressions are used; adjacent emotions may reuse the same expression when no
+distinct one exists (harmless — `applyEmotion` just activates that group).
 
-1. Part A — apply each expression to the **live stage model** via the preview
-   harness + `capturePage`, then fill the "Visual" column below from the captured
-   screenshots (the settings panel is a separate, empty window — do NOT use it).
-2. Part B — fill `EMOTION_Live2DWitchExpressionName_value` (map 9 emotions → a
-   subset of these 12 exp3 names) from the finalized visual catalog, and build the
-   `applyEmotion` glue (Live2D emotions currently map to motion groups only).
+| Emotion | exp3 | rationale |
+|---------|------|-----------|
+| `happy` | `x` | heart eyes = joy/love |
+| `sad` | `ku` | soft, faintly worried — the only sad-leaning face |
+| `angry` | `sq` | angled angry brows |
+| `think` | `yj` | glasses = studious/thinking |
+| `surprised` | `xx` | star/sparkle eyes = amazement |
+| `awkward` | `h` | blush = embarrassed/shy |
+| `question` | `yj` | glasses = inquisitive (reuses think) |
+| `curious` | `xx` | sparkle eyes = interest (reuses surprised) |
+| `neutral` | `undefined` | relax to neutral (reset) |
+
+The 5 prop/costume expressions (`zs1`, `zs2`, `cw`, `fz`, `mz`) are left out of the
+emotion map. They remain registered and can still be driven manually / by future
+LLM expression tools if desired (out of scope here).
