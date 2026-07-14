@@ -14,7 +14,7 @@
 - The witch preset id is the single string `'preset-live2d-neru-witch'`, defined once in `packages/stage-ui/src/constants/neru-witch.ts` and imported everywhere (no duplicated literal).
 - The bundled model file is `packages/stage-ui/src/assets/live2d/models/neru_witch.zip`, referenced via `new URL('../assets/live2d/models/neru_witch.zip', import.meta.url).href` (exact Hiyori pattern, `display-models.ts:22`).
 - All model-internal filenames must be **ASCII** (no `魔女`); `model3.json` `FileReferences` must stay internally consistent with the renamed files.
-- neru asserts its stage model **unconditionally every boot** via `assertRaw` (matching the provider preseed, `neruPreseed.ts:83-88`). Do NOT use a "write only if unset" guard — `neruPreseed.ts:4-8` documents that guard fails because the AIRI store writes the Hiyori default into localStorage.
+- neru **seeds** its stage model to the witch **once**, gated by a neru-owned sentinel key `neru/stage-model-seeded` (NOT the target key). After the first seed, a user's later avatar choice is preserved across reboots. Do NOT guard on `settings/stage/model` itself — `neruPreseed.ts:4-8` documents that the AIRI store writes the Hiyori default into that key, so it is never reliably "unset"; the sentinel is written only by neru.
 - New source files start with a one-line Korean header comment (project rule). Follow existing AIRI patterns (`airi/AGENTS.md`); prefer functional style; camelCase filenames.
 - Do not delete the Hiyori presets. Do not change AIRI's generic default (`stage-model.ts:18`).
 
@@ -172,15 +172,15 @@ git commit -m "feat(stage-ui): register neru witch as a Live2D preset"
 
 ---
 
-### Task 3: Assert the witch as neru's default stage model (TDD)
+### Task 3: Seed the witch as neru's default stage model, once (TDD)
 
 **Files:**
-- Modify: `airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts` (add one `assertRaw` in `preseedNeruProviders`, plus the import)
+- Modify: `airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts` (add a sentinel-gated seed block in `preseedNeruProviders`, plus the import)
 - Test: `airi/apps/stage-tamagotchi/src/renderer/neruPreseed.test.ts` (new)
 
 **Interfaces:**
 - Consumes: `NERU_WITCH_PRESET_ID` from `@proj-airi/stage-ui/constants/neru-witch`; the existing `assertRaw(key, value)` helper (`neruPreseed.ts:18`) and `preseedNeruProviders()` (`neruPreseed.ts:67`).
-- Produces: after `preseedNeruProviders()` runs, `localStorage['settings/stage/model'] === NERU_WITCH_PRESET_ID`, unconditionally.
+- Produces: on first run (sentinel `neru/stage-model-seeded` unset), `localStorage['settings/stage/model'] === NERU_WITCH_PRESET_ID` and the sentinel is set to `'true'`. Once the sentinel is set, `settings/stage/model` is left untouched (user's choice preserved).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -193,21 +193,32 @@ import { NERU_WITCH_PRESET_ID } from '@proj-airi/stage-ui/constants/neru-witch'
 
 import { preseedNeruProviders } from './neruPreseed'
 
-describe('preseedNeruProviders — stage model', () => {
+const STAGE_MODEL_KEY = 'settings/stage/model'
+const SEEDED_KEY = 'neru/stage-model-seeded'
+
+describe('preseedNeruProviders — stage model (seed once)', () => {
   beforeEach(() => {
     localStorage.clear()
   })
 
-  it('asserts the neru witch model as the stage model', () => {
+  it('seeds the witch model and marks the sentinel on first run', () => {
     preseedNeruProviders()
-    expect(localStorage.getItem('settings/stage/model')).toBe(NERU_WITCH_PRESET_ID)
+    expect(localStorage.getItem(STAGE_MODEL_KEY)).toBe(NERU_WITCH_PRESET_ID)
+    expect(localStorage.getItem(SEEDED_KEY)).toBe('true')
   })
 
-  it('overwrites a pre-existing stale stage-model selection (appliance behavior)', () => {
-    // The AIRI store writes 'preset-live2d-1' (Hiyori) on first boot; neru must reclaim it.
-    localStorage.setItem('settings/stage/model', 'preset-live2d-1')
+  it('claims the witch over a stale AIRI Hiyori default when the sentinel is unset', () => {
+    // AIRI store may have written its 'preset-live2d-1' default before neru first seeds.
+    localStorage.setItem(STAGE_MODEL_KEY, 'preset-live2d-1')
     preseedNeruProviders()
-    expect(localStorage.getItem('settings/stage/model')).toBe(NERU_WITCH_PRESET_ID)
+    expect(localStorage.getItem(STAGE_MODEL_KEY)).toBe(NERU_WITCH_PRESET_ID)
+  })
+
+  it('preserves the user\'s later avatar choice once the sentinel is set', () => {
+    localStorage.setItem(SEEDED_KEY, 'true')
+    localStorage.setItem(STAGE_MODEL_KEY, 'preset-live2d-2')
+    preseedNeruProviders()
+    expect(localStorage.getItem(STAGE_MODEL_KEY)).toBe('preset-live2d-2')
   })
 })
 ```
@@ -215,9 +226,9 @@ describe('preseedNeruProviders — stage model', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm exec vitest run apps/stage-tamagotchi/src/renderer/neruPreseed.test.ts`
-Expected: FAIL — both assertions get `null` / `'preset-live2d-1'` (the assert isn't wired yet).
+Expected: FAIL — first two tests find no witch id / no sentinel (the seed block isn't wired yet). The third may pass incidentally (nothing writes the key), which is fine — it guards the final behavior.
 
-- [ ] **Step 3: Wire the stage-model assertion**
+- [ ] **Step 3: Wire the sentinel-gated seed**
 
 In `neruPreseed.ts`, add the import next to the existing stage-ui import (`neruPreseed.ts:13`):
 ```ts
@@ -225,15 +236,19 @@ import { NERU_WITCH_PRESET_ID } from '@proj-airi/stage-ui/constants/neru-witch'
 ```
 In `preseedNeruProviders()`, immediately after the onboarding line (`neruPreseed.ts:91`, `assertRaw('onboarding/completed', 'true')`), add:
 ```ts
-  // neru의 기본 아바타를 마녀 모델로 매 기동 단언한다(provider 프리시드와 동일한 어플라이언스 방침).
-  // "값이 없을 때만"은 AIRI 스토어가 Hiyori 기본값을 이미 써두어 무력화되므로 쓰지 않는다.
-  assertRaw('settings/stage/model', NERU_WITCH_PRESET_ID)
+  // neru의 기본 아바타를 마녀 모델로 최초 1회만 시드한다 — 이후 사용자가 UI에서 바꾼 선택을 존중한다.
+  // 대상 키(settings/stage/model)는 AIRI 스토어가 Hiyori 기본값을 써버려 "없을 때만" 판정이
+  // 무력화되므로, 우리만 쓰는 별도 센티넬 키로 최초 1회 여부를 판정한다.
+  if (!localStorage.getItem('neru/stage-model-seeded')) {
+    assertRaw('settings/stage/model', NERU_WITCH_PRESET_ID)
+    assertRaw('neru/stage-model-seeded', 'true')
+  }
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm exec vitest run apps/stage-tamagotchi/src/renderer/neruPreseed.test.ts`
-Expected: PASS (2 tests).
+Expected: PASS (3 tests).
 
 - [ ] **Step 5: Typecheck + lint**
 
@@ -309,7 +324,7 @@ git commit -m "docs: neru witch 12-expression catalog (Phase 2 input)"
 
 ## Self-Review
 
-**Spec coverage:** §Approach 1 (ASCII package) → Task 1. §2 (preset) → Task 2. §3 (preseed default, unconditional) → Task 3. §4 (auto-behaviors verify) → Task 4 Steps 2-4. §5 (expression catalog) → Task 4 Step 5. §Testing (unit for preseed; build; manual render) → Tasks 3 & 4. All spec sections mapped.
+**Spec coverage:** §Approach 1 (ASCII package) → Task 1. §2 (preset) → Task 2. §3 (preseed default, seed-once via sentinel) → Task 3. §4 (auto-behaviors verify) → Task 4 Steps 2-4. §5 (expression catalog) → Task 4 Step 5. §Testing (unit for preseed; build; manual render) → Tasks 3 & 4. All spec sections mapped.
 
 **Placeholder scan:** No TBD/TODO. The only free-text-to-fill is the expression catalog table (Task 4 Step 5) — inherent to a discovery deliverable, with explicit param hints and a "from observation, not guesswork" instruction.
 

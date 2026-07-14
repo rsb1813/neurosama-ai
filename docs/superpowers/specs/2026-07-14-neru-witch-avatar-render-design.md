@@ -104,26 +104,35 @@ Add a preset entry to `display-models.ts` mirroring the Hiyori Pro entry:
 `Live2dZip`, `type: 'url'`, a stable `id` (e.g. `preset-live2d-neru-witch`), name
 `"neru (witch)"`. Keep the Hiyori presets (fallback/options) — no deletion.
 
-### 3. Make it neru's default (via preseed, not AIRI's global default)
+### 3. Make it neru's default — seed once, respect the user's later choice
 
-In `neruPreseed.ts`, assert `localStorage['settings/stage/model']` to the witch
-preset id **unconditionally on every boot**, matching the existing provider
-preseed (`assertRaw`, `neruPreseed.ts:83-88`).
+In `neruPreseed.ts`, seed `localStorage['settings/stage/model']` to the witch
+preset id **once**, then never touch it again — so a user who picks a different
+avatar in the UI keeps it across reboots.
 
-> **Correction (codebase evidence supersedes the earlier "only if not set"
-> idea):** `neruPreseed.ts:4-8` documents that the "write only if the key is
-> unset" approach was tried and **failed** — the AIRI store
-> (`useLocalStorageManualReset('settings/stage/model', 'preset-live2d-1')`,
-> `stage-model.ts:18`) writes the Hiyori default into localStorage on first
-> boot, so on every later boot the key is already set to Hiyori and a
-> guarded preseed would skip, leaving neru on Hiyori. Unconditional assert is
-> the file's established, deliberate pattern. Tradeoff (same as providers): a
-> user who switches avatars in the UI reverts to the witch next boot — intended
-> for a single-purpose appliance.
+The gate is a **separate neru-owned sentinel key** `neru/stage-model-seeded`, NOT
+the target key:
 
-`preseedNeruProviders()` runs at `apps/stage-tamagotchi/src/renderer/main.ts:7`,
-before Pinia/stores init — the correct place to assert. AIRI's generic default
-(`stage-model.ts:18`) is untouched; only neru's boot is affected.
+```ts
+if (!localStorage.getItem('neru/stage-model-seeded')) {
+  assertRaw('settings/stage/model', NERU_WITCH_PRESET_ID)
+  assertRaw('neru/stage-model-seeded', 'true')
+}
+```
+
+Why a sentinel rather than "only if the target is unset": `neruPreseed.ts:4-8`
+documents that guarding on the *target* key fails — the AIRI store
+(`useLocalStorageManualReset('settings/stage/model', 'preset-live2d-1')`,
+`stage-model.ts:18`) writes the Hiyori default into localStorage, so the target
+key is never reliably "unset." The sentinel is written only by neru and the AIRI
+store never touches it, so it is a truthful "has neru seeded the avatar yet?"
+flag. `preseedNeruProviders()` runs at
+`apps/stage-tamagotchi/src/renderer/main.ts:7`, before Pinia/store init, so on
+the first boot our witch value is in place before the store would write its
+default; on later boots the sentinel short-circuits and the user's selection
+(witch or otherwise) is preserved. Unlike the provider keys (asserted every boot
+out of functional necessity), the avatar is cosmetic, so seed-once is the right
+policy. AIRI's generic default (`stage-model.ts:18`) is untouched.
 
 ### 4. Verify auto-behaviors
 
@@ -154,11 +163,13 @@ Live2D rendering is not unit-testable; verification is primarily **visual/manual
 
 - **Manual (primary):** app boots → witch renders as default; eyes blink; TTS
   playback moves the mouth; (gaze if params present). Expression catalog captured.
-- **Unit (where cheap):** `neruPreseed` asserts the witch preset id into
-  `settings/stage/model`, **including overwriting a pre-existing stale value**
-  (jsdom env, `localStorage`). The preset entry itself (`display-models.ts`) is a
-  private const loaded via IndexedDB, so it's verified by typecheck + build +
-  manual render rather than a unit test.
+- **Unit (where cheap):** `neruPreseed` seed-once semantics (jsdom env,
+  `localStorage`): (a) fresh storage → witch id written + sentinel set; (b)
+  sentinel unset but a stale `preset-live2d-1` present (AIRI default) → witch
+  claims it; (c) sentinel already set + a user's selection present → left
+  untouched. The preset entry itself (`display-models.ts`) is a private const
+  loaded via IndexedDB, so it's verified by typecheck + build + manual render
+  rather than a unit test.
 - **Build:** `pnpm -F @proj-airi/stage-tamagotchi build` succeeds with the +38 MB
   asset (Hiyori Pro at 31.6 MB proves the size is fine).
 
