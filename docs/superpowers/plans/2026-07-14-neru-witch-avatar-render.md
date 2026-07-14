@@ -13,6 +13,7 @@
 - Spec: `docs/superpowers/specs/2026-07-14-neru-witch-avatar-render-design.md`.
 - The witch preset id is the single string `'preset-live2d-neru-witch'`, defined once in `packages/stage-ui/src/constants/neru-witch.ts` and imported everywhere (no duplicated literal).
 - The bundled model file is `packages/stage-ui/src/assets/live2d/models/neru_witch.zip`, referenced via `new URL('../assets/live2d/models/neru_witch.zip', import.meta.url).href` (exact Hiyori pattern, `display-models.ts:22`).
+- The model asset lives **on disk, untracked** — the models dir is deliberately gitignored (`airi/.gitignore:81` `**/assets/live2d/models/*`) and the stock Hiyori zips are untracked too. Do NOT commit or force-add `neru_witch.zip`. Vite loads it from disk regardless. (Decision confirmed with the user.)
 - All model-internal filenames must be **ASCII** (no `魔女`); `model3.json` `FileReferences` must stay internally consistent with the renamed files.
 - neru **seeds** its stage model to the witch **once**, gated by a neru-owned sentinel key `neru/stage-model-seeded` (NOT the target key). After the first seed, a user's later avatar choice is preserved across reboots. Do NOT guard on `settings/stage/model` itself — `neruPreseed.ts:4-8` documents that the AIRI store writes the Hiyori default into that key, so it is never reliably "unset"; the sentinel is written only by neru.
 - New source files start with a one-line Korean header comment (project rule). Follow existing AIRI patterns (`airi/AGENTS.md`); prefer functional style; camelCase filenames.
@@ -80,13 +81,15 @@ PY
 ```
 Expected: `OK - 20 entries, all 17 references resolve, all ASCII` (counts may differ slightly; the assertions are what matter).
 
-- [ ] **Step 3: Commit the asset**
+- [ ] **Step 3: Leave the asset on disk — do NOT commit it**
+
+The model assets dir is deliberately gitignored (root `.gitignore` `models/` and `airi/.gitignore:81` `**/assets/live2d/models/*`), exactly like the stock Hiyori zips, which are on disk but untracked. Vite resolves the preset URL from disk (`import.meta.url`), so the local app loads the model whether or not it is tracked. Keep `neru_witch.zip` untracked, consistent with Hiyori.
 
 ```bash
 cd "C:/Users/jolib/Documents/neurosama-ai"
-git add airi/packages/stage-ui/src/assets/live2d/models/neru_witch.zip
-git commit -m "feat(stage-ui): bundle ASCII-normalized neru witch Live2D model asset"
+git status --short   # expected: clean — the zip is ignored, not staged
 ```
+Expected: no output (the zip is ignored/untracked). Do not force-add it. The source `~/Downloads/neru-witch-live2d.zip` remains the backup of record.
 
 ---
 

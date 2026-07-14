@@ -94,6 +94,13 @@ by normalizing to ASCII** when producing the bundled zip:
   ASCII (`Scene1.motion3.json`, `cw.exp3.json`, …) — leave them.
 - output `packages/stage-ui/src/assets/live2d/models/neru_witch.zip`
 
+The model asset stays **on disk, untracked** — the models dir is deliberately
+gitignored (`airi/.gitignore:81` `**/assets/live2d/models/*`) and the stock
+Hiyori zips are untracked the same way. Vite resolves the preset URL from disk,
+so the local app loads it regardless of git tracking. `~/Downloads/neru-witch-live2d.zip`
+is the backup of record. (Corrects the earlier assumption that Hiyori is committed —
+it is not; no model zip is tracked in this repo.)
+
 Expression `Name`s inside `model3.json` (`cw`, `fz`, …) are unchanged — Phase 2
 maps against them.
 
