@@ -735,4 +735,58 @@ describe('createChatOrchestratorRuntime', () => {
     releaseStream()
     await sendPromise.catch(() => {}) // may reject with AbortError; Task 2 makes it graceful
   })
+
+  /**
+   * @example
+   * A barge-in abort should not be treated as a failure: the reply streamed so
+   * far is kept in history, and no failure telemetry fires.
+   *
+   * NOTICE:
+   * The brief's placeholder text ('half a sentence') has no `<ko>` tag, so it
+   * would never reach `buildingMessage.content`/`slices` — only closed `<ko>`
+   * segments do (see response-categoriser.ts mapTagNameToCategory + the
+   * onSegment wiring at chat-orchestrator-runtime.ts ~527-537, and the existing
+   * regression tests around line 582-591 showing untagged text persists as
+   * content: ''). Using a closed `<ko>` segment here exercises the same
+   * `slices.length > 0` persistence guard the normal finalize path uses,
+   * while preserving the brief's fixed assertion intent (partial persisted,
+   * no failure event).
+   *
+   * The delta also pads past the marker-parser's 24-char emit threshold
+   * (llm-marker-parser.ts minLiteralEmitLength, chat-orchestrator-runtime.ts
+   * STREAMING_UI_FLUSH_CHUNK_SIZE): `onLiteral` (and thus the categorizer)
+   * only fires once buffered text crosses that threshold, since `parser.end()`
+   * — which would flush a short remainder — never runs on this abort path.
+   */
+  it('keeps the partial reply and does not fail when barge-in aborts the stream', async () => {
+    const harness = createHarness()
+    let releaseStream: () => void = () => {}
+    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: '<ko>half a sentence</ko> more padding text here' })
+      await streamGate
+      // @xsai's fetch wrapper throws this shape when the AbortSignal fires mid-stream.
+      const err = new Error('aborted')
+      err.name = 'AbortError'
+      throw err
+    })
+
+    const sendPromise = harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+    await vi.waitFor(() => expect(harness.runtime.getSending()).toBe(true))
+    harness.runtime.abortActiveStream()
+    releaseStream()
+    await sendPromise
+
+    // The partial assistant message is persisted to session history.
+    const assistant = harness.sessionMessages['session-1']?.at(-1) as StreamingAssistantMessage
+    expect(assistant.role).toBe('assistant')
+    expect(assistant.content).toContain('half a sentence')
+    expect(harness.assistantAppended).toHaveLength(1)
+
+    // And no failure was reported.
+    expect(harness.telemetry.chatActivationFailed).toHaveLength(0)
+  })
 })

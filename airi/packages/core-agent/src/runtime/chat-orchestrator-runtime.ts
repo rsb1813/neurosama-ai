@@ -421,6 +421,8 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
 
     setSending(true)
     activeAbortController = new AbortController()
+    // catch에서도 정상 종료 시 메시지와 동일한 텍스트를 참조해야 하므로 try 바깥으로 끌어올림.
+    let fullText = ''
 
     const buildingMessage: StreamingAssistantMessage = {
       role: 'assistant',
@@ -669,7 +671,6 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       await hooks.emitAfterMessageComposedHooks(sendingMessage, streamingMessageContext)
       await hooks.emitBeforeSendHooks(sendingMessage, streamingMessageContext)
 
-      let fullText = ''
       const headers = (options.providerConfig?.headers || {}) as Record<string, string>
 
       if (shouldAbort())
@@ -798,6 +799,20 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       })
     }
     catch (error) {
+      // 사용자가 끼어들어(barge-in) 스트림을 취소한 경우: 실패가 아니라 정상 중단이다.
+      // 이미 스트리밍된 반쪽 답변을 히스토리에 남기고 실패 이벤트는 내지 않는다(spec D3).
+      // finally가 아직 실행되지 않았으므로 activeAbortController는 여기서도 유효하다.
+      if (activeAbortController?.signal.aborted) {
+        if (!isStaleGeneration() && buildingMessage.slices.length > 0) {
+          deps.session.appendSessionMessage(sessionId, buildingMessage)
+          deps.onAssistantMessageAppended?.({
+            sessionId,
+            message: buildingMessage,
+            messageText: fullText,
+          })
+        }
+        return
+      }
       console.error('Error sending message:', error)
       deps.onChatActivationFailed?.({
         source: sendSource,
