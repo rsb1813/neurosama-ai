@@ -26,6 +26,7 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { useSettingsLive2d } from '../../../../stage-ui-live2d/src/composables/live2d/live2d'
+import { useBargeIn } from '../../composables/audio/use-barge-in'
 import { useAnalytics } from '../../composables/use-analytics'
 import { useAuthProviderSync } from '../../composables/use-auth-provider-sync'
 import { useDuckDb } from '../../composables/use-duck-db'
@@ -45,6 +46,7 @@ import { useAiriCardStore } from '../../stores/modules'
 import { useSpeechStore } from '../../stores/modules/speech'
 import { useProvidersStore } from '../../stores/providers'
 import { useSettings } from '../../stores/settings'
+import { useSettingsAudioDevice } from '../../stores/settings/audio-device'
 import { useSpeechOutputControlStore } from '../../stores/speech-output-control'
 import { useSpeechRuntimeStore } from '../../stores/speech-runtime'
 
@@ -92,6 +94,17 @@ const { mouthOpenSize, nowSpeaking } = storeToRefs(useSpeakingStore())
 const { audioContext } = useAudioContext()
 const currentAudioSource = ref<AudioBufferSourceNode>()
 const { latestStopRequest } = storeToRefs(useSpeechOutputControlStore())
+
+const { stream: micStream } = storeToRefs(useSettingsAudioDevice())
+const chatOrchestrator = useChatOrchestratorStore()
+const { sending } = storeToRefs(chatOrchestrator)
+const speechOutputControl = useSpeechOutputControlStore()
+
+useBargeIn(micStream, {
+  isBusy: () => nowSpeaking.value || sending.value,
+  stopSpeaking: () => speechOutputControl.requestStopSpeaking('barge-in'),
+  abortStream: () => chatOrchestrator.abortActiveStream(),
+})
 
 const { onBeforeMessageComposed, onBeforeSend, onTokenLiteral, onTokenSpecial, onStreamEnd, onAssistantResponseEnd, onSubtitle } = useChatOrchestratorStore()
 const chatHookCleanups: Array<() => void> = []
