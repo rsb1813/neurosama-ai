@@ -25,5 +25,10 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 
 **Next Steps:**
 1. Human: push + PR + merge `feat/neru-witch-emotion` (M-E Phase 2 complete).
-2. **Barge-in (M-G)** — interrupt neru by speaking: VAD detects user speech during TTS → stop playback + cancel the in-flight LLM stream + return to listening. Core MVP requirement, needs its own design (brainstorm → spec → plan). Likely the next milestone.
+2. **Barge-in (M-G) — IN DESIGN** on `feat/neru-barge-in` (brainstorming). Readiness map from codebase exploration (2026-07-15):
+   - **Stop TTS = ready to reuse:** `requestStopSpeaking(reason)` (`stage-ui/src/stores/speech-output-control.ts`) → `stopSpeechOutput` (`Stage.vue:639`) already halts the `AudioBufferSourceNode`, drains the sentence queue, cancels pending synthesis, closes the streaming WS. Only needs a new `SpeechOutputStopReason` value (`'barge-in'`) + a trigger.
+   - **Cancel LLM stream = must build:** `abortSignal` is plumbed to `streamText` (`core-agent/src/runtime/llm-service.ts:225`) but no `AbortController` is ever created/passed for a send; `cancelPendingSends` only drops not-yet-started queued sends. Build a per-send controller + `abortActiveStream()` in the chat-orchestrator runtime.
+   - **Trigger (VAD speech-start → interrupt) = must build:** client-side Silero VAD signal exists (`useVAD` `stage-ui/src/stores/ai/models/vad.ts`, `useVoiceInputSession`) but is only used on the hearing settings page; nothing in the live loop subscribes. Wire a stage-level subscription that fires the two stops, gated on `nowSpeaking`/`sending`. `Stage.vue` is the natural host.
+   - **Return to listening = mostly free:** speaking-state reset is already in the stop path; mic isn't paused during TTS.
+   - **No existing barge-in; no unified turn-state machine.** Open prerequisite question (asked): is voice input (mic→STT→neru) live yet, or has testing been text-only?
 3. Known-issue cleanup candidates: caption overlay window shows nothing (pre-existing AIRI infra); v1 bilingual persistence gap (pure-English reply saves nothing); cross-window expression settings panel empty (cosmetic).
