@@ -1,5 +1,5 @@
 ---
-summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> segment-boundary slicing in chat-orchestrator-runtime
+summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> segment-boundary slicing; emotion→exp3 expression wiring drives the witch avatar's face from LLM emotions (one at a time, hold+auto-reset); cross-window Pinia store isolation affects the settings panel but not the stage window where driving happens
 read_when:
   - understanding how AIRI, the local LLM proxy, and the neru-audio gateway fit together
   - adding or modifying the neru-audio FastAPI endpoints (/v1/audio/speech, /v1/audio/transcriptions)
@@ -8,6 +8,8 @@ read_when:
   - debugging the bilingual output routing (English voice vs Korean display/subtitle)
   - debugging the streaming speech extraction (segment-boundary slicing, filterToSpeech bug history)
   - debugging the caption overlay BroadcastChannel cross-window delivery
+  - debugging the emotion→expression wiring (applyEmotion, exp3 registration, cross-window store isolation)
+  - understanding the witch expression catalog (which exp3 are facial vs props)
   - working on CUDA/Blackwell DLL loading shared by Chatterbox TTS and faster-whisper STT
   - working on the neru persona card or system prompt
   - looking for the removed self-built backend/frontend (orchestrator, provider ABCs, VTubeStudioAvatar) — see "Removed" section below
@@ -32,7 +34,7 @@ AIRI owns: mic capture, STT orchestration/turn-taking/barge-in, the LLM conversa
 
 ## Providers (AIRI side — config only, no custom code)
 
-All three point at local services via `neruPreseed.ts` (`airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts`), which **authoritatively** seeds localStorage before AIRI's stores hydrate so onboarding is skipped. "Authoritative" means scalar keys (active-provider, active-model) are **overwritten every launch** (not write-only-if-absent), and shared object keys (credentials, providers/added) are **merged** preserving the rest of the catalog. This overcomes stale AIRI defaults in dev localStorage that would otherwise leave providers unbound. Tradeoff: UI provider switches revert next launch — intended for a single-purpose appliance:
+All three point at local services via `neruPreseed.ts` (`airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts`), which **authoritatively** seeds localStorage before AIRI's stores hydrate so onboarding is skipped. "Authoritative" means scalar keys (active-provider, active-model, `settings/live2d/expression-enabled`) are **overwritten every launch** (not write-only-if-absent), and shared object keys (credentials, providers/added) are **merged** preserving the rest of the catalog. This overcomes stale AIRI defaults in dev localStorage that would otherwise leave providers unbound. Tradeoff: UI provider switches revert next launch — intended for a single-purpose appliance. The stage-model preseed uses a sentinel key (`neru/stage-model-seeded`) so the witch model is seeded once but the user's later model choice is respected:
 
 | Role | AIRI provider id | Base URL | Backing service |
 |------|------------------|----------|-----------------|
@@ -69,6 +71,22 @@ The desktop app (`pnpm desktop`, run from `airi/`) spawns `uv run neru-audio` as
 The root `backend/` (Python orchestrator with a turn-taking state machine + barge-in cancellation, `STTProvider`/`LLMProvider`/`TTSProvider`/`AvatarDriver` ABCs, `ClaudeLLM`, `WhisperLocalSTT`, `ChatterboxTTS`, `VTubeStudioAvatar` — pyvts direct mouth-parameter injection lip-sync) and `frontend/` (Vite + pixi.js web-native Live2D renderer + Electron overlay) were **deleted** in this integration (commit `9ebc01e`, "chore: remove parallel self-built backend and frontend"). AIRI now performs orchestration, avatar rendering, and subtitles natively, making that code redundant except for the GPU voice tech, which was ported into `neru-audio` (see above). None of the classes, event types, or state-machine behavior described in earlier revisions of this document exist in this repo anymore; they're preserved only in git history.
 
 ## Language Flow (bilingual routing — implemented)
+
+## Emotion → Expression (Live2D exp3 wiring — M-E Phase 2)
+
+The witch Live2D model has 12 `.exp3.json` expressions. **7 are facial** (heart-eyes `x`→happy, star-eyes `xx`→surprised/curious, angry-brow `sq`→angry, soft-worry `ku`→sad, blush `h`→awkward, glasses `yj`→think/question, shadow-eyes `hdj`→sinister/unused). **5 are prop/costume toggles** (gamepad `zs1`, mic `zs2`, ghosts `cw`, staff `fz`, hat-off `mz`) excluded from the emotion map.
+
+Data flow: LLM emotion token → `Stage.vue` emotion queue → Live2D branch calls `expressionStore.applyEmotion(EMOTION_Live2DWitchExpressionName_value[emotion])` → resets previous group to `modelDefault` → activates mapped exp3 group params to their target values → `applyExpressions` (per-frame motion plugin) writes values to the Cubism core model → hold ~4s → auto-reset to neutral via `applyValue`'s duration timer (reset target = `modelDefault`, not `defaultValue`, to prevent drift if `saveDefaults()` is called during an active emotion).
+
+Key files: `packages/stage-ui/src/constants/emotions.ts` (witch map), `packages/stage-ui-live2d/src/stores/expression-store.ts` (`applyEmotion` action), `packages/stage-ui/src/components/scenes/Stage.vue` (one-line hook in the Live2D emotion branch). The map is witch-specific (`EMOTION_Live2DWitchExpressionName_value`); models with no registered expressions see a no-op.
+
+### Cross-window expression store isolation (known issue)
+
+The expression store (`useExpressionStore`, Pinia id `live2d-expressions`) is **renderer-local**: each BrowserWindow has its own isolated Pinia instance. The Live2D model runs in the **main stage window** and registers all 12 exp3 groups there (runtime-verified: `registerExpressions groups=12`, all exp3 fetch 200). The expression **settings panel** (`model-settings/live2d.vue`) runs in the **settings BrowserWindow** (`windows/settings/`, separate `new BrowserWindow`, route `/settings/models`) with its own empty store — no model runs there, so it shows "No expressions available." `createPinia()` is plain (no cross-window sync plugin; only chat has `chat-sync`). This does NOT affect emotion→expression driving (it happens entirely in the stage window). A future fix would broadcast registered groups via eventa IPC stage→settings.
+
+### Expression system prerequisite
+
+AIRI's Live2D expression system is **off by default** (`settings/live2d/expression-enabled = false`). When disabled, `initExpressionController` in `Model.vue` does not create `internalModelRef`, so expressions are never registered and `applyEmotion` is a no-op. `neruPreseed.ts` seeds this key to `true` on every launch so the witch's expressions always register.
 
 - STT: faster-whisper (`neru-audio`) transcribes Korean mic input → Korean text.
 - LLM: Claude (via the local proxy) generates the reply. The neru persona card (`packages/stage-ui/src/constants/neru-persona.ts`, preseeded by `neruPreseed.ts`) instructs the LLM to reply in the format `English sentence <ko>한국어 번역</ko>` per sentence.
