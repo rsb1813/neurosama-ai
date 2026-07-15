@@ -34,6 +34,12 @@ export const EMOTION_EmotionMotionName_value = {
   [Emotion.Curious]: EmotionCuriousMotionName,
 }
 
+// 시스템 프롬프트에 넣는 "사용 가능한 감정" 목록 렌더링 — 감정 세트와 문자열 형식을 한 곳에서
+// 관리해 기본 카드(SystemPromptV2)와 neru 카드가 같은 문자열을 공유하도록 한다(DRY).
+export const EMOTION_PROMPT_LIST = EMOTION_VALUES
+  .map(emotion => `- ${emotion} (Emotion for feeling ${EMOTION_EmotionMotionName_value[emotion]})`)
+  .join('\n')
+
 export const EMOTION_VRMExpressionName_value = {
   [Emotion.Happy]: 'happy',
   [Emotion.Sad]: 'sad',

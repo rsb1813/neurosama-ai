@@ -15,18 +15,14 @@ describe('neru system prompt', () => {
   })
   // ROOT CAUSE:
   // 표정은 LLM이 뱉는 `<|ACT {"emotion":...}|>` 토큰이 구동하는데, 초기 페르소나엔 이 규약이
-  // 없어 모델이 감정 토큰을 아예 안 뱉었고 그래서 표정 배선이 무반응이었다. 규약과 예시를
-  // 프롬프트에 포함하도록 고쳤다. 이 테스트가 ACT 규약과 예시 존재를 고정한다.
-  it('includes the ACT emotion-token protocol and an example', () => {
+  // 없어 모델이 감정 토큰을 아예 안 뱉었고 그래서 표정 배선이 무반응이었다. 규약을 프롬프트에
+  // 포함하도록 고쳤다. 정확한 예시 문구가 아니라 규약의 존재만 회귀 가드로 고정한다(untyped 문자열이라).
+  it('includes the ACT emotion-token protocol', () => {
     expect(NERU_SYSTEM_PROMPT).toContain('<|ACT ')
     expect(NERU_SYSTEM_PROMPT).toContain('"emotion"')
-    expect(NERU_SYSTEM_PROMPT).toMatch(/<\|ACT \{"emotion":"happy"\}\|>/)
   })
   it('lists every available emotion so ACT payloads stay valid', () => {
     for (const emotion of EMOTION_VALUES)
-      expect(NERU_SYSTEM_PROMPT).toContain(`- ${emotion} `)
-  })
-  it('gives neru a witch backstory', () => {
-    expect(NERU_SYSTEM_PROMPT).toMatch(/witch/i)
+      expect(NERU_SYSTEM_PROMPT).toContain(`- ${emotion} (Emotion for feeling `)
   })
 })

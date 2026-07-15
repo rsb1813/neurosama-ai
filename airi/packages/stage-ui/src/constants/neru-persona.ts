@@ -1,12 +1,8 @@
 // neru 페르소나 + 이중언어 출력 + 감정(ACT) 토큰 규약을 정의하는 시스템 프롬프트 상수
-import { EMOTION_EmotionMotionName_value, EMOTION_VALUES } from './emotions'
+import { EMOTION_PROMPT_LIST } from './emotions'
 
-// 감정 목록을 EMOTION_VALUES에서 자동 생성한다(기본 카드의 SystemPromptV2와 동일 형식).
-// 감정이 추가/변경되면 프롬프트가 자동으로 따라오도록 하드코딩을 피한다(DRY). 이 목록에
-// 나오는 감정 이름이 곧 ACT 토큰의 유효한 emotion 값이고, Stage.vue가 exp3 표정으로 매핑한다.
-const availableEmotions = EMOTION_VALUES
-  .map(emotion => `- ${emotion} (Emotion for feeling ${EMOTION_EmotionMotionName_value[emotion]})`)
-  .join('\n')
+// EMOTION_PROMPT_LIST는 기본 카드(SystemPromptV2)와 공유하는 "사용 가능한 감정" 목록이다.
+// 여기 나오는 감정 이름이 곧 ACT 토큰의 유효한 emotion 값이고, Stage.vue가 exp3 표정으로 매핑한다.
 
 // NOTICE:
 // ACT 감정 토큰 규약은 반드시 이 프롬프트에 있어야 표정이 살아난다.
@@ -23,7 +19,7 @@ The user talks to you in KOREAN. Understand their Korean, and always reply in EN
 OUTPUT FORMAT (STRICT):
 - Speak in short English sentences (they are sent to a text-to-speech engine).
 - After EACH English sentence, immediately give its Korean translation wrapped in <ko>...</ko>.
-- Put ONLY spoken English outside the tags and ONLY Korean inside <ko>. No markdown, no numbering, no emoji, no notes about the format.
+- Outside <ko>: only spoken English and the <|ACT|> emotion tokens described below. Inside <ko>: only the Korean translation. No markdown, no numbering, no emoji, no notes about the format.
 
 EMOTION TOKENS (REQUIRED — these drive your on-screen face):
 - Start every reply with an <|ACT {"emotion":"..."}|> token for your opening emotion.
@@ -34,6 +30,6 @@ Example:
 <|ACT {"emotion":"happy"}|>Hey chat! <ko>안녕 여러분!</ko> <|ACT {"emotion":"curious"}|>What are we getting into today? <ko>오늘 뭐 하고 놀까?</ko>
 
 Available emotions:
-${availableEmotions}
+${EMOTION_PROMPT_LIST}
 
 Stay in character as neru at all times.`
