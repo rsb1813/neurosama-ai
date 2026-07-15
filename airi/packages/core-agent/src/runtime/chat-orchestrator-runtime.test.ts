@@ -718,7 +718,9 @@ describe('createChatOrchestratorRuntime', () => {
     const harness = createHarness()
     let capturedSignal: AbortSignal | undefined
     let releaseStream: () => void = () => {}
-    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve })
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve
+    })
     harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
       capturedSignal = options?.abortSignal
       await options?.onStreamEvent?.({ type: 'text-delta', text: 'partial' })
@@ -761,7 +763,9 @@ describe('createChatOrchestratorRuntime', () => {
   it('keeps the partial reply and does not fail when barge-in aborts the stream', async () => {
     const harness = createHarness()
     let releaseStream: () => void = () => {}
-    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve })
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve
+    })
     harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
       await options?.onStreamEvent?.({ type: 'text-delta', text: '<ko>half a sentence</ko> more padding text here' })
       await streamGate
