@@ -212,7 +212,7 @@ it('keeps the partial reply and does not fail when barge-in aborts the stream', 
     const err = new Error('aborted'); err.name = 'AbortError'; throw err
   })
   const sendPromise = runtime.ingest('hello', sendOptions)
-  await vi.waitFor(() => expect(getAppendedAssistantText()).toContain('half a sentence') || true) // wait until a delta streamed
+  await vi.waitFor(() => expect(runtime.getSending()).toBe(true)) // send is in-flight (the delta streamed before the gate await)
   runtime.abortActiveStream()
   releaseStream()
   await sendPromise
