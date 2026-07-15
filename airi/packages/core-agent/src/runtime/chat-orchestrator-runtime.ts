@@ -279,6 +279,8 @@ export interface ChatOrchestratorRuntime {
   ingest: (sendingMessage: string, options: ChatOrchestratorSendOptions, targetSessionId?: string) => Promise<void>
   /** Rejects queued sends that have not started yet. */
   cancelPendingSends: (sessionId?: string) => void
+  /** Aborts the in-flight LLM stream, if any; no-op otherwise. */
+  abortActiveStream: () => void
   /** Returns serializable snapshots of currently queued sends. */
   getPendingQueuedSendSnapshot: () => QueuedSendSnapshot[]
   /** Returns the current queued send count. */
@@ -318,6 +320,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
 
   let sending = false
   let pendingQueuedSends: QueuedSend[] = []
+  let activeAbortController: AbortController | undefined
 
   function emitStateChange() {
     deps.onStateChange?.({
@@ -417,6 +420,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       return
 
     setSending(true)
+    activeAbortController = new AbortController()
 
     const buildingMessage: StreamingAssistantMessage = {
       role: 'assistant',
@@ -680,6 +684,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       })
 
       await deps.llm.stream(options.model, options.chatProvider, newMessages as Message[], {
+        abortSignal: activeAbortController.signal,
         headers,
         tools: options.tools,
         waitForTools: true,
@@ -804,6 +809,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       throw error
     }
     finally {
+      activeAbortController = undefined
       setSending(false)
       deps.onSendSettled?.({ sessionId })
     }
@@ -888,9 +894,14 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
     } satisfies QueuedSendSnapshot))
   }
 
+  function abortActiveStream() {
+    activeAbortController?.abort()
+  }
+
   return {
     ingest,
     cancelPendingSends,
+    abortActiveStream,
     getPendingQueuedSendSnapshot,
     getPendingQueuedSendCount: () => pendingQueuedSends.length,
     getSending: () => sending,

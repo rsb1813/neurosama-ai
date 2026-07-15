@@ -45,6 +45,7 @@ function createHarness() {
     messageRound: [] as unknown[],
   }
   const stream = vi.fn(async (_model: string, _chatProvider: ChatProvider, _messages: Message[], options?: {
+    abortSignal?: AbortSignal
     onStreamEvent?: (event: StreamEvent) => Promise<void> | void
   }) => {
     await options?.onStreamEvent?.({ type: 'text-delta', text: 'assistant reply' })
@@ -686,5 +687,52 @@ describe('createChatOrchestratorRuntime', () => {
     expect(assistant.content).toContain('안녕 여러분 스트림 복귀 환영!')
     expect(assistant.content).toContain('오늘 하루 어때?')
     expect(assistant.slices.length).toBeGreaterThan(0)
+  })
+
+  /**
+   * @example
+   * Barge-in relies on the runtime forwarding an AbortSignal to the LLM stream call.
+   */
+  it('passes an AbortSignal to the LLM stream', async () => {
+    const harness = createHarness()
+    let capturedSignal: AbortSignal | undefined
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      capturedSignal = options?.abortSignal
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'hi' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+    })
+
+    await harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    expect(capturedSignal).toBeInstanceOf(AbortSignal)
+  })
+
+  /**
+   * @example
+   * runtime.abortActiveStream() aborts the signal handed to the in-flight LLM stream call.
+   */
+  it('abortActiveStream() aborts the in-flight stream', async () => {
+    const harness = createHarness()
+    let capturedSignal: AbortSignal | undefined
+    let releaseStream: () => void = () => {}
+    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      capturedSignal = options?.abortSignal
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'partial' })
+      await streamGate // hang mid-stream until the test releases it
+    })
+
+    const sendPromise = harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+    await vi.waitFor(() => expect(capturedSignal).toBeInstanceOf(AbortSignal))
+    harness.runtime.abortActiveStream()
+    expect(capturedSignal!.aborted).toBe(true)
+    releaseStream()
+    await sendPromise.catch(() => {}) // may reject with AbortError; Task 2 makes it graceful
   })
 })
