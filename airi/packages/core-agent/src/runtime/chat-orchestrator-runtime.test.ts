@@ -789,4 +789,61 @@ describe('createChatOrchestratorRuntime', () => {
     // And no failure was reported.
     expect(harness.telemetry.chatActivationFailed).toHaveLength(0)
   })
+
+  /**
+   * @example
+   * The stream resolves normally, then a barge-in flips `signal.aborted` to
+   * true while a post-stream success-path hook is still running. A throw from
+   * that hook must NOT be misclassified as the barge-in itself.
+   *
+   * ROOT CAUSE:
+   *
+   * The catch branch used to discriminate "was this a barge-in?" via the
+   * sticky `activeAbortController?.signal.aborted` flag instead of the caught
+   * error's identity. That flag stays true for the rest of the send once
+   * `abortActiveStream()` fires, so it answers "was abort ever pressed during
+   * this send?" — not "is THIS caught error the abort?".
+   *
+   * If the LLM stream already resolved (success-path append at line ~763
+   * already ran once) and the user barges in while the reply's last TTS
+   * sentence is still playing, `signal.aborted` flips to true before the
+   * post-stream hooks (onStreamEnd / onAssistantResponseEnd / ...) finish.
+   * A plain (non-abort) throw from one of those hooks then landed in the old
+   * catch, which saw `signal.aborted === true` and treated it as a barge-in:
+   * it appended `buildingMessage` a SECOND time (session-store has no
+   * id-based dedup) and swallowed the real error (no `onChatActivationFailed`,
+   * no rethrow).
+   *
+   * We fixed this by discriminating on the caught error's identity
+   * (`isAbortError`, mirroring llm-service.ts's file-local helper) instead of
+   * the sticky flag. A genuine barge-in still rejects the in-flight stream
+   * with an AbortError, so that path is unaffected; a hook throw after a
+   * successfully-resolved stream is no longer misclassified.
+   */
+  it('does not double-append or swallow a post-stream hook error when a barge-in flips signal.aborted after the stream resolves', async () => {
+    const harness = createHarness()
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: '<ko>closed reply</ko> padding text past the flush threshold' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+      // The stream resolves normally (no throw) — this simulates the user
+      // barging in while the already-finished reply's tail TTS sentence is
+      // still playing: abort() fires, but it's too late to reject the stream.
+      harness.runtime.abortActiveStream()
+    })
+    harness.runtime.hooks.onStreamEnd(async () => {
+      throw new Error('hook boom')
+    })
+
+    await expect(harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })).rejects.toThrow('hook boom')
+
+    // The partial was appended exactly once by the success path (line ~763);
+    // the catch branch must not have appended it again as a barge-in.
+    expect(harness.assistantAppended).toHaveLength(1)
+
+    // The hook failure was reported as a real failure, not swallowed.
+    expect(harness.telemetry.chatActivationFailed).toHaveLength(1)
+  })
 })
