@@ -357,6 +357,10 @@ export const useChatOrchestratorStore = defineStore('chat-orchestrator', () => {
     runtime.cancelPendingSends(sessionId)
   }
 
+  function abortActiveStream() {
+    runtime.abortActiveStream()
+  }
+
   function getPendingQueuedSendSnapshot() {
     return runtime.getPendingQueuedSendSnapshot()
   }
@@ -368,6 +372,7 @@ export const useChatOrchestratorStore = defineStore('chat-orchestrator', () => {
     ingest,
     ingestOnFork,
     cancelPendingSends,
+    abortActiveStream,
     getPendingQueuedSendSnapshot,
 
     clearHooks: runtime.hooks.clearHooks,

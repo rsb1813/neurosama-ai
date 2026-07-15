@@ -13,17 +13,27 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - ⚠️ Do NOT re-introduce auto-merge that lets one model both review untrusted PR content and merge/push (prompt-injection + token-exfil P0; removed in PR #9).
 
 **Ready for human merge:**
-- **neru witch avatar (M-E Phase 2) — COMPLETE & runtime-validated** on `feat/neru-witch-emotion` (NOT pushed/PR'd — human merges). Emotions drive the witch's face end-to-end: LLM emits `<|ACT {"emotion":...}|>` → `Stage.vue` → `expressionStore.applyEmotion` → exp3 group activates, holds ~4s, relaxes. Confirmed live: happy=heart eyes (`x`), surprised/curious=star eyes (`xx`), etc.; the neru card is active (bilingual English+`<ko>` replies confirm it). Root cause that blocked it (neru's persona lacked the ACT protocol, which lived only in AIRI's default card via `SystemPromptV2`) is fixed: `NERU_SYSTEM_PROMPT` now embeds the ACT protocol + shared `EMOTION_PROMPT_LIST` (emotions.ts, also consumed by system-v2.ts), keeps `<ko>` format, adds a witch backstory + personality, narrows the STRICT rule so it can't suppress ACT tokens, and holds one emotion per short reply (no per-sentence flicker). Both reviewers ran; tests/typecheck/lint pass. Commits: `dfd890a`, `72d2afc`, `4c02709` (+ `4195b03` expression-enabled seed).
-- Known cosmetic limit (accepted): 9 emotions → 7 facial exp3, so surprised & curious share the star-eye face and think & question share glasses. Intentional — only one star/glasses exp3 exists.
+- **Barge-in (M-G)** on `feat/neru-barge-in` — all 4 SDD tasks + final-review fix, all reviewed clean (ledger: `.superpowers/sdd/progress.md`). Tests green (core-agent 16/16, stage-ui use-barge-in 5/5; typecheck 0). Awaiting human push/PR/merge + manual mic verification.
+  - Task 1: in-flight LLM abort (`abortActiveStream` on runtime + chat store) `be9d457`
+  - Task 2: persist partial reply on abort (graceful handling in `performSend` catch) `db648be`
+  - Task 3: `useBargeIn` composable (VAD speech-start gating) `c999068` + test fix `5ffcbad`
+  - Task 4: Stage.vue wiring + `'barge-in'` stop reason `cd4cb07`
+  - Final-review fix: discriminate barge-in by `AbortError` identity, not the sticky `signal.aborted` flag (fixes tail-barge-in double-append + error-swallow) `b1ae418`; lint cleanup `c1b6616`
+  - Spec: `docs/superpowers/specs/2026-07-15-neru-barge-in-design.md`; Plan: `docs/superpowers/plans/2026-07-15-neru-barge-in.md`
+  - Merge-time notes (non-blocking): barge-in doesn't `cancelPendingSends` (benign, no self-queue); brief `nowSpeaking||sending` blind window on ultra-short replies; D3 — partial persists only after ≥1 `<ko>` closes.
+
+**Key Decisions:**
+- Audio setup = headphones → no AEC needed for barge-in MVP.
+- D3: partial reply kept in history on barge-in. Nuance: only closed `<ko>` segments persist; barge-in before first `<ko>` closes saves nothing (same as normal finalize; ties to bilingual-persistence gap).
 
 **Known Issues:**
 - Packaged `airi.exe` has no Python — dev-only auto-spawn (`uv run`). Bundling approach undecided.
 - 4 stage-tamagotchi vitest failures are pre-existing Windows symlink-permission (EPERM) errors.
 - **v1 bilingual persistence gap**: pure-English reply (zero `<ko>`, format violation) leaves `buildingMessage.slices` empty → persistence guard skips saving that assistant turn.
-- **Caption overlay window shows nothing**: pre-existing AIRI infra issue (affects both caption-speaker and caption-assistant). Korean shows in chat panel.
-- **Expression settings panel empty (cross-window, cosmetic)**: the panel shows "No expressions available" — ROOT CAUSE (verified via runtime instrumentation 2026-07-15): the expression store is renderer-local Pinia; the Live2D model registers its 12 exp3 in the **stage window's** store (proven: `registerExpressions groups=12`, all 12 exp3 fetch 200), but the settings panel runs in a **separate settings BrowserWindow** with its own empty store (no model there). No cross-window sync. The earlier suspects (`_expFiles`, load race, OPFS) were all refuted. Emotion→exp3 driving is NOT affected (it happens in the stage window). Panel fix = eventa IPC broadcast stage→settings, deferred. Full evidence in `.superpowers/sdd/progress.md`.
+- **Caption overlay window shows nothing**: pre-existing AIRI infra issue. Korean shows in chat panel.
+- **Expression settings panel empty (cross-window, cosmetic)**: renderer-local Pinia; exp3 registered in stage window, settings panel has its own empty store. Fix = eventa IPC broadcast, deferred.
 
 **Next Steps:**
-1. Human: push + PR + merge `feat/neru-witch-emotion` (M-E Phase 2 complete).
-2. **Barge-in (M-G)** — interrupt neru by speaking: VAD detects user speech during TTS → stop playback + cancel the in-flight LLM stream + return to listening. Core MVP requirement, needs its own design (brainstorm → spec → plan). Likely the next milestone.
-3. Known-issue cleanup candidates: caption overlay window shows nothing (pre-existing AIRI infra); v1 bilingual persistence gap (pure-English reply saves nothing); cross-window expression settings panel empty (cosmetic).
+1. Final whole-branch review of `feat/neru-barge-in` (SDD tasks 1-4), then human push + PR + merge.
+2. Manual verification with headphones: speak while neru talks → audio stops ~300ms; speak while thinking → generation cancels; speak while idle → normal turn.
+3. After barge-in lands: bilingual persistence gap fix, caption overlay, or next milestone.
