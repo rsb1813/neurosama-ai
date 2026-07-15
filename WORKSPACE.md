@@ -12,16 +12,18 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - GitHub Actions: `claude.yml` (@claude mentions), `claude-code-review.yml` (plugin review), `claude-fix-review.yml` (**review-only advisory** — `id-token: write` for OIDC, posts `VERDICT:` comment, no merge power). A human always merges.
 - ⚠️ Do NOT re-introduce auto-merge that lets one model both review untrusted PR content and merge/push (prompt-injection + token-exfil P0; removed in PR #9).
 
-**In Progress:**
-- **neru witch avatar (M-E Phase 1)** — PR #19 open, pending merge. Witch renders as default with blink/lip-sync. 12 expressions don't register in AIRI's expression store (Phase 2 scope). On `feat/neru-witch-avatar`.
+**Ready for human merge:**
+- **neru witch avatar (M-E Phase 2) — COMPLETE & runtime-validated** on `feat/neru-witch-emotion` (NOT pushed/PR'd — human merges). Emotions drive the witch's face end-to-end: LLM emits `<|ACT {"emotion":...}|>` → `Stage.vue` → `expressionStore.applyEmotion` → exp3 group activates, holds ~4s, relaxes. Confirmed live: happy=heart eyes (`x`), surprised/curious=star eyes (`xx`), etc.; the neru card is active (bilingual English+`<ko>` replies confirm it). Root cause that blocked it (neru's persona lacked the ACT protocol, which lived only in AIRI's default card via `SystemPromptV2`) is fixed: `NERU_SYSTEM_PROMPT` now embeds the ACT protocol + shared `EMOTION_PROMPT_LIST` (emotions.ts, also consumed by system-v2.ts), keeps `<ko>` format, adds a witch backstory + personality, narrows the STRICT rule so it can't suppress ACT tokens, and holds one emotion per short reply (no per-sentence flicker). Both reviewers ran; tests/typecheck/lint pass. Commits: `dfd890a`, `72d2afc`, `4c02709` (+ `4195b03` expression-enabled seed).
+- Known cosmetic limit (accepted): 9 emotions → 7 facial exp3, so surprised & curious share the star-eye face and think & question share glasses. Intentional — only one star/glasses exp3 exists.
 
 **Known Issues:**
 - Packaged `airi.exe` has no Python — dev-only auto-spawn (`uv run`). Bundling approach undecided.
 - 4 stage-tamagotchi vitest failures are pre-existing Windows symlink-permission (EPERM) errors.
 - **v1 bilingual persistence gap**: pure-English reply (zero `<ko>`, format violation) leaves `buildingMessage.slices` empty → persistence guard skips saving that assistant turn.
 - **Caption overlay window shows nothing**: pre-existing AIRI infra issue (affects both caption-speaker and caption-assistant). Korean shows in chat panel.
-- **Expression registration (Phase 2)**: witch's 12 exp3 expressions don't register in AIRI's expression store — `initExpressionController` silently early-returns. Suspects: `settings.expressions` vs zip-loader's `_expFiles` mismatch; expression-enabled load-time race; OPFS cache. Diagnosed in `.superpowers/sdd/progress.md`.
+- **Expression settings panel empty (cross-window, cosmetic)**: the panel shows "No expressions available" — ROOT CAUSE (verified via runtime instrumentation 2026-07-15): the expression store is renderer-local Pinia; the Live2D model registers its 12 exp3 in the **stage window's** store (proven: `registerExpressions groups=12`, all 12 exp3 fetch 200), but the settings panel runs in a **separate settings BrowserWindow** with its own empty store (no model there). No cross-window sync. The earlier suspects (`_expFiles`, load race, OPFS) were all refuted. Emotion→exp3 driving is NOT affected (it happens in the stage window). Panel fix = eventa IPC broadcast stage→settings, deferred. Full evidence in `.superpowers/sdd/progress.md`.
 
 **Next Steps:**
-1. Merge PR #19 (witch avatar Phase 1). Then Phase 2: fix expression registration + visual catalog + emotion→exp3 glue.
-2. Barge-in: interrupt neru by speaking (M-G).
+1. Human: push + PR + merge `feat/neru-witch-emotion` (M-E Phase 2 complete).
+2. **Barge-in (M-G)** — interrupt neru by speaking: VAD detects user speech during TTS → stop playback + cancel the in-flight LLM stream + return to listening. Core MVP requirement, needs its own design (brainstorm → spec → plan). Likely the next milestone.
+3. Known-issue cleanup candidates: caption overlay window shows nothing (pre-existing AIRI infra); v1 bilingual persistence gap (pure-English reply saves nothing); cross-window expression settings panel empty (cosmetic).

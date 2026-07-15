@@ -11,7 +11,7 @@ import { sleep } from '@moeru/std'
 import { createLive2DLipSync } from '@proj-airi/model-driver-lipsync'
 import { wlipsyncProfile } from '@proj-airi/model-driver-lipsync/shared/wlipsync'
 import { createPlaybackManager, createSpeechPipeline, normalizeActPayload } from '@proj-airi/pipelines-audio'
-import { Live2DScene, useLive2dParams } from '@proj-airi/stage-ui-live2d'
+import { Live2DScene, useExpressionStore, useLive2dParams } from '@proj-airi/stage-ui-live2d'
 import { SpineScene } from '@proj-airi/stage-ui-spine'
 import { ThreeScene } from '@proj-airi/stage-ui-three'
 import { animations } from '@proj-airi/stage-ui-three/assets/vrm'
@@ -32,7 +32,7 @@ import { useDuckDb } from '../../composables/use-duck-db'
 import { useIOTraceBridge } from '../../composables/use-io-trace-bridge'
 import { initIOTracer } from '../../composables/use-io-tracer'
 import { useSpeechPipelineAnalytics } from '../../composables/use-speech-pipeline-analytics'
-import { Emotion, EMOTION_EmotionMotionName_value, EMOTION_VRMExpressionName_value, EmotionThinkMotionName } from '../../constants/emotions'
+import { Emotion, EMOTION_EmotionMotionName_value, EMOTION_Live2DWitchExpressionName_value, EMOTION_VRMExpressionName_value, EmotionThinkMotionName } from '../../constants/emotions'
 import { getDefaultStreamingModel, getDefinedProvider } from '../../libs/providers/providers'
 import { OFFICIAL_SPEECH_PROVIDER_ID, OFFICIAL_SPEECH_STREAMING_PROVIDER_ID } from '../../libs/providers/providers/official'
 import { bindSpeakingStateToPlaybackManager } from '../../libs/speech/playback-speaking-state'
@@ -162,6 +162,7 @@ const backgroundStore = useBackgroundStore()
 const { activeBackgroundUrl } = storeToRefs(backgroundStore)
 
 const { currentMotion } = storeToRefs(useLive2dParams())
+const expressionStore = useExpressionStore()
 
 const emotionsQueue = createQueue<EmotionPayload>({
   handlers: [
@@ -176,6 +177,8 @@ const emotionsQueue = createQueue<EmotionPayload>({
       }
       else if (stageModelRenderer.value === 'live2d') {
         currentMotion.value = { group: EMOTION_EmotionMotionName_value[ctx.data.name] }
+        // 감정→exp3 표정(마녀 전용 맵; 표정 미등록 모델에선 no-op, 모션 경로는 그대로).
+        expressionStore.applyEmotion(EMOTION_Live2DWitchExpressionName_value[ctx.data.name])
       }
       else if (stageModelRenderer.value === 'spine') {
         spineSceneRef.value?.setEmotion(ctx.data.name, ctx.data.intensity)
