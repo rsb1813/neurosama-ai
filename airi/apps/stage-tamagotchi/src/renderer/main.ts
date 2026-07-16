@@ -1,6 +1,7 @@
 import type { Plugin } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 
+import { initMemory } from './memory-init'
 import { preseedNeruProviders } from './neruPreseed'
 
 // Pinia/스토어가 useLocalStorage로 값을 읽기 전에 로컬 provider를 프리시드해야 한다.
@@ -59,3 +60,6 @@ createApp(App)
   .use(i18n)
   .use(Tres)
   .mount('#app')
+
+// 앱 마운트(=Pinia 활성화) 후 MEMORY.md를 스토어에 미리 로드한다 — 회상 provider가 즉시 읽도록.
+void initMemory()
