@@ -13,7 +13,7 @@ import { ref, toRaw, watch } from 'vue'
 import { useAnalytics } from '../composables'
 import { activeTurnSpan, startSpan } from '../composables/use-io-tracer'
 import { extractMessageText, isCloudSyncableMessage } from '../libs/chat-sync'
-import { createMinecraftContext } from './chat/context-providers'
+import { createMemoryContext, createMinecraftContext } from './chat/context-providers'
 import { useChatContextStore } from './chat/context-store'
 import { useChatSessionStore } from './chat/session-store'
 import { useChatStreamStore } from './chat/stream-store'
@@ -179,6 +179,7 @@ export const useChatOrchestratorStore = defineStore('chat-orchestrator', () => {
     getSystemPromptSupplement: () => llmToolsetPromptsStore.activeToolsetPrompt,
     runtimeContextProviders: [
       createMinecraftContext,
+      createMemoryContext,
     ],
     createId: nanoid,
     unwrapMessage: message => toRaw(message),
