@@ -58,7 +58,7 @@ export function appendMemoryToMarkdown(
 
 /**
  * MEMORY.md 텍스트를 회상용 컨텍스트 블록으로 렌더한다.
- * 비어 있으면 '' 를 반환하고(주입 no-op), budgetChars 초과 시 잘라 표시한다.
+ * 비어 있으면 '' 를 반환하고(주입 no-op), 전체 출력이 budgetChars 를 넘지 않도록 자른다.
  */
 export function renderMemoryContext(memoryText: string, budgetChars: number): string {
   const trimmed = memoryText.trim()
@@ -66,9 +66,13 @@ export function renderMemoryContext(memoryText: string, budgetChars: number): st
     return ''
 
   const header = 'What you remember about the user and this world (from past sessions):'
-  let body = trimmed
-  if (body.length > budgetChars)
-    body = `${body.slice(0, budgetChars)}\n(memory truncated)`
+  const full = `${header}\n${trimmed}`
+  if (full.length <= budgetChars)
+    return full
 
-  return `${header}\n${body}`
+  // 예산 초과 시: 잘림 표시를 포함해 전체 출력이 budgetChars 를 넘지 않도록 본문을 자른다.
+  const marker = '\n(memory truncated)'
+  const room = budgetChars - header.length - 1 - marker.length
+  const body = room > 0 ? trimmed.slice(0, room) : ''
+  return `${header}\n${body}${marker}`
 }

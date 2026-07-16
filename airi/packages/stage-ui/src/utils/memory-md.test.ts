@@ -32,6 +32,12 @@ describe('appendMemoryToMarkdown', () => {
     expect(out).toContain('## Context')
     expect(out).toContain('## Misc')
   })
+
+  it('dedup is scoped per section — same text in a different category is kept', () => {
+    let out = appendMemoryToMarkdown('', { category: 'identity', text: 'plays factorio' }, '2026-07-16')
+    out = appendMemoryToMarkdown(out, { category: 'context', text: 'plays factorio' }, '2026-07-16')
+    expect(out.match(/- plays factorio/gi)).toHaveLength(2)
+  })
 })
 
 describe('renderMemoryContext', () => {
@@ -46,10 +52,10 @@ describe('renderMemoryContext', () => {
     expect(out).toContain('- x (2026-07-16)')
   })
 
-  it('truncates to the budget and marks truncation', () => {
+  it('truncates so the whole block stays within budget and marks truncation', () => {
     const big = `# neru's memory\n\n## Misc\n${Array.from({ length: 500 }, (_, i) => `- fact ${i}`).join('\n')}`
     const out = renderMemoryContext(big, 200)
-    expect(out.length).toBeLessThanOrEqual(200 + 90) // header + truncation note allowance
+    expect(out.length).toBeLessThanOrEqual(200)
     expect(out).toContain('(memory truncated)')
   })
 })
