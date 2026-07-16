@@ -20,7 +20,10 @@ async function ensureFile(): Promise<string> {
   try {
     await readFile(path, 'utf-8')
   }
-  catch {
+  catch (error) {
+    // 파일이 없을 때(ENOENT)만 새로 만든다. 락/권한 등 다른 오류는 전파해 기존 MEMORY.md를 덮어쓰지 않는다.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw error
     await writeFile(path, '')
   }
   return path
