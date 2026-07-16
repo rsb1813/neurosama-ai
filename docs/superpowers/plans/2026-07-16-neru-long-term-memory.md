@@ -38,7 +38,7 @@
 - **Create** `airi/apps/stage-tamagotchi/src/renderer/stores/tools/builtin/memory.test.ts` — tool unit tests.
 - **Create** `airi/apps/stage-tamagotchi/src/renderer/memory-init.ts` — startup load of MEMORY.md into the store.
 - **Modify** `airi/apps/stage-tamagotchi/src/renderer/stores/chat-sync.ts` — always include memory tools in `resolveTools`.
-- **Modify** the renderer bootstrap where `neruPreseed()` is called — call `initMemory()`.
+- **Modify** `airi/apps/stage-tamagotchi/src/renderer/main.ts` — call `void initMemory()` after `.mount('#app')` (Pinia must be installed/active first, since `initMemory` uses `useMemoryStore`).
 - **Modify** `airi/packages/stage-ui/src/constants/neru-persona.ts` — add the "when to remember" guidance.
 - **Create** `airi/packages/stage-ui/src/stores/chat/context-providers/memory.ts` — `createMemoryContext` recall provider.
 - **Create** `airi/packages/stage-ui/src/stores/chat/context-providers/memory.test.ts` — provider unit tests.
@@ -542,6 +542,7 @@ Create `airi/apps/stage-tamagotchi/src/renderer/stores/tools/builtin/memory.ts`:
 // neru가 대화 중 기억할 만한 사실을 MEMORY.md에 기록하는 remember 도구.
 import type { Tool } from '@xsai/shared-chat'
 import type { MemoryCategory } from '@proj-airi/stage-ui/utils/memory-md'
+import { errorMessageFrom } from '@moeru/std'
 import { useMemoryStore } from '@proj-airi/stage-ui/stores/modules/memory'
 import { appendMemoryToMarkdown } from '@proj-airi/stage-ui/utils/memory-md'
 import { tool } from '@xsai/tool'
@@ -571,7 +572,7 @@ export async function executeRemember(input: { category: MemoryCategory, text: s
     return 'Saved.'
   }
   catch (error) {
-    return `error: ${error instanceof Error ? error.message : String(error)}`
+    return `error: ${errorMessageFrom(error) ?? 'failed to save memory'}`
   }
 }
 
@@ -643,13 +644,17 @@ export async function initMemory(): Promise<void> {
 }
 ```
 
-Then, in the renderer bootstrap file where `neruPreseed()` is called (grep for `neruPreseed(` under `apps/stage-tamagotchi/src/renderer/`), import and invoke `initMemory()` immediately after the `neruPreseed()` call:
+Then wire it into the renderer entry `airi/apps/stage-tamagotchi/src/renderer/main.ts`. IMPORTANT: `initMemory()` calls `useMemoryStore()`, which needs an active Pinia — so it must run AFTER `.use(pinia)` / `.mount('#app')`, NOT next to the top-of-file `preseedNeruProviders()` call (that runs before `createPinia()`). Add the import with the other local imports, and call it immediately after the `createApp(...)....mount('#app')` chain at the bottom of the file:
 
 ```ts
-import { initMemory } from './memory-init' // adjust relative path to the bootstrap file's location
-// after neruPreseed():
+import { initMemory } from './memory-init'
+// ... existing createApp(App)....mount('#app') chain stays as-is ...
+
+// 앱 마운트(=Pinia 활성화) 후 MEMORY.md를 스토어에 미리 로드한다 — 회상 provider가 즉시 읽도록.
 void initMemory()
 ```
+
+Note: `useElectronEventaInvoke` (used by `memory-io.ts`) is safe to call here and from tool `execute` — it is not a real Vue composable; it resolves a module-level shared eventa context from `window.electron.ipcRenderer` (see `packages/electron-vueuse/src/composables/use-electron-eventa-context.ts`), with the context arg optional.
 
 - [ ] **Step 8: Add the persona guidance**
 
