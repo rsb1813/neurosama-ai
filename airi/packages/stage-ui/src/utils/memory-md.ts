@@ -1,6 +1,7 @@
 // neru 장기기억 MEMORY.md 마크다운을 다루는 순수 헬퍼 (섹션별 append·중복제거·회상 렌더링)
 
-export type MemoryCategory = 'identity' | 'preference' | 'context' | 'misc'
+export const MEMORY_CATEGORIES = ['identity', 'preference', 'context', 'misc'] as const
+export type MemoryCategory = typeof MEMORY_CATEGORIES[number]
 
 // 카테고리 → 섹션 헤더 표기. 파일은 이 순서로 섹션을 유지한다.
 const SECTION_TITLE: Record<MemoryCategory, string> = {
@@ -29,8 +30,11 @@ export function appendMemoryToMarkdown(
   date: string,
 ): string {
   const title = SECTION_TITLE[entry.category]
-  const newBody = entry.text.trim().toLowerCase()
-  const newBullet = `- ${entry.text.trim()} (${date})`
+  // 불릿은 한 줄이어야 한다. 내부 개행/연속 공백이 남으면 이후 append의 줄 분해가
+  // "## ..." 를 섹션 헤더로 오인해 dedup/섹션 라우팅이 깨진다. 여기서 한 줄로 정규화한다.
+  const cleanText = entry.text.replace(/\s+/g, ' ').trim()
+  const newBody = cleanText.toLowerCase()
+  const newBullet = `- ${cleanText} (${date})`
 
   const base = existing.trim().length > 0 ? existing.replace(/\s*$/, '') : FILE_HEADER
   const lines = base.split('\n')

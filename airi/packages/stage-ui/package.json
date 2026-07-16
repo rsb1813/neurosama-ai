@@ -47,9 +47,9 @@
     "./workers/vad": "./src/workers/vad/index.ts",
     "./workers/*": "./src/workers/*.ts",
     "./workers": "./src/workers/index.ts",
-    "./utils/*": "./src/utils/*.ts",
     "./utils": "./src/utils/index.ts",
     "./utils/tts": "./src/utils/tts.ts",
+    "./utils/memory-md": "./src/utils/memory-md.ts",
     "./types/*": "./src/types/*.ts",
     "./types": "./src/types/index.ts"
   },

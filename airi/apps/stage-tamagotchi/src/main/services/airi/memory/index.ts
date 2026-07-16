@@ -30,7 +30,9 @@ async function ensureFile(): Promise<string> {
 }
 
 export function createMemoryService(params: { context: ReturnType<typeof createContext>['context'] }) {
-  // 쓰기를 직렬화한다 — 한 응답에서 remember가 여러 번 호출돼도 파일이 깨지지 않게.
+  // 파일 IO 경계에서 writeFile 을 직렬화한다(동시 쓰기 방지). remember 의 read-modify-write
+  // lost-update 를 막는 건 렌더러 도구의 writeChain 이다(renderer/stores/tools/builtin/memory.ts).
+  // 이 체인은 경계 방어일 뿐 RMW 원자성을 보장하지 않는다.
   let writeChain: Promise<unknown> = Promise.resolve()
 
   defineInvokeHandler(params.context, electronMemoryReadText, async () => {

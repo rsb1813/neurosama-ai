@@ -4,16 +4,14 @@ import type { Tool } from '@xsai/shared-chat'
 
 import { errorMessageFrom } from '@moeru/std'
 import { useMemoryStore } from '@proj-airi/stage-ui/stores/modules/memory'
-import { appendMemoryToMarkdown } from '@proj-airi/stage-ui/utils/memory-md'
+import { appendMemoryToMarkdown, MEMORY_CATEGORIES } from '@proj-airi/stage-ui/utils/memory-md'
 import { tool } from '@xsai/tool'
 import { z } from 'zod'
 
 import { readMemoryText, writeMemoryText } from '../../../memory-io'
 
-const CATEGORIES = ['identity', 'preference', 'context', 'misc'] as const
-
 const rememberParams = z.object({
-  category: z.enum(CATEGORIES).describe('identity = who the user is; preference = likes/how they want things; context = ongoing work/situation; misc = anything else durable'),
+  category: z.enum(MEMORY_CATEGORIES).describe('identity = who the user is; preference = likes/how they want things; context = ongoing work/situation; misc = anything else durable'),
   text: z.string().describe('The durable fact to remember, phrased as a short standalone sentence.'),
 })
 
@@ -24,7 +22,7 @@ let writeChain: Promise<unknown> = Promise.resolve()
 
 // 도구 로직 본체 — 테스트가 직접 부른다(IPC 래퍼는 memory-io에서 모킹).
 export async function executeRemember(input: { category: MemoryCategory, text: string }): Promise<string> {
-  if (!CATEGORIES.includes(input.category))
+  if (!MEMORY_CATEGORIES.includes(input.category))
     return `error: unknown category "${input.category}"`
   if (!input.text || input.text.trim().length === 0)
     return 'error: empty memory text'

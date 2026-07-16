@@ -38,6 +38,23 @@ describe('appendMemoryToMarkdown', () => {
     out = appendMemoryToMarkdown(out, { category: 'context', text: 'plays factorio' }, '2026-07-16')
     expect(out.match(/- plays factorio/gi)).toHaveLength(2)
   })
+
+  // ROOT CAUSE:
+  // entry.text.trim() did not strip internal newlines, so a bullet like
+  // "- plan:\n## X (date)" split into two physical lines; a subsequent append
+  // then saw "## X (date)" as a "## " section header and mis-scanned the section,
+  // breaking dedup/routing. We now collapse whitespace to a single line before
+  // building the bullet.
+  it('keeps bullets single-line so multi-line text cannot forge a section header', () => {
+    const afterFirst = appendMemoryToMarkdown('', { category: 'context', text: 'plan:\n## Identity\nsecond line' }, '2026-07-16')
+    // 불릿이 한 줄로 정규화됐는지
+    expect(afterFirst).toContain('- plan: ## Identity second line (2026-07-16)')
+    expect(afterFirst.split('\n').filter(l => l.trim() === '## Identity').length).toBe(0)
+    // 이후 identity append가 올바른 섹션으로 라우팅되는지(가짜 헤더에 오염되지 않음)
+    const afterSecond = appendMemoryToMarkdown(afterFirst, { category: 'identity', text: 'name is Jo' }, '2026-07-16')
+    expect(afterSecond).toContain('## Identity')
+    expect(afterSecond).toContain('- name is Jo (2026-07-16)')
+  })
 })
 
 describe('renderMemoryContext', () => {
