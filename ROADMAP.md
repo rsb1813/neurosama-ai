@@ -31,7 +31,7 @@ We build **one vertical slice end-to-end, then expand** — so only #1 is active
 | # | Subproject | Status | Notes |
 |---|------------|--------|-------|
 | **1** | **Real-time voice conversation core** (MVP) | 🔄 **In progress** | STT→LLM→TTS streaming + barge-in + avatar lip-sync + subtitles. Milestone detail below. |
-| 2 | Long-term memory | 🔄 **Code-complete, ready for human merge** | `remember` LLM tool appends categorized facts to `MEMORY.md`; loaded at startup + injected into the prompt each turn for cross-session recall. Chose a plain markdown file over vector DB/RAG (YAGNI for current scale). On `feat/neru-long-term-memory` — runtime check + merge are the human's. |
+| 2 | Long-term memory | ✅ **Done** (PR #22) | `remember` LLM tool appends categorized facts to `MEMORY.md`; loaded at startup + injected into the prompt each turn for cross-session recall. Chose a plain markdown file over vector DB/RAG (YAGNI for current scale). Runtime-validated (save + recall across restart) and merged to master. |
 | 3 | Proactive speech | ⬜ Planned | Idle-timer / event-driven prompter. |
 | 4 | Chat integration | ⬜ Planned | Twitch / YouTube chat, treated as untrusted input. |
 | 5 | Broadcasting | ⬜ Planned | OBS WebSocket compositing. |
