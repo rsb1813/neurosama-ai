@@ -329,6 +329,12 @@ export interface ElectronMemoryText { path: string, text: string }
 export const electronMemoryReadText = defineInvokeEventa<ElectronMemoryText>('eventa:invoke:electron:memory:read-text')
 export const electronMemoryWriteText = defineInvokeEventa<ElectronMemoryText, { text: string }>('eventa:invoke:electron:memory:write-text')
 
+export interface SearchResultItem { title: string, url: string, snippet: string }
+export interface ElectronWebSearchResult { results: SearchResultItem[], error?: string }
+
+// 웹 검색은 메인 프로세스가 수행한다(자체 호스팅 SearXNG는 CORS 헤더가 없어 렌더러 직접 fetch 불가).
+export const electronWebSearch = defineInvokeEventa<ElectronWebSearchResult, { query: string }>('eventa:invoke:electron:web-search:query')
+
 export const widgetsOpenWindow = defineInvokeEventa<void, { id?: string }>('eventa:invoke:electron:windows:widgets:open')
 export const widgetsHideWindow = defineInvokeEventa<void, { id?: string }>('eventa:invoke:electron:windows:widgets:hide')
 export const widgetsAdd = defineInvokeEventa<string | undefined, WidgetsAddPayload>('eventa:invoke:electron:windows:widgets:add')
