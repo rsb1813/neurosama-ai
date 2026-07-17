@@ -19,6 +19,7 @@ import { electronOpenChat, electronOpenMainDevtools, electronOpenSettings, notic
 import { createAuthService } from '../../../services/airi/auth'
 import { createGodotStageService } from '../../../services/airi/godot-stage'
 import { createMcpServersService } from '../../../services/airi/mcp-servers'
+import { createMemoryService } from '../../../services/airi/memory'
 import { createOnboardingService } from '../../../services/airi/onboarding'
 import { createWidgetsService } from '../../../services/airi/widgets'
 import { createAutoUpdaterService } from '../../../services/electron'
@@ -50,6 +51,7 @@ export async function setupMainWindowElectronInvokes(params: {
   createWidgetsService({ context, widgetsManager: params.widgetsManager, window: params.window })
   createAutoUpdaterService({ context, window: params.window, service: params.autoUpdater })
   createMcpServersService({ context, manager: params.mcpStdioManager })
+  createMemoryService({ context })
   createGodotStageService({ context, manager: params.godotStageManager, window: params.window })
   createOnboardingService({ context, onboardingWindowManager: params.onboardingWindowManager, mainWindow: params.window })
   createAuthService({ context, window: params.window, windowAuthManager: params.windowAuthManager })

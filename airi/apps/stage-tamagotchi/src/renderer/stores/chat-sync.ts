@@ -19,6 +19,7 @@ import { defineStore, storeToRefs } from 'pinia'
 import { ref, watch } from 'vue'
 
 import { imageJournalTools } from './tools/builtin/image-journal'
+import { memoryTools } from './tools/builtin/memory'
 import { weatherTools } from './tools/builtin/weather'
 import { widgetsTools } from './tools/builtin/widgets'
 
@@ -309,11 +310,12 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
       },
     }
 
-    if (toolset && toolsetRegistry[toolset]) {
-      return toolsetRegistry[toolset]
+    // memory(remember)는 toolset과 무관하게 매 턴 항상 제공한다.
+    return async () => {
+      const base = await memoryTools()
+      const extra = (toolset && toolsetRegistry[toolset]) ? await toolsetRegistry[toolset]() : []
+      return [...base, ...extra]
     }
-
-    return undefined
   }
 
   function readNewAssistantVisibleText(sessionId: string, fromIndex: number): string {

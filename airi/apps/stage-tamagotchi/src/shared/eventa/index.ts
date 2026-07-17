@@ -324,6 +324,11 @@ export const electronMcpReadConfigText = defineInvokeEventa<ElectronMcpStdioConf
 export const electronMcpWriteConfigText = defineInvokeEventa<ElectronMcpStdioConfigText, { text: string }>('eventa:invoke:electron:mcp:write-config-text')
 export const electronMcpTestServer = defineInvokeEventa<ElectronMcpStdioTestResult, ElectronMcpStdioTestPayload>('eventa:invoke:electron:mcp:test-server')
 
+export interface ElectronMemoryText { path: string, text: string }
+
+export const electronMemoryReadText = defineInvokeEventa<ElectronMemoryText>('eventa:invoke:electron:memory:read-text')
+export const electronMemoryWriteText = defineInvokeEventa<ElectronMemoryText, { text: string }>('eventa:invoke:electron:memory:write-text')
+
 export const widgetsOpenWindow = defineInvokeEventa<void, { id?: string }>('eventa:invoke:electron:windows:widgets:open')
 export const widgetsHideWindow = defineInvokeEventa<void, { id?: string }>('eventa:invoke:electron:windows:widgets:hide')
 export const widgetsAdd = defineInvokeEventa<string | undefined, WidgetsAddPayload>('eventa:invoke:electron:windows:widgets:add')

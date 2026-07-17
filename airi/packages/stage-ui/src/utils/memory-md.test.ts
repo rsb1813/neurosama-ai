@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest'
+
+import { appendMemoryToMarkdown, renderMemoryContext } from './memory-md'
+
+describe('appendMemoryToMarkdown', () => {
+  it('creates the file scaffold and section when empty', () => {
+    const out = appendMemoryToMarkdown('', { category: 'preference', text: 'Likes Factorio' }, '2026-07-16')
+    expect(out).toContain('# neru\'s memory')
+    expect(out).toContain('## Preferences')
+    expect(out).toContain('- Likes Factorio (2026-07-16)')
+  })
+
+  it('appends under the existing section, not a duplicate section', () => {
+    const existing = '# neru\'s memory\n\n## Preferences\n- Likes Factorio (2026-07-16)\n'
+    const out = appendMemoryToMarkdown(existing, { category: 'preference', text: 'Streams Tuesdays' }, '2026-07-16')
+    expect(out.match(/## Preferences/g)).toHaveLength(1)
+    expect(out).toContain('- Likes Factorio (2026-07-16)')
+    expect(out).toContain('- Streams Tuesdays (2026-07-16)')
+  })
+
+  it('skips an exact duplicate bullet (case-insensitive, trimmed) in the same section', () => {
+    const existing = '# neru\'s memory\n\n## Identity\n- The user builds neru (2026-07-16)\n'
+    const out = appendMemoryToMarkdown(existing, { category: 'identity', text: '  the user builds neru  ' }, '2026-07-17')
+    expect(out.match(/- .*builds neru/gi)).toHaveLength(1)
+  })
+
+  it('routes each category to its own section header', () => {
+    let out = appendMemoryToMarkdown('', { category: 'identity', text: 'a' }, '2026-07-16')
+    out = appendMemoryToMarkdown(out, { category: 'context', text: 'b' }, '2026-07-16')
+    out = appendMemoryToMarkdown(out, { category: 'misc', text: 'c' }, '2026-07-16')
+    expect(out).toContain('## Identity')
+    expect(out).toContain('## Context')
+    expect(out).toContain('## Misc')
+  })
+
+  it('dedup is scoped per section — same text in a different category is kept', () => {
+    let out = appendMemoryToMarkdown('', { category: 'identity', text: 'plays factorio' }, '2026-07-16')
+    out = appendMemoryToMarkdown(out, { category: 'context', text: 'plays factorio' }, '2026-07-16')
+    expect(out.match(/- plays factorio/gi)).toHaveLength(2)
+  })
+
+  // ROOT CAUSE:
+  // entry.text.trim() did not strip internal newlines, so a bullet like
+  // "- plan:\n## X (date)" split into two physical lines; a subsequent append
+  // then saw "## X (date)" as a "## " section header and mis-scanned the section,
+  // breaking dedup/routing. We now collapse whitespace to a single line before
+  // building the bullet.
+  it('keeps bullets single-line so multi-line text cannot forge a section header', () => {
+    const afterFirst = appendMemoryToMarkdown('', { category: 'context', text: 'plan:\n## Identity\nsecond line' }, '2026-07-16')
+    // 불릿이 한 줄로 정규화됐는지
+    expect(afterFirst).toContain('- plan: ## Identity second line (2026-07-16)')
+    expect(afterFirst.split('\n').filter(l => l.trim() === '## Identity').length).toBe(0)
+    // 이후 identity append가 올바른 섹션으로 라우팅되는지(가짜 헤더에 오염되지 않음)
+    const afterSecond = appendMemoryToMarkdown(afterFirst, { category: 'identity', text: 'name is Jo' }, '2026-07-16')
+    expect(afterSecond).toContain('## Identity')
+    expect(afterSecond).toContain('- name is Jo (2026-07-16)')
+  })
+})
+
+describe('renderMemoryContext', () => {
+  it('returns empty string for empty/whitespace memory', () => {
+    expect(renderMemoryContext('', 4000)).toBe('')
+    expect(renderMemoryContext('   \n  ', 4000)).toBe('')
+  })
+
+  it('wraps memory text in a recall header when present', () => {
+    const out = renderMemoryContext('# neru\'s memory\n\n## Identity\n- x (2026-07-16)\n', 4000)
+    expect(out).toContain('What you remember about the user and this world')
+    expect(out).toContain('- x (2026-07-16)')
+  })
+
+  it('truncates so the whole block stays within budget and marks truncation', () => {
+    const big = `# neru's memory\n\n## Misc\n${Array.from({ length: 500 }, (_, i) => `- fact ${i}`).join('\n')}`
+    const out = renderMemoryContext(big, 200)
+    expect(out.length).toBeLessThanOrEqual(200)
+    expect(out).toContain('(memory truncated)')
+  })
+})
