@@ -209,6 +209,10 @@ async def transcriptions(
     response_format: str = Form(default="json"),
 ) -> Response:
     # OpenAI: multipart {file, model, language?, response_format?} → {text}.
+    # STT 보류 중이면(기본) whisper를 로드하지 않고 503 — 마이크 경로가 요청을 쏘더라도
+    # large-v3(~3GB VRAM)가 절대 올라오지 않게 여기서 차단한다. NERU_STT_ENABLED=true로 재활성.
+    if not _settings.stt_enabled:
+        raise HTTPException(status_code=503, detail="STT disabled (set NERU_STT_ENABLED=true to enable)")
     data = await _read_upload_capped(file, _MAX_UPLOAD_BYTES)
     lang = language or "ko"  # neru는 한국어 입력 기본
     whisper = await _get_whisper()

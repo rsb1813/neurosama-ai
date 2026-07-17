@@ -24,6 +24,10 @@ class Settings:
     tts_voice_prompt: str | None
     # faster-whisper 모델 크기.
     stt_model_size: str
+    # STT(faster-whisper) 활성 여부. 음성 입력이 프로젝트 차원에서 보류 중이라 기본 False —
+    # 이러면 /v1/audio/transcriptions가 503을 돌려주고 whisper large-v3(~3GB VRAM)를 아예
+    # 로드하지 않는다. 음성 작업 재개 시 NERU_STT_ENABLED=true 로 되살린다.
+    stt_enabled: bool
     # /v1/* 요청에 요구하는 Bearer 토큰. 기본값은 neruPreseed.ts가 심는 더미 apiKey와 동일 —
     # 다른 값을 쓰려면 두 곳(NERU_API_KEY, stage-tamagotchi 프리시드) 모두 맞춰야 한다.
     api_key: str
@@ -36,8 +40,11 @@ def load_settings() -> Settings:
         voice_prompt = str(_DEFAULT_VOICE_PROMPT)
     elif voice_prompt == "":
         voice_prompt = None
+    # NERU_STT_ENABLED: 미설정/거짓이면 STT 비활성(whisper 미로드). 보류 중이라 기본 off.
+    stt_enabled = os.getenv("NERU_STT_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     return Settings(
         tts_voice_prompt=voice_prompt,
         stt_model_size=os.getenv("NERU_STT_MODEL_SIZE", "large-v3"),
+        stt_enabled=stt_enabled,
         api_key=os.getenv("NERU_API_KEY", "sk-local-proxy"),
     )
