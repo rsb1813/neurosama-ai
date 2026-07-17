@@ -1,5 +1,7 @@
 // SearXNG JSON 검색 응답을 다루는 순수 헬퍼 — neru가 쓸 상위 N개 스니펫으로 정규화한다.
-import type { SearchResultItem } from '../../../../shared/eventa'
+import type { ElectronWebSearchResult, SearchResultItem } from '../../../../shared/eventa'
+
+import { errorMessageFrom } from '@moeru/std'
 
 interface SearxngRawResult {
   title?: string
@@ -25,4 +27,31 @@ export function mapSearxngResults(json: unknown, maxResults: number, snippetMaxC
     items.push({ title, url, snippet })
   }
   return items
+}
+
+export interface SearchSearxngOptions {
+  baseUrl: string
+  maxResults: number
+  snippetMaxChars: number
+  timeoutMs: number
+}
+
+// SearXNG JSON API를 호출해 상위 N개 결과를 돌려준다. 검색은 선택적 의존성이라 절대 throw하지 않고
+// 실패(미기동/타임아웃/비200/깨진 JSON)는 { results: [], error }로 우아하게 반환한다.
+export async function searchSearxng(query: string, opts: SearchSearxngOptions): Promise<ElectronWebSearchResult> {
+  const q = query.trim()
+  if (!q)
+    return { results: [], error: 'empty query' }
+
+  try {
+    const url = `${opts.baseUrl}/search?q=${encodeURIComponent(q)}&format=json`
+    const res = await fetch(url, { signal: AbortSignal.timeout(opts.timeoutMs) })
+    if (!res.ok)
+      return { results: [], error: `search backend returned ${res.status}` }
+    const json = await res.json()
+    return { results: mapSearxngResults(json, opts.maxResults, opts.snippetMaxChars) }
+  }
+  catch (error) {
+    return { results: [], error: errorMessageFrom(error) ?? 'web search unavailable' }
+  }
 }
