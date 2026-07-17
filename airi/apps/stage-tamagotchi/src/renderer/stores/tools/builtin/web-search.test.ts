@@ -55,4 +55,11 @@ describe('executeWebSearch', () => {
     const out = await executeWebSearch({ query: 'cats' })
     expect(out).toMatch(/could not|unavailable|error/i)
   })
+
+  it('treats a non-string query as empty and never throws (no search call)', async () => {
+    // 도구콜 인자가 zod 검증 없이 들어와 query가 비문자열일 수 있다 — throw 없이 우아하게.
+    const out = await executeWebSearch({ query: 123 as unknown as string })
+    expect(out).toMatch(/error/i)
+    expect(mockedSearchWeb).not.toHaveBeenCalled()
+  })
 })

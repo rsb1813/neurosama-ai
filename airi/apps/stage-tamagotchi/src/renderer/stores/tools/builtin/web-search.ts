@@ -25,10 +25,13 @@ export function formatSearchResults(result: ElectronWebSearchResult): string {
 
 // 도구 로직 본체 — 테스트가 직접 부른다(IPC 래퍼 searchWeb은 모킹).
 export async function executeWebSearch(input: { query: string }): Promise<string> {
-  if (!input.query || input.query.trim().length === 0)
+  // 도구는 절대 throw하면 안 된다(자기완결). 도구콜 인자는 zod로 검증되지 않은 채 들어오므로
+  // query가 문자열이 아닐 수도 있다 — 그 경우 빈 쿼리로 취급한다(.trim() TypeError 방지).
+  const query = typeof input.query === 'string' ? input.query.trim() : ''
+  if (query.length === 0)
     return 'error: empty search query'
   try {
-    const result = await searchWeb(input.query)
+    const result = await searchWeb(query)
     return formatSearchResults(result)
   }
   catch (error) {
