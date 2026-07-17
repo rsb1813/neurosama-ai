@@ -21,6 +21,7 @@ import { ref, watch } from 'vue'
 import { imageJournalTools } from './tools/builtin/image-journal'
 import { memoryTools } from './tools/builtin/memory'
 import { weatherTools } from './tools/builtin/weather'
+import { webSearchTools } from './tools/builtin/web-search'
 import { widgetsTools } from './tools/builtin/widgets'
 
 type ChatSyncMode = 'inactive' | 'authority' | 'follower'
@@ -310,11 +311,11 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
       },
     }
 
-    // memory(remember)는 toolset과 무관하게 매 턴 항상 제공한다.
+    // memory(remember)와 webSearch는 toolset과 무관하게 매 턴 항상 제공한다.
     return async () => {
-      const base = await memoryTools()
+      const [mem, search] = await Promise.all([memoryTools(), webSearchTools()])
       const extra = (toolset && toolsetRegistry[toolset]) ? await toolsetRegistry[toolset]() : []
-      return [...base, ...extra]
+      return [...mem, ...search, ...extra]
     }
   }
 
