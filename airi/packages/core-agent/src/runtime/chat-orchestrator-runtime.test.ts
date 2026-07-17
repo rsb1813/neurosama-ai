@@ -45,6 +45,7 @@ function createHarness() {
     messageRound: [] as unknown[],
   }
   const stream = vi.fn(async (_model: string, _chatProvider: ChatProvider, _messages: Message[], options?: {
+    abortSignal?: AbortSignal
     onStreamEvent?: (event: StreamEvent) => Promise<void> | void
   }) => {
     await options?.onStreamEvent?.({ type: 'text-delta', text: 'assistant reply' })
@@ -686,5 +687,167 @@ describe('createChatOrchestratorRuntime', () => {
     expect(assistant.content).toContain('안녕 여러분 스트림 복귀 환영!')
     expect(assistant.content).toContain('오늘 하루 어때?')
     expect(assistant.slices.length).toBeGreaterThan(0)
+  })
+
+  /**
+   * @example
+   * Barge-in relies on the runtime forwarding an AbortSignal to the LLM stream call.
+   */
+  it('passes an AbortSignal to the LLM stream', async () => {
+    const harness = createHarness()
+    let capturedSignal: AbortSignal | undefined
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      capturedSignal = options?.abortSignal
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'hi' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+    })
+
+    await harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    expect(capturedSignal).toBeInstanceOf(AbortSignal)
+  })
+
+  /**
+   * @example
+   * runtime.abortActiveStream() aborts the signal handed to the in-flight LLM stream call.
+   */
+  it('abortActiveStream() aborts the in-flight stream', async () => {
+    const harness = createHarness()
+    let capturedSignal: AbortSignal | undefined
+    let releaseStream: () => void = () => {}
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve
+    })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      capturedSignal = options?.abortSignal
+      await options?.onStreamEvent?.({ type: 'text-delta', text: 'partial' })
+      await streamGate // hang mid-stream until the test releases it
+    })
+
+    const sendPromise = harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+    await vi.waitFor(() => expect(capturedSignal).toBeInstanceOf(AbortSignal))
+    harness.runtime.abortActiveStream()
+    expect(capturedSignal!.aborted).toBe(true)
+    releaseStream()
+    await sendPromise.catch(() => {}) // may reject with AbortError; Task 2 makes it graceful
+  })
+
+  /**
+   * @example
+   * A barge-in abort should not be treated as a failure: the reply streamed so
+   * far is kept in history, and no failure telemetry fires.
+   *
+   * NOTICE:
+   * The brief's placeholder text ('half a sentence') has no `<ko>` tag, so it
+   * would never reach `buildingMessage.content`/`slices` — only closed `<ko>`
+   * segments do (see response-categoriser.ts mapTagNameToCategory + the
+   * onSegment wiring at chat-orchestrator-runtime.ts ~527-537, and the existing
+   * regression tests around line 582-591 showing untagged text persists as
+   * content: ''). Using a closed `<ko>` segment here exercises the same
+   * `slices.length > 0` persistence guard the normal finalize path uses,
+   * while preserving the brief's fixed assertion intent (partial persisted,
+   * no failure event).
+   *
+   * The delta also pads past the marker-parser's 24-char emit threshold
+   * (llm-marker-parser.ts minLiteralEmitLength, chat-orchestrator-runtime.ts
+   * STREAMING_UI_FLUSH_CHUNK_SIZE): `onLiteral` (and thus the categorizer)
+   * only fires once buffered text crosses that threshold, since `parser.end()`
+   * — which would flush a short remainder — never runs on this abort path.
+   */
+  it('keeps the partial reply and does not fail when barge-in aborts the stream', async () => {
+    const harness = createHarness()
+    let releaseStream: () => void = () => {}
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve
+    })
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: '<ko>half a sentence</ko> more padding text here' })
+      await streamGate
+      // @xsai's fetch wrapper throws this shape when the AbortSignal fires mid-stream.
+      const err = new Error('aborted')
+      err.name = 'AbortError'
+      throw err
+    })
+
+    const sendPromise = harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+    await vi.waitFor(() => expect(harness.runtime.getSending()).toBe(true))
+    harness.runtime.abortActiveStream()
+    releaseStream()
+    await sendPromise
+
+    // The partial assistant message is persisted to session history.
+    const assistant = harness.sessionMessages['session-1']?.at(-1) as StreamingAssistantMessage
+    expect(assistant.role).toBe('assistant')
+    expect(assistant.content).toContain('half a sentence')
+    expect(harness.assistantAppended).toHaveLength(1)
+
+    // And no failure was reported.
+    expect(harness.telemetry.chatActivationFailed).toHaveLength(0)
+  })
+
+  /**
+   * @example
+   * The stream resolves normally, then a barge-in flips `signal.aborted` to
+   * true while a post-stream success-path hook is still running. A throw from
+   * that hook must NOT be misclassified as the barge-in itself.
+   *
+   * ROOT CAUSE:
+   *
+   * The catch branch used to discriminate "was this a barge-in?" via the
+   * sticky `activeAbortController?.signal.aborted` flag instead of the caught
+   * error's identity. That flag stays true for the rest of the send once
+   * `abortActiveStream()` fires, so it answers "was abort ever pressed during
+   * this send?" — not "is THIS caught error the abort?".
+   *
+   * If the LLM stream already resolved (success-path append at line ~763
+   * already ran once) and the user barges in while the reply's last TTS
+   * sentence is still playing, `signal.aborted` flips to true before the
+   * post-stream hooks (onStreamEnd / onAssistantResponseEnd / ...) finish.
+   * A plain (non-abort) throw from one of those hooks then landed in the old
+   * catch, which saw `signal.aborted === true` and treated it as a barge-in:
+   * it appended `buildingMessage` a SECOND time (session-store has no
+   * id-based dedup) and swallowed the real error (no `onChatActivationFailed`,
+   * no rethrow).
+   *
+   * We fixed this by discriminating on the caught error's identity
+   * (`isAbortError`, mirroring llm-service.ts's file-local helper) instead of
+   * the sticky flag. A genuine barge-in still rejects the in-flight stream
+   * with an AbortError, so that path is unaffected; a hook throw after a
+   * successfully-resolved stream is no longer misclassified.
+   */
+  it('does not double-append or swallow a post-stream hook error when a barge-in flips signal.aborted after the stream resolves', async () => {
+    const harness = createHarness()
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      await options?.onStreamEvent?.({ type: 'text-delta', text: '<ko>closed reply</ko> padding text past the flush threshold' })
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+      // The stream resolves normally (no throw) — this simulates the user
+      // barging in while the already-finished reply's tail TTS sentence is
+      // still playing: abort() fires, but it's too late to reject the stream.
+      harness.runtime.abortActiveStream()
+    })
+    harness.runtime.hooks.onStreamEnd(async () => {
+      throw new Error('hook boom')
+    })
+
+    await expect(harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })).rejects.toThrow('hook boom')
+
+    // The partial was appended exactly once by the success path (line ~763);
+    // the catch branch must not have appended it again as a barge-in.
+    expect(harness.assistantAppended).toHaveLength(1)
+
+    // The hook failure was reported as a real failure, not swallowed.
+    expect(harness.telemetry.chatActivationFailed).toHaveLength(1)
   })
 })

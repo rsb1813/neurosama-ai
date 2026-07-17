@@ -44,6 +44,14 @@ function cloneStreamingMessage(message: StreamingAssistantMessage): StreamingAss
   }
 }
 
+// llm-service.ts의 file-local isAbortError를 그대로 미러링한다(모듈 경계를 넘겨 export하지 않음).
+// 스트림이 실제로 abortSignal에 의해 취소됐을 때 xsai의 fetch 래퍼가 던지는 에러 모양이 이것이다.
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && (error as { name?: unknown }).name === 'AbortError'
+}
+
 /**
  * Options accepted by the chat orchestrator runtime for one user send.
  */
@@ -279,6 +287,8 @@ export interface ChatOrchestratorRuntime {
   ingest: (sendingMessage: string, options: ChatOrchestratorSendOptions, targetSessionId?: string) => Promise<void>
   /** Rejects queued sends that have not started yet. */
   cancelPendingSends: (sessionId?: string) => void
+  /** Aborts the in-flight LLM stream, if any; no-op otherwise. */
+  abortActiveStream: () => void
   /** Returns serializable snapshots of currently queued sends. */
   getPendingQueuedSendSnapshot: () => QueuedSendSnapshot[]
   /** Returns the current queued send count. */
@@ -318,6 +328,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
 
   let sending = false
   let pendingQueuedSends: QueuedSend[] = []
+  let activeAbortController: AbortController | undefined
 
   function emitStateChange() {
     deps.onStateChange?.({
@@ -417,6 +428,9 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       return
 
     setSending(true)
+    activeAbortController = new AbortController()
+    // catch에서도 정상 종료 시 메시지와 동일한 텍스트를 참조해야 하므로 try 바깥으로 끌어올림.
+    let fullText = ''
 
     const buildingMessage: StreamingAssistantMessage = {
       role: 'assistant',
@@ -665,7 +679,6 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       await hooks.emitAfterMessageComposedHooks(sendingMessage, streamingMessageContext)
       await hooks.emitBeforeSendHooks(sendingMessage, streamingMessageContext)
 
-      let fullText = ''
       const headers = (options.providerConfig?.headers || {}) as Record<string, string>
 
       if (shouldAbort())
@@ -680,6 +693,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       })
 
       await deps.llm.stream(options.model, options.chatProvider, newMessages as Message[], {
+        abortSignal: activeAbortController.signal,
         headers,
         tools: options.tools,
         waitForTools: true,
@@ -793,6 +807,29 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       })
     }
     catch (error) {
+      // 사용자가 끼어들어(barge-in) 스트림을 취소한 경우: 실패가 아니라 정상 중단이다.
+      // 이미 스트리밍된 반쪽 답변을 히스토리에 남기고 실패 이벤트는 내지 않는다(spec D3).
+      //
+      // 판별 기준은 activeAbortController?.signal.aborted가 아니라 캐치된 error가
+      // AbortError인지 여부다. signal.aborted는 sticky해서 abort() 호출 이후로는
+      // 계속 true로 남는다 — "이번 send 도중 언젠가 abort가 눌렸는가"는 답해도
+      // "지금 캐치된 이 에러가 abort 그 자체인가"는 답하지 못한다.
+      // 스트림이 정상적으로 resolve된 뒤(성공 경로 append는 이미 763번 줄에서 끝났다)
+      // 아직 재생 중인 마지막 TTS 문장 도중 사용자가 끼어들면 signal.aborted가 true로
+      // 바뀌지만, 이후 771~799번 줄의 post-stream 훅에서 던져진 에러는 abort와 무관한
+      // 진짜 실패다. sticky 플래그로 판별하면 이 경우를 barge-in으로 오분류해서
+      // buildingMessage를 중복 append하고 실제 에러를 삼켜버린다.
+      if (isAbortError(error)) {
+        if (!isStaleGeneration() && buildingMessage.slices.length > 0) {
+          deps.session.appendSessionMessage(sessionId, buildingMessage)
+          deps.onAssistantMessageAppended?.({
+            sessionId,
+            message: buildingMessage,
+            messageText: fullText,
+          })
+        }
+        return
+      }
       console.error('Error sending message:', error)
       deps.onChatActivationFailed?.({
         source: sendSource,
@@ -804,6 +841,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       throw error
     }
     finally {
+      activeAbortController = undefined
       setSending(false)
       deps.onSendSettled?.({ sessionId })
     }
@@ -888,9 +926,14 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
     } satisfies QueuedSendSnapshot))
   }
 
+  function abortActiveStream() {
+    activeAbortController?.abort()
+  }
+
   return {
     ingest,
     cancelPendingSends,
+    abortActiveStream,
     getPendingQueuedSendSnapshot,
     getPendingQueuedSendCount: () => pendingQueuedSends.length,
     getSending: () => sending,

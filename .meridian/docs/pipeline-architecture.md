@@ -1,5 +1,5 @@
 ---
-summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> segment-boundary slicing; emotion→exp3 expression wiring drives the witch avatar's face from LLM emotions (one at a time, hold+auto-reset); cross-window Pinia store isolation affects the settings panel but not the stage window where driving happens
+summary: neru voice pipeline architecture — AIRI fork owns orchestration/avatar/subtitles; neru-audio gateway exposes GPU STT/TTS over OpenAI-compatible HTTP; bilingual routing splits English→TTS, Korean→display via <ko> segment-boundary slicing; emotion→exp3 expression wiring drives the witch avatar's face from LLM emotions (one at a time, hold+auto-reset); barge-in interrupts neru via client-side Silero VAD → TTS stop + LLM stream abort; neru persona card embeds ACT emotion-token protocol + witch backstory; cross-window Pinia store isolation affects the settings panel but not the stage window where driving happens
 read_when:
   - understanding how AIRI, the local LLM proxy, and the neru-audio gateway fit together
   - adding or modifying the neru-audio FastAPI endpoints (/v1/audio/speech, /v1/audio/transcriptions)
@@ -12,6 +12,8 @@ read_when:
   - understanding the witch expression catalog (which exp3 are facial vs props)
   - working on CUDA/Blackwell DLL loading shared by Chatterbox TTS and faster-whisper STT
   - working on the neru persona card or system prompt
+  - debugging barge-in (VAD trigger, TTS stop, LLM abort, partial-reply persistence)
+  - understanding how the in-flight LLM stream abort works (AbortController in chat-orchestrator-runtime)
   - looking for the removed self-built backend/frontend (orchestrator, provider ABCs, VTubeStudioAvatar) — see "Removed" section below
 ---
 
@@ -28,7 +30,7 @@ Korean mic (captured by AIRI) → AIRI STT orchestration → neru-audio POST /v1
    → AIRI Live2D avatar lip-sync + AIRI subtitle overlay
 ```
 
-AIRI owns: mic capture, STT orchestration/turn-taking/barge-in, the LLM conversation loop, the Live2D avatar (rendering + lip-sync), and subtitles — all via AIRI's own existing code, not ours.
+AIRI owns: mic capture, STT orchestration/turn-taking, the LLM conversation loop, the Live2D avatar (rendering + lip-sync), and subtitles — all via AIRI's own existing code, not ours. Barge-in (user interrupts neru) was added by us on top of AIRI's primitives (see Barge-in section below).
 
 `neru-audio` (`airi/services/neru-audio/`) owns only GPU-accelerated STT and TTS, exposed as plain OpenAI-compatible HTTP endpoints so AIRI's existing `openai-compatible-audio-*` providers can call them with zero AIRI code changes.
 
@@ -97,3 +99,54 @@ AIRI's Live2D expression system is **off by default** (`settings/live2d/expressi
 - Caption overlay: separate Electron window subscribing to the same BroadcastChannel. Currently not rendering (known issue under investigation — BroadcastChannel cross-window delivery or window render issue).
 
 The speech extraction was originally `categorizer.filterToSpeech` per stream chunk, which dropped English preceding an opening `<ko>` when a chunk straddled the tag boundary (first 1-2 spoken sentences silently swallowed). Fixed in commits 5f11741 + d898ad1: replaced with segment-boundary slicing that emits English before each completed segment, skips reasoning-tag content, and flushes trailing English in onEnd (cut at first `<` to prevent incomplete tag leakage).
+
+## neru Persona Card (`neru-persona.ts`)
+
+`NERU_SYSTEM_PROMPT` (`packages/stage-ui/src/constants/neru-persona.ts`) is the sole system prompt for neru's card. It combines four concerns in one constant:
+
+1. **Personality/backstory**: witty, playful, warm goblin-witch VTuber. A little digital witch who woke up in a machine, wears a pointy black star hat, has ghost familiars, improvises her past.
+2. **Bilingual output format** (STRICT): English sentences + `<ko>한국어</ko>` translation per sentence.
+3. **ACT emotion-token protocol** (REQUIRED): `<|ACT {"emotion":"..."}|>` tokens that drive the on-screen face. Without this protocol in the prompt, the LLM never emits emotion tokens and the expression wiring is inert. The available-emotions list is generated from `EMOTION_PROMPT_LIST` (`packages/stage-ui/src/constants/emotions.ts`), shared with the default card's `SystemPromptV2` so both stay in sync.
+4. **Emotion pacing**: instructs one emotion per short reply to prevent per-sentence face flickering.
+
+The `<|ACT|>` (special marker, `<|` delimiter) and `<ko>` (literal, `<` delimiter) token formats are parsed by different stages and don't collide — the marker parser strips ACT tokens first, then downstream subtitle slicing handles `<ko>`.
+
+The card is preseeded as active by `neruPreseed.ts` (key `airi-card-active-id` = `'neru'`, overwritten every launch). The default AIRI card's `SystemPromptV2` description is never used when neru's card is active — so the ACT protocol MUST be in `NERU_SYSTEM_PROMPT` or emotions are dead.
+
+## Barge-in (M-G) — interrupt neru by speaking
+
+When the user starts speaking while neru is talking or generating, neru stops immediately. Assumes headphones (no acoustic echo cancellation needed).
+
+### Architecture — three pieces
+
+**1. In-flight LLM stream abort** (`packages/core-agent/src/runtime/chat-orchestrator-runtime.ts`)
+
+A per-send `AbortController` is created after `setSending(true)` and its `abortSignal` is passed into the `deps.llm.stream(...)` options — the signal was already plumbed through `coreStreamFrom` to `streamText({ abortSignal })` but nothing ever provided a controller. `abortActiveStream()` calls `controller.abort()` and is exposed on the runtime return object and through `useChatOrchestratorStore` (`packages/stage-ui/src/stores/chat.ts`). The controller is cleared in `finally`.
+
+On abort, the `performSend` `catch` block treats a graceful interruption (NOT a failure) as one whose caught error is an `AbortError` — discriminated by the error's identity via a local `isAbortError(error)`, deliberately NOT the sticky `activeAbortController?.signal.aborted` flag (that flag stays true for the rest of the send, so a post-stream success-path hook throw during a still-playing TTS tail would be misclassified as a barge-in and double-append the partial). On a real barge-in it appends the partial `buildingMessage` to the session (mirroring the normal finalize guard: `!isStaleGeneration() && buildingMessage.slices.length > 0`) and returns without firing `onChatActivationFailed`. The existing `AbortError` handling in `llm-service.ts` prevents error toasts.
+
+**D3 nuance:** only closed `<ko>` segments populate `buildingMessage.slices`/`.content`. A barge-in landing mid-English-sentence before the first `<ko>` closes persists nothing — same guard as the normal finalize, not a regression. Ties to the bilingual-persistence gap known issue.
+
+**2. `useBargeIn` composable** (`packages/stage-ui/src/composables/audio/use-barge-in.ts`)
+
+Owns a client-side Silero VAD instance on the live mic `MediaStream` via `useVAD` (`packages/stage-ui/src/stores/ai/models/vad.ts`). The VAD uses its own 16kHz audio context and coexists with the STT consumer on the same `MediaStream`.
+
+On `onSpeechStart` (~300ms latency, threshold 0.52, minSpeechDurationMs 300), evaluates `shouldBargeIn(actions.isBusy())` — a pure gate that returns `isBusy`. If true, fires `actions.stopSpeaking()` + `actions.abortStream()`. If false (neru idle), does nothing (normal input). Lifecycle: `watch(micStream)` → `init()` (loads ONNX model) → `start(stream)`; `onScopeDispose` → `dispose()`. No mic stream = VAD never starts = barge-in inert.
+
+**3. Stage wiring** (`packages/stage-ui/src/components/scenes/Stage.vue` + `packages/stage-ui/src/stores/speech-output-control.ts`)
+
+`SpeechOutputStopReason` union extended with `'barge-in'`. Stage.vue instantiates `useBargeIn(micStream, { isBusy, stopSpeaking, abortStream })` where:
+- `micStream` = `useSettingsAudioDevice().stream` (same stream STT uses)
+- `isBusy = () => nowSpeaking.value || sending.value`
+- `stopSpeaking = () => requestStopSpeaking('barge-in')` → the existing stop path (halt AudioBufferSourceNode, drain sentence queue, cancel pending TTS, close WS)
+- `abortStream = () => useChatOrchestratorStore().abortActiveStream()`
+
+### Data flow
+
+```
+User speaks → Silero VAD speech-start (~300ms) → useBargeIn gate:
+  nowSpeaking || sending?
+    YES → requestStopSpeaking('barge-in') + abortActiveStream()
+    NO  → ignore (normal STT input path)
+→ user's utterance transcribed as next turn; partial reply kept in history
+```
