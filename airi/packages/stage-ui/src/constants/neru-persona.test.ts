@@ -9,6 +9,15 @@ describe('neru system prompt', () => {
     expect(NERU_SYSTEM_PROMPT).toMatch(/KOREAN/)
     expect(NERU_SYSTEM_PROMPT).toMatch(/ENGLISH/)
   })
+  // ROOT CAUSE:
+  // 긴 한국어 대화에서 neru가 자기 과거 한국어 답변을 따라 순수 한국어로 드리프트했고, 그 한국어가
+  // 영어 전용 TTS(Chatterbox)로 가서 발음이 외계어처럼 뭉개졌다. 프롬프트의 영어-강제가 약해
+  // conversation momentum에 밀린 게 원인. "항상 영어" 강제와 발화 위치 한국어 금지 하드룰을
+  // 넣어 고쳤다. 그 강화 문구가 실수로 약화/삭제되지 않도록 회귀 가드로 고정한다.
+  it('enforces English speech strongly enough to resist Korean drift', () => {
+    expect(NERU_SYSTEM_PROMPT).toMatch(/ALWAYS[\s\S]{0,80}ENGLISH/i)
+    expect(NERU_SYSTEM_PROMPT).toMatch(/never put Korean in the spoken position/i)
+  })
   it('specifies the <ko> subtitle marker format', () => {
     expect(NERU_SYSTEM_PROMPT).toContain('<ko>')
     expect(NERU_SYSTEM_PROMPT).toContain('</ko>')
