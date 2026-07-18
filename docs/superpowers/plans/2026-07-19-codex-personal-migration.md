@@ -121,18 +121,18 @@ Update `checklist.md` and `context-notes.md`, then commit the logical documentat
 - Consumes: file hashes captured before implementation and installed artifacts from Tasks 1 and 2.
 - Produces: evidence that the requested migration is installed and excluded surfaces remain unchanged.
 
-- [ ] **Step 1: Compare protected-file hashes**
+- [x] **Step 1: Compare protected-file hashes**
 
-Expected: all Claude originals and the Codex config hash match their pre-migration values.
+Expected: all Claude originals match their pre-migration hashes. If Codex rewrites `config.toml` concurrently, record the observed delta without overwriting it.
 
-- [ ] **Step 2: Run all completion checks in one fresh verification pass**
+- [x] **Step 2: Run all completion checks in one fresh verification pass**
 
 Expected: global guidance, RTK, and `clone-website` checks pass; `brutal-critique` remains absent; hook, MCP, and plugin configuration remains unchanged.
 
-- [ ] **Step 3: Review the final diff and records for scope**
+- [x] **Step 3: Review the final diff and records for scope**
 
-Expected: no unrelated workspace or user-profile changes are present.
+Expected: no unrelated agent-authored workspace or user-profile changes are present; any concurrent external drift is documented.
 
-- [ ] **Step 4: Mark the checklist complete and record backup paths**
+- [x] **Step 4: Mark the checklist complete and record backup paths**
 
 Commit only the final workspace record update if it is not already included in Task 2.

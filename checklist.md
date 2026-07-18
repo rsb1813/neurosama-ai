@@ -111,5 +111,5 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [x] 사용자 피드백 반영 — 미완성 `brutal-critique` 마이그레이션 제외
 - [x] `clone-website` Codex 스킬 변환 및 검증
 - [x] 기존 RTK 바이너리를 Codex 전역 `RTK.md`와 `AGENTS.md`에 연결하고 검증
-- [ ] Claude 전용 토큰·설정 변경 여부와 최종 구조 검증
-- [ ] 변경 결과와 백업 경로 기록
+- [x] Claude 전용 토큰·설정 변경 여부와 최종 구조 검증
+- [x] 변경 결과와 백업 경로 기록
