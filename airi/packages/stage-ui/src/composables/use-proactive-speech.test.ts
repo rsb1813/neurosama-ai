@@ -31,6 +31,13 @@ function makeOpts(over: Partial<Parameters<typeof createProactiveScheduler>[0]> 
   return { t, trigger, opts: { idleDelayMs: 1000, maxConsecutive: 2, enabled: true, isBusy: () => false, trigger, setTimer: t.setTimer, clearTimer: t.clearTimer, ...over } }
 }
 
+// trigger()의 프로미스 체인(.catch().finally())이 settle되고 스케줄러가 arm()으로
+// 타이머를 재무장할 때까지 마이크로태스크를 비운다. 단일 await로는 부족하다(§리뷰 finding 참고).
+async function settle() {
+  for (let i = 0; i < 5; i++)
+    await Promise.resolve()
+}
+
 describe('createProactiveScheduler', () => {
   it('fires the trigger after the idle delay', async () => {
     const { t, trigger, opts } = makeOpts()
@@ -52,11 +59,18 @@ describe('createProactiveScheduler', () => {
     const { t, trigger, opts } = makeOpts({ maxConsecutive: 2 })
     createProactiveScheduler(opts)
     t.fireLatest()
-    await Promise.resolve() // 1
+    await settle() // fire 1
+    expect(trigger).toHaveBeenCalledTimes(1)
+    expect(t.pending()).toBe(1) // 아직 상한 미도달 — 재무장됨
+
     t.fireLatest()
-    await Promise.resolve() // 2
+    await settle() // fire 2 → 상한 도달
+    expect(trigger).toHaveBeenCalledTimes(2)
+    expect(t.pending()).toBe(0) // arm()이 상한 도달로 재무장을 거부함 — 진짜 상한 보증
+
+    // 이후 시간이 더 지나도(타이머가 없으므로) 절대 발동하지 않는다.
     t.fireLatest()
-    await Promise.resolve() // capped — no 3rd
+    await settle()
     expect(trigger).toHaveBeenCalledTimes(2)
   })
 
@@ -64,13 +78,15 @@ describe('createProactiveScheduler', () => {
     const { t, trigger, opts } = makeOpts({ maxConsecutive: 1 })
     const c = createProactiveScheduler(opts)
     t.fireLatest()
-    await Promise.resolve() // 1 (now capped)
-    t.fireLatest()
-    await Promise.resolve() // capped
+    await settle() // fire 1 → 상한(1) 도달
     expect(trigger).toHaveBeenCalledTimes(1)
-    c.recordUserActivity() // user spoke → reset
+    expect(t.pending()).toBe(0) // 상한 도달로 타이머 없음
+
+    c.recordUserActivity() // 사용자 발화 → 리셋 + 재무장
+    expect(t.pending()).toBe(1)
+
     t.fireLatest()
-    await Promise.resolve()
+    await settle() // 리셋 후 다시 발동
     expect(trigger).toHaveBeenCalledTimes(2)
   })
 
