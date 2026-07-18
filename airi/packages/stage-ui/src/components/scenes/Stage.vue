@@ -837,7 +837,12 @@ const proactive = useProactiveSpeech({
 })
 
 // 사용자가 실제로 전송하면 연속 카운터를 리셋한다(무응답 상한 해제).
-chatHookCleanups.push(onBeforeSend(async () => {
+// onBeforeSend는 seedRole과 무관하게 모든 전송(능동 넛지 포함)에 대해 발생한다
+// (core-agent chat-orchestrator-runtime.ts의 emitBeforeSendHooks는 user-turn 가드 밖에 있음) —
+// 넛지 자신이 자기 카운터를 리셋해 상한이 무력화되지 않도록 넛지 텍스트로 걸러낸다.
+chatHookCleanups.push(onBeforeSend(async (message) => {
+  if (message === PROACTIVE_NUDGE)
+    return
   proactive.recordUserActivity()
 }))
 // 어떤 턴이 끝나든(사용자든 능동이든) 유휴 타이머를 다시 무장한다.
