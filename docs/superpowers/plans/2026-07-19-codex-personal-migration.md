@@ -74,35 +74,35 @@ Update `checklist.md` and `context-notes.md`, then commit the logical documentat
 - Consumes: the existing Claude skill's website inspection, specification, asset extraction, build, responsive, interaction, and visual QA procedures.
 - Produces: a Codex-discoverable skill that uses user-provided URLs and currently available browser capabilities without forced delegation.
 
-- [ ] **Step 1: Verify the pre-migration discovery check fails**
+- [x] **Step 1: Verify the pre-migration discovery check fails**
 
 Run a path check for `C:\Users\jolib\.agents\skills\clone-website\SKILL.md`.
 
 Expected: the target is absent.
 
-- [ ] **Step 2: Initialize a Codex skill in workspace staging**
+- [x] **Step 2: Initialize a Codex skill in workspace staging**
 
 Use `skill-creator/scripts/init_skill.py` with `name=clone-website` and deterministic `display_name`, `short_description`, and `default_prompt` values.
 
-- [ ] **Step 3: Port the skill body with Codex-specific adaptations**
+- [x] **Step 3: Port the skill body with Codex-specific adaptations**
 
 Retain the proven extraction and QA workflow. Remove `argument-hint`, `user-invocable`, `$ARGUMENTS`, Claude-only MCP preference, mandatory worktrees, mandatory parallel builders, and assumptions that every project is Next.js with shadcn/Tailwind.
 
-- [ ] **Step 4: Validate the staged skill**
+- [x] **Step 4: Validate the staged skill**
 
 Run `quick_validate.py`, YAML parsing, frontmatter field checks, and searches for forbidden Claude-only tokens.
 
 Expected: all validators pass and forbidden-token searches return no matches.
 
-- [ ] **Step 5: Back up and install the skill**
+- [x] **Step 5: Back up and install the skill**
 
 Verify the destination resolves under `C:\Users\jolib\.agents\skills`, back up a pre-existing target if present, and copy the validated staged directory into place.
 
-- [ ] **Step 6: Validate the installed skill independently**
+- [x] **Step 6: Validate the installed skill independently**
 
 Run the same structural validator against `C:\Users\jolib\.agents\skills\clone-website` and confirm `brutal-critique` was not created.
 
-- [ ] **Step 7: Commit workspace records**
+- [x] **Step 7: Commit workspace records**
 
 Update `checklist.md` and `context-notes.md`, then commit the logical documentation change.
 

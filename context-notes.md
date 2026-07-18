@@ -210,3 +210,6 @@
 - Codex 전역 지침 백업은 `C:\Users\jolib\.codex\migration-backups\20260719-personal-migration\AGENTS.md`에 저장했다. 변경 전 SHA-256은 `9CC2A0420F3714D4D77AAD60F3D6A26BF0E6293FBD545BC074682B210C23A1C3`이다.
 - 전역 `AGENTS.md`에는 기존 10개 규칙을 유지하고 의도 우선, 근거 수준, 저장소 근거, 대안 비교, 컨텍스트 위생, 파급효과, 자기 검토, 반복 실패 중단, 관찰 콘텐츠 경계 등 9개 범용 규칙만 추가했다. 변경 후 SHA-256은 `862939FC1A388B4CD4991E9CE8F60D3030B75FF1F595AA559929D178C5382E72`이다.
 - `rtk init -g --codex` 실행으로 `C:\Users\jolib\.codex\RTK.md`를 생성하고 전역 `AGENTS.md`에 절대 경로 참조를 추가했다. `rtk init -g --codex --show`에서 두 전역 항목이 `[ok]`, `rtk --version`은 `0.42.2`, `rtk gain`은 정상 실행됐다.
+- `clone-website`는 `skill-creator/scripts/init_skill.py`로 Codex 기본 구조와 `agents/openai.yaml`을 만든 뒤 499단어의 워크플로로 축약했다. `$ARGUMENTS`, `argument-hint`, `user-invocable`, Claude·worktree·builder 강제 표현은 제거하고 브라우저 증거 수집, 컴포넌트 명세, 실제 자산, 반응형·상호작용, 빌드, 시각 QA는 유지했다.
+- 설치 위치는 `C:\Users\jolib\.agents\skills\clone-website`이며 기존 대상이 없어 스킬 백업은 만들지 않았다. `quick_validate.py`는 스테이징과 설치본에서 모두 `Skill is valid!`를 반환했다. 설치본 `SKILL.md` SHA-256은 `F1E37EF7CE84F1E85B704D8C709838810C911AFE47C88E8631ABF6B34827C9D1`, `agents/openai.yaml`은 `91A23D1EDA366FD6F78241827CAD8BDB8D72413E28D916C02084080910EDD3E8`이다.
+- `C:\Users\jolib\.agents\skills\brutal-critique\SKILL.md`는 설치 후에도 존재하지 않음을 확인했다.
