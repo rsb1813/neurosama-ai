@@ -30,6 +30,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Local agent worktrees
+.worktrees/
+
 # Test/inspection artifacts
 .playwright-mcp/
 neru-render-*.png
