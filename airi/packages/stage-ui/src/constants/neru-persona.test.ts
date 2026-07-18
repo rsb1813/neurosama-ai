@@ -34,4 +34,8 @@ describe('neru system prompt', () => {
     for (const emotion of EMOTION_VALUES)
       expect(NERU_SYSTEM_PROMPT).toContain(`- ${emotion} (Emotion for feeling `)
   })
+  it('includes web-search guidance', () => {
+    expect(NERU_SYSTEM_PROMPT).toMatch(/webSearch/)
+    expect(NERU_SYSTEM_PROMPT).toMatch(/search the web|look .* up/i)
+  })
 })

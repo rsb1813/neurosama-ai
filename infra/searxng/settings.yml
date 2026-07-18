@@ -1,0 +1,15 @@
+# neru용 최소 SearXNG 설정 — JSON 출력 활성화가 핵심(webSearch 도구가 format=json으로 조회).
+# secret_key는 로컬 전용이라 데모 값이지만, 공개 배포한다면 반드시 교체할 것.
+use_default_settings: true
+
+server:
+  secret_key: "neru-local-searxng-change-me"
+  bind_address: "0.0.0.0:8080"
+  limiter: false
+  image_proxy: false
+
+search:
+  # JSON은 기본으로 꺼져 있다 — 도구가 프로그램적으로 읽으려면 반드시 켜야 한다.
+  formats:
+    - html
+    - json
