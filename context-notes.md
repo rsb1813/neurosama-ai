@@ -194,3 +194,13 @@
 **알려진 미해결**: 패키지된 `airi.exe`엔 Python이 없어 `neru-audio` 자동 기동이 dev(`uv run`)에서만 동작 — 패키징 시 게이트웨이를 어떻게 번들링할지(PyInstaller, 별도 설치 스크립트 등)는 후속 결정 사항.
 
 **후속 스펙**: (a) 패키지 Python 번들링 결정, (b) 이중언어(영어 음성+한국어 자막) — `neru-persona-reference.md` 기반 캐릭터 카드 스펙, (c) neru 마녀 Live2D 모델(Cubism4) AIRI 로더 연결, (d) 리브랜딩(productName airi→neru).
+
+---
+
+## Codex 개인 설정 마이그레이션 결정 (2026-07-19)
+
+- 사용자가 전역 지침 정리와 `brutal-critique`, `clone-website` 스킬 마이그레이션만 요청했다. 훅, MCP, 플러그인은 범위에서 제외한다.
+- 전역 지침은 `CLAUDE.md` 전체 복사가 아니라 범용 규칙의 선별 병합을 택했다. Claude 모델 라인업, Claude 전용 모델 ID, 강제 위임 정책, `@RTK.md`는 Codex 정책과 충돌할 수 있어 제외한다.
+- 스킬 설치 위치는 현재 Codex 매뉴얼과 런타임 검색 경로에 맞춰 `$HOME/.agents/skills`를 사용한다.
+- `clone-website`의 픽셀 단위 조사·명세·빌드·시각 QA는 유지하되, `$ARGUMENTS`와 특정 MCP·worktree·병렬 에이전트 강제는 Codex 도구 가용성과 세션 권한을 따르는 표현으로 바꾼다.
+- 원본은 수정하지 않고 대상 파일을 먼저 백업한 뒤 설치한다.
