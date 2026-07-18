@@ -113,3 +113,14 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [x] 기존 RTK 바이너리를 Codex 전역 `RTK.md`와 `AGENTS.md`에 연결하고 검증
 - [x] Claude 전용 토큰·설정 변경 여부와 최종 구조 검증
 - [x] 변경 결과와 백업 경로 기록
+
+---
+
+## Codex 프로젝트 컨텍스트 초기화 문서 (2026-07-19)
+
+- [x] 루트 문서와 최근 Git 상태 대조
+- [x] 문서별 역할과 상태 기준 설계
+- [ ] 루트 `AGENTS.md` 작성
+- [ ] `WORKSPACE.md`, `ROADMAP.md`, `README.md` 상태 동기화
+- [ ] 문서 링크·경로·명령·Git 근거 검증
+- [ ] 문서 변경 커밋

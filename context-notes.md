@@ -216,3 +216,13 @@
 - 최종 무결성 검사에서 Claude 원본 `CLAUDE.md`, `clone-website/SKILL.md`, `settings.json`의 SHA-256은 모두 작업 전과 일치했다. 따라서 Claude 훅 설정을 포함한 원본 세 파일은 변경하지 않았다.
 - Codex `config.toml`은 작업 전 해시 `32FA007856EDC5952B9FC71A473A192A1CA002A7E31544069FA4EB9F46FAC837`에서 00:35:15에 `0BB1A52032BA326D06183A586E69A164471F19B207B18B6D14E2B6EA2E438E5E`로 동시 변경됐다. RTK 설치 대상인 `AGENTS.md`·`RTK.md`의 수정 시각은 각각 00:27:15·00:27:50이며, 전후 키 목록상 `service_tier`가 사라진 차이가 확인됐다. 사용자 또는 Codex 앱의 동시 상태 변경을 덮어쓰지 않기 위해 복구하지 않았고, 기존 MCP·플러그인·훅 섹션의 존재는 다시 확인했다.
 - 최종 검증은 보호된 Claude 해시 3/3, AGENTS 백업 해시, 범용 지침 9개, RTK 참조 정확히 1개, 설치 스킬 해시 2/2, `brutal-critique` 부재를 모두 통과했다. `quick_validate.py`는 설치본에서 `Skill is valid!`, `rtk init -g --codex --show`는 전역 두 항목을 `[ok]`로 보고했다.
+
+---
+
+## Codex 프로젝트 컨텍스트 초기화 결정 (2026-07-19)
+
+- 저장소 루트에 Codex가 자동으로 읽는 `AGENTS.md`를 새 진입점으로 둔다.
+- `AGENTS.md`에는 안정적인 구조·규칙·검증 방법만 두고, 변동이 잦은 상태와 다음 작업은 `WORKSPACE.md`에서 관리한다.
+- `master`에 머지된 기능과 로컬 브랜치에서만 완료된 작업을 분리한다. `feat/neru-proactive-speech`는 구현·자동 검증 완료지만 수동 런타임 검증과 원격 PR이 남은 상태로 기록한다.
+- `ROADMAP.md`는 제품 비전과 단계 상태, `README.md`는 외부 소개와 실행법, `checklist.md`와 `context-notes.md`는 세부 이력 보존 역할을 유지한다.
+- 루트 `AGENTS.md`의 `Review guidelines`를 로컬·GitHub Codex 리뷰의 공통 기준으로 사용한다.
