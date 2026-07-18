@@ -120,7 +120,7 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 
 - [x] 루트 문서와 최근 Git 상태 대조
 - [x] 문서별 역할과 상태 기준 설계
-- [ ] 루트 `AGENTS.md` 작성
-- [ ] `WORKSPACE.md`, `ROADMAP.md`, `README.md` 상태 동기화
-- [ ] 문서 링크·경로·명령·Git 근거 검증
-- [ ] 문서 변경 커밋
+- [x] 루트 `AGENTS.md` 작성
+- [x] `WORKSPACE.md`, `ROADMAP.md`, `README.md` 상태 동기화
+- [x] 문서 링크·경로·명령·Git 근거 검증
+- [x] 문서 변경 커밋

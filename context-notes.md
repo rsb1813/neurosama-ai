@@ -226,3 +226,11 @@
 - `master`에 머지된 기능과 로컬 브랜치에서만 완료된 작업을 분리한다. `feat/neru-proactive-speech`는 구현·자동 검증 완료지만 수동 런타임 검증과 원격 PR이 남은 상태로 기록한다.
 - `ROADMAP.md`는 제품 비전과 단계 상태, `README.md`는 외부 소개와 실행법, `checklist.md`와 `context-notes.md`는 세부 이력 보존 역할을 유지한다.
 - 루트 `AGENTS.md`의 `Review guidelines`를 로컬·GitHub Codex 리뷰의 공통 기준으로 사용한다.
+
+### 완료 검증 기록
+
+- Task 1 문서 커밋은 `3807834` (`docs: add Codex project guide`)이고, Task 2 문서 동기화 커밋은 `8277437` (`docs: sync neru project status`)이다.
+- `rtk git diff --check HEAD~2..HEAD`는 공백 오류 없이 통과했고, `rtk git diff --stat HEAD~2..HEAD`는 `AGENTS.md`, `WORKSPACE.md`, `ROADMAP.md`, `README.md` 네 파일만 보고했다.
+- 네 상위 문서의 상대 Markdown 링크 검증 결과는 `all relative markdown links resolve`였다.
+- 상태 주장 스캔에서 발견한 완료·진행·보류 표기는 각 문서의 Git 근거와 일치했고, 오래된 상태 주장은 발견하지 못했다.
+- 웹 검색 병합 커밋 `080efde`가 존재함을 확인했다. proactive speech 팁 `3e3b8c4`는 `feat/neru-proactive-speech` 로컬 기능 브랜치에만 포함되고 `master`에는 포함되지 않았다.
