@@ -515,7 +515,10 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
             createdAt: sendingCreatedAt,
             id: userMessageId,
           }) satisfies ChatHistoryItem
-      deps.session.appendSessionMessage(sessionId, userMessage)
+      // system 씨앗(능동 발화 넛지)은 영속시키지 않는다 — 영속하면 이후 모든 정상 턴의 메시지 배열에
+      // 재전송돼 페르소나 오염/프록시 에러를 일으킨다. 이번 턴의 LLM 요청에만 일시적으로 얹는다.
+      if (userMessage.role === 'user')
+        deps.session.appendSessionMessage(sessionId, userMessage)
 
       // system 씨앗(능동 발화 넛지)은 사용자 턴이 아니므로 user-turn 분석/훅을 타지 않는다.
       // 렌더(history.vue)와 클라우드 동기화(isCloudSyncableMessage)는 role:'system'을 이미
@@ -539,7 +542,12 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
 
       // sessionMessagesForSend는 seedRole에 상관없이 이후 LLM 프롬프트 조립(buildProviderMessages)과
       // 도구 호출 복원(toolCalls)에 쓰이므로 user-turn 가드 밖에 둔다.
-      const sessionMessagesForSend = deps.session.getSessionMessages(sessionId)
+      // system 씨앗은 persistedMessages에 없으므로(위에서 append를 건너뜀) 여기서 이번 턴 전송용
+      // 배열에만 일시적으로 이어붙인다 — getSessionMessages 결과(영속 이력)에는 절대 섞이지 않는다.
+      const persistedMessages = deps.session.getSessionMessages(sessionId)
+      const sessionMessagesForSend = userMessage.role === 'system'
+        ? [...persistedMessages, userMessage]
+        : persistedMessages
       if (userMessage.role === 'user') {
         deps.onUserTurnReady?.({
           messageText: sendingMessage,

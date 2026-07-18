@@ -855,9 +855,11 @@ describe('createChatOrchestratorRuntime', () => {
    * @example
    * 능동 발화(proactive nudge): seedRole:'system'으로 ingest하면 사용자 발화가 아니라
    * '조용히 말 걸어' 씨앗 메시지로 취급되어 렌더/동기화에서 자동 제외되고
-   * user-turn 훅/분석을 타지 않는다.
+   * user-turn 훅/분석을 타지 않는다. 씨앗은 이번 턴의 LLM 요청에만 실려가고 세션
+   * 이력에는 영속되지 않는다 — 영속하면 이후 모든 정상 턴에 재전송돼 페르소나
+   * 오염/프록시 에러를 일으킨다(아래 no-pollution 회귀 테스트가 그 케이스를 검증한다).
    */
-  it('seedRole:"system" seeds a system message and skips user-turn side effects', async () => {
+  it('seedRole:"system" reaches the LLM this turn but is not persisted to session history', async () => {
     const harness = createHarness()
 
     await harness.runtime.ingest('(proactive nudge)', {
@@ -866,10 +868,43 @@ describe('createChatOrchestratorRuntime', () => {
       seedRole: 'system',
     })
 
-    const seed = harness.sessionMessages['session-1']?.find(message => message.content === '(proactive nudge)')
-    expect(seed?.role).toBe('system')
+    // 영속 이력(getSessionMessages가 읽는 것과 동일한 소스)에는 씨앗이 없어야 한다.
+    const persistedSeed = harness.sessionMessages['session-1']?.find(message => message.content === '(proactive nudge)')
+    expect(persistedSeed).toBeUndefined()
+
+    // 그래도 이번 턴에 LLM(stream)으로 전송된 메시지 배열에는 씨앗이 실려 있어야 한다.
+    const sentMessages = harness.stream.mock.calls[0]?.[2] as Message[]
+    expect(sentMessages.some(message => message.role === 'system' && message.content === '(proactive nudge)')).toBe(true)
+
     expect(harness.userAppended).toHaveLength(0)
     expect(harness.userTurns).toHaveLength(0)
+  })
+
+  /**
+   * @example
+   * 회귀 테스트: system 씨앗 턴 바로 다음에 정상 user 턴을 보내면, 두 번째 턴이
+   * LLM으로 보내는 메시지 배열에는 첫 턴의 넛지 텍스트가 섞여 있으면 안 된다.
+   * 씨앗이 영속됐다면(수정 전 버그) getSessionMessages가 이를 포함해 반환하므로
+   * 이 테스트는 수정 전에는 실패하고 수정 후에는 통과한다.
+   */
+  it('does not leak the system seed into a later normal user turn', async () => {
+    const harness = createHarness()
+
+    await harness.runtime.ingest('(proactive nudge)', {
+      model: 'gpt-test',
+      chatProvider: provider,
+      seedRole: 'system',
+    })
+
+    await harness.runtime.ingest('hello again', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    const secondTurnMessages = harness.stream.mock.calls[1]?.[2] as Message[]
+    expect(secondTurnMessages.some(message =>
+      typeof message.content === 'string' && message.content.includes('(proactive nudge)'),
+    )).toBe(false)
   })
 
   /**
