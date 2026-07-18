@@ -20,6 +20,11 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - **STT gated off for VRAM — MERGED** via PR #23. neru-audio's whisper `large-v3` was lazy-loading via the still-active mic path and eating ~3GB VRAM though voice is on hold; now gated behind `NERU_STT_ENABLED` (default off), `/v1/audio/transcriptions` → 503 when disabled. Re-enable with `NERU_STT_ENABLED=true`.
 - **TTS "garbled voice" fix — MERGED** via PR #24. In long Korean chats neru drifted into pure Korean, or *inverted* the format (`Korean <ko>English</ko>`), sending Korean to the English-only Chatterbox TTS → garbled audio. Root cause = persona format drift, NOT a code bug (the `<ko>` categorizer correctly excludes `<ko>` from speech — verified offline). Fixed by strengthening `NERU_SYSTEM_PROMPT` (emphatic always-English + HARD RULE + a CRITICAL contrastive WRONG/RIGHT example) + a regression test. Verified live via TTS-input logging: English now reaches the TTS. Diagnosis tip: a temp `print()` of the TTS input text in neru-audio `app.py` shows exactly what is synthesized.
 
+- **Web search — MERGED** via PR #26. A self-hosted SearXNG JSON API is accessed through a main-process IPC service, avoiding renderer-to-localhost CORS; the builtin `webSearch` LLM tool is always on and degrades gracefully when search is unavailable. Manual runtime verification succeeded.
+
+**Local work awaiting integration:**
+- **Proactive speech (#3)** on `feat/neru-proactive-speech` at `3e3b8c4`. Implementation and automated verification are complete: 26 tests and three package typechecks passed in the Claude session. Remaining gate: restart the app, wait 45 seconds idle, verify spontaneous speech, verify no more than two unanswered nudges, then send a user message and verify it resets the counter. After that, push and open a PR.
+
 **Key Decisions:**
 - Audio setup = headphones → no AEC needed for barge-in MVP.
 - D3: partial reply kept in history on barge-in. Nuance: only closed `<ko>` segments persist; barge-in before first `<ko>` closes saves nothing (same as normal finalize; ties to bilingual-persistence gap).
@@ -35,6 +40,6 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - **Memory lost-update is guarded only for a single writer window**: the `remember` tool serializes read-modify-write on a renderer module-level promise chain, and the main-process write is serialized too — but that prevents *file corruption*, not *cross-window lost-update*. Fine for today's single chat window; if a second window ever writes MEMORY.md, move the append into the main process (atomic read-append-write) or the last writer will silently clobber the other's bullet.
 
 **Next Steps:**
-1. **Web search (#internet)** — NEXT subproject, in brainstorming/spec. Self-hosted **SearXNG** (Docker Compose, manual) + a builtin `webSearch` LLM tool (always-on, like `remember`) querying SearXNG's JSON API via a main-process IPC service (avoids renderer→localhost CORS). Returns top-N snippets; page-browsing deferred to #7. Chosen for the local/privacy ethos.
+1. Validate proactive speech at runtime, then push `feat/neru-proactive-speech` and open its PR: after an app restart, wait 45 seconds idle for spontaneous speech, confirm at most two unanswered nudges, and confirm a user message resets the counter.
 2. Human: manual mic verification of barge-in (headphones): speak while neru talks → audio stops ~300ms; speak while thinking → generation cancels; speak while idle → normal turn.
-3. Later: bilingual persistence gap fix, caption overlay, cross-window expression panel, or #3 proactive speech / #4 chat integration.
+3. Later: bilingual persistence gap fix, caption overlay, cross-window expression panel, or #4 chat integration.

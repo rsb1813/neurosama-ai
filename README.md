@@ -137,7 +137,10 @@ co-watching). The MVP (voice core) at a glance:
 - ☑ Live loop end-to-end (mic → STT → LLM → TTS → avatar), verified
 - ☑ neru persona / character card (preseeded, active)
 - ◐ Bilingual output — **English voice + Korean subtitles**: voice + chat-panel Korean working; caption overlay in progress
-- ☐ Barge-in (interrupt neru by speaking)
+- ☑ Barge-in (interrupt neru by speaking) — complete in code; manual mic verification pending
+- ☑ Long-term memory — completed and runtime-validated
+- ☑ Web search — completed (PR #26)
+- 🟡 Proactive speech — local implementation awaiting runtime verification and PR
 - ☐ neru's own witch Live2D model in the AIRI loader
 - ☐ Rebrand + packaged desktop build with a bundled runtime
 
