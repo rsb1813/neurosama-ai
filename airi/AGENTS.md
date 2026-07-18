@@ -231,6 +231,19 @@ Concise but detailed reference for contributors working across the `moeru-ai/air
 - Test through stable public behavior. Do not create new exports, dependency bags, or wrapper services only to make private implementation details mockable.
 - Keep reusable domain contracts and rendering/building logic in the package that owns that domain. Runtime entrypoints should wire dependencies and call those boundaries instead of inlining large reusable contracts.
 
+## Agent Orchestration and Token Budget
+
+- Use `gpt-5.6-terra` with high reasoning effort as the default main model for implementation work.
+- Use `gpt-5.6-terra` with medium reasoning effort for routine subagents and high reasoning effort for complex implementation or final review.
+- Use `gpt-5.6-sol` only when security, architecture, or a genuinely difficult bug justifies it, and notify the user before using it.
+- Do not use a full subagent-driven workflow for low-risk documentation or similarly small changes. Implement directly and use at most one final reviewer when review is useful.
+- Keep at most one subagent active unless two or more tasks are genuinely independent and parallel execution materially helps.
+- Avoid repeated short `wait_agent` polling. Prefer useful local work while an agent runs; when waiting is necessary, use bounded waits of about 60 seconds and report only state changes.
+- Batch related repository reads, shell checks, and verification commands to avoid unnecessary orchestration turns.
+- Apply review findings in one batch and allow at most one re-review by default. Add further review rounds only for unresolved correctness or safety issues.
+- Start a fresh Codex task when moving to a substantially different work phase if the current conversation has accumulated unrelated investigation, logs, or tool output.
+- When analyzing token usage, distinguish cached input, uncached input, and output. Do not treat raw cached-token totals as equivalent to quota usage.
+
 ## PR / Workflow Tips
 
 - Rebase pulls; branch naming `username/feat/short-name`; clear commit messages (gitmoji is prohibited).
