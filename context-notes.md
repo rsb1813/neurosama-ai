@@ -199,8 +199,11 @@
 
 ## Codex 개인 설정 마이그레이션 결정 (2026-07-19)
 
-- 사용자가 전역 지침 정리와 `brutal-critique`, `clone-website` 스킬 마이그레이션만 요청했다. 훅, MCP, 플러그인은 범위에서 제외한다.
-- 전역 지침은 `CLAUDE.md` 전체 복사가 아니라 범용 규칙의 선별 병합을 택했다. Claude 모델 라인업, Claude 전용 모델 ID, 강제 위임 정책, `@RTK.md`는 Codex 정책과 충돌할 수 있어 제외한다.
+- 최초 범위는 전역 지침 정리와 `brutal-critique`, `clone-website` 스킬 마이그레이션이었으나, 설계 검토에서 `brutal-critique`를 제외하고 RTK Codex 통합을 추가했다. 일반 훅, MCP, 플러그인은 계속 범위에서 제외한다.
+- 전역 지침은 `CLAUDE.md` 전체 복사가 아니라 범용 규칙의 선별 병합을 택했다. Claude 모델 라인업, Claude 전용 모델 ID, 강제 위임 정책은 Codex 정책과 충돌할 수 있어 제외한다. `@RTK.md`는 Codex 전용 파일을 가리키도록 추가한다.
 - 스킬 설치 위치는 현재 Codex 매뉴얼과 런타임 검색 경로에 맞춰 `$HOME/.agents/skills`를 사용한다.
 - `clone-website`의 픽셀 단위 조사·명세·빌드·시각 QA는 유지하되, `$ARGUMENTS`와 특정 MCP·worktree·병렬 에이전트 강제는 Codex 도구 가용성과 세션 권한을 따르는 표현으로 바꾼다.
 - 원본은 수정하지 않고 대상 파일을 먼저 백업한 뒤 설치한다.
+- 사용자 설계 검토에서 미완성 `brutal-critique`는 마이그레이션 대상에서 제외됐다. Claude 원본도 삭제하지 않는다.
+- RTK는 Rust Token Killer이며 `C:\Users\jolib\.cargo\bin\rtk.exe` 버전 `0.42.2`가 이미 설치되어 있다. 재설치하지 않고 RTK 공식 Codex 통합 명령 `rtk init -g --codex`로 `~/.codex/RTK.md`와 전역 `AGENTS.md` 참조만 설치한다.
+- RTK의 Codex 통합은 지침 기반이다. Claude의 `PreToolUse` 훅(`rtk hook claude`)은 Codex로 복사하지 않는다.
