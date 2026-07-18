@@ -850,4 +850,42 @@ describe('createChatOrchestratorRuntime', () => {
     // The hook failure was reported as a real failure, not swallowed.
     expect(harness.telemetry.chatActivationFailed).toHaveLength(1)
   })
+
+  /**
+   * @example
+   * 능동 발화(proactive nudge): seedRole:'system'으로 ingest하면 사용자 발화가 아니라
+   * '조용히 말 걸어' 씨앗 메시지로 취급되어 렌더/동기화에서 자동 제외되고
+   * user-turn 훅/분석을 타지 않는다.
+   */
+  it('seedRole:"system" seeds a system message and skips user-turn side effects', async () => {
+    const harness = createHarness()
+
+    await harness.runtime.ingest('(proactive nudge)', {
+      model: 'gpt-test',
+      chatProvider: provider,
+      seedRole: 'system',
+    })
+
+    const seed = harness.sessionMessages['session-1']?.find(message => message.content === '(proactive nudge)')
+    expect(seed?.role).toBe('system')
+    expect(harness.userAppended).toHaveLength(0)
+    expect(harness.userTurns).toHaveLength(0)
+  })
+
+  /**
+   * @example
+   * seedRole을 생략하면 기존 사용자 발화 동작(role:'user' + user-turn 훅 호출)이 그대로 유지된다.
+   */
+  it('default seedRole keeps user-turn behavior', async () => {
+    const harness = createHarness()
+
+    await harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+    })
+
+    const seed = harness.sessionMessages['session-1']?.find(message => message.content === 'hello')
+    expect(seed?.role).toBe('user')
+    expect(harness.userAppended).toHaveLength(1)
+  })
 })
