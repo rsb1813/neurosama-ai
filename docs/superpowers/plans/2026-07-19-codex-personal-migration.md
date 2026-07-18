@@ -32,33 +32,33 @@
 - Consumes: `C:\Users\jolib\.claude\CLAUDE.md`, current Codex `AGENTS.md`, and `rtk init -g --codex` output.
 - Produces: concise global Codex guidance plus an absolute `@C:\Users\jolib\.codex\RTK.md` reference.
 
-- [ ] **Step 1: Verify the pre-migration state fails the completion contract**
+- [x] **Step 1: Verify the pre-migration state fails the completion contract**
 
 Run checks for the absence of `C:\Users\jolib\.codex\RTK.md`, the absence of the RTK reference, and the absence of selected merged guidance headings.
 
 Expected: at least one check reports missing content.
 
-- [ ] **Step 2: Build and review the exact merged AGENTS.md in workspace staging**
+- [x] **Step 2: Build and review the exact merged AGENTS.md in workspace staging**
 
 Preserve the existing language, honorific, simplicity, surgical-change, plan, test, commit, and error-reading rules. Add only intent, evidence calibration, repository evidence, alternative comparison, context hygiene, ripple checks, self-review, stuck recovery, and instruction-source boundaries.
 
-- [ ] **Step 3: Resolve and back up exact user-profile targets**
+- [x] **Step 3: Resolve and back up exact user-profile targets**
 
 Verify all resolved paths remain under `C:\Users\jolib\.codex`, create a timestamped backup directory, and copy existing target files there.
 
-- [ ] **Step 4: Run the RTK-supported Codex initializer**
+- [x] **Step 4: Run the RTK-supported Codex initializer**
 
 Run `rtk init -g --codex` outside the sandbox so it targets `C:\Users\jolib\.codex` rather than the sandbox profile.
 
 Expected: `RTK.md` is created and `AGENTS.md` receives its reference.
 
-- [ ] **Step 5: Install the reviewed merged AGENTS.md and verify RTK**
+- [x] **Step 5: Install the reviewed merged AGENTS.md and verify RTK**
 
 Install the staged `AGENTS.md` with the RTK reference, then run `rtk --version`, `rtk gain`, and static path/reference checks.
 
 Expected: RTK reports version `0.42.2`, analytics run successfully, and the global instructions contain no Claude model IDs.
 
-- [ ] **Step 6: Commit workspace records**
+- [x] **Step 6: Commit workspace records**
 
 Update `checklist.md` and `context-notes.md`, then commit the logical documentation change.
 

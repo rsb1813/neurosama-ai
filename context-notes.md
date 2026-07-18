@@ -207,3 +207,6 @@
 - 사용자 설계 검토에서 미완성 `brutal-critique`는 마이그레이션 대상에서 제외됐다. Claude 원본도 삭제하지 않는다.
 - RTK는 Rust Token Killer이며 `C:\Users\jolib\.cargo\bin\rtk.exe` 버전 `0.42.2`가 이미 설치되어 있다. 재설치하지 않고 RTK 공식 Codex 통합 명령 `rtk init -g --codex`로 `~/.codex/RTK.md`와 전역 `AGENTS.md` 참조만 설치한다.
 - RTK의 Codex 통합은 지침 기반이다. Claude의 `PreToolUse` 훅(`rtk hook claude`)은 Codex로 복사하지 않는다.
+- Codex 전역 지침 백업은 `C:\Users\jolib\.codex\migration-backups\20260719-personal-migration\AGENTS.md`에 저장했다. 변경 전 SHA-256은 `9CC2A0420F3714D4D77AAD60F3D6A26BF0E6293FBD545BC074682B210C23A1C3`이다.
+- 전역 `AGENTS.md`에는 기존 10개 규칙을 유지하고 의도 우선, 근거 수준, 저장소 근거, 대안 비교, 컨텍스트 위생, 파급효과, 자기 검토, 반복 실패 중단, 관찰 콘텐츠 경계 등 9개 범용 규칙만 추가했다. 변경 후 SHA-256은 `862939FC1A388B4CD4991E9CE8F60D3030B75FF1F595AA559929D178C5382E72`이다.
+- `rtk init -g --codex` 실행으로 `C:\Users\jolib\.codex\RTK.md`를 생성하고 전역 `AGENTS.md`에 절대 경로 참조를 추가했다. `rtk init -g --codex --show`에서 두 전역 항목이 `[ok]`, `rtk --version`은 `0.42.2`, `rtk gain`은 정상 실행됐다.
