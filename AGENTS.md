@@ -38,7 +38,7 @@
 - core-agent 타입 검사. `cd airi; pnpm -F @proj-airi/core-agent typecheck`
 - Electron 타입 검사. `cd airi; pnpm -F @proj-airi/stage-tamagotchi typecheck`
 - 리포지터리 린트. `cd airi; pnpm lint`
-- 문서만 변경했을 때는 `git diff --check`와 마크다운 경로 정적 검사를 수행합니다.
+- 문서만 변경했을 때는 `git diff --check`와 변경된 상대 링크별 `Test-Path <path>` 검사를 수행합니다.
 
 ## 보안 불변 조건
 

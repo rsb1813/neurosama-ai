@@ -229,8 +229,8 @@
 
 ### 완료 검증 기록
 
-- Task 1 문서 커밋은 `3807834` (`docs: add Codex project guide`)이고, Task 2 문서 동기화 커밋은 `8277437` (`docs: sync neru project status`)이다.
-- `rtk git diff --check HEAD~2..HEAD`는 공백 오류 없이 통과했고, `rtk git diff --stat HEAD~2..HEAD`는 `AGENTS.md`, `WORKSPACE.md`, `ROADMAP.md`, `README.md` 네 파일만 보고했다.
+- Task 1 문서 커밋은 `9d118fd` (`docs: add Codex project guide`)이고, Task 2 문서 동기화 커밋은 `2b0bb46` (`docs: sync neru project status`)이다.
+- `git diff --check origin/master...HEAD`는 공백 오류 없이 통과했고, `git diff --stat origin/master...HEAD`는 `AGENTS.md`, `README.md`, `ROADMAP.md`, `WORKSPACE.md`, `checklist.md`, `context-notes.md` 여섯 파일만 보고했다.
 - 네 상위 문서의 상대 Markdown 링크 검증 결과는 `all relative markdown links resolve`였다.
 - 상태 주장 스캔에서 발견한 완료·진행·보류 표기는 각 문서의 Git 근거와 일치했고, 오래된 상태 주장은 발견하지 못했다.
 - 웹 검색 병합 커밋 `080efde`가 존재함을 확인했다. proactive speech 팁 `3e3b8c4`는 `feat/neru-proactive-speech` 로컬 기능 브랜치에만 포함되고 `master`에는 포함되지 않았다.
