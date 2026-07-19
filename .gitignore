@@ -23,6 +23,8 @@ dist/
 *.onnx
 .cache/
 models/
+!airi/packages/stage-ui/src/stores/ai/models/
+!airi/packages/stage-ui/src/stores/ai/models/vad.ts
 
 # OS / editor
 .DS_Store
