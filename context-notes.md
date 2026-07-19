@@ -246,3 +246,4 @@
 - Task 2는 엄격한 `codex-cli X.Y.Z` 검사, JSONL 요청 상관, 동기 write 실패 정리, `initialize` 후 `initialized` 알림 계약을 구현했다.
 - Task 3은 app-server 단일 수명주기와 Device OAuth를 구현했다. 로그인 시작 시점부터 계정 알림을 버퍼링하고, 일치하는 성공 completion 뒤에만 인증 상태를 활성화한다. 중복 로그인, stop 경쟁, 외부 프로세스 종료를 회귀 테스트로 고정했으며 집중 테스트 15개가 통과했다.
 - Task 4부터는 공식 최상위 `developerInstructions`를 사용한다. 명령·파일 승인은 `accept`·`acceptForSession`·`decline`, 권한 승인은 요청된 부분집합과 선택적 `scope: 'session'`으로 구분하며 알 수 없는 서버 요청은 자동 승인하지 않는다.
+- Task 4는 thread·turn·동적 도구·승인 런타임을 구현했다. 도구와 승인은 RPC 세션 및 thread·turn 소유권으로 단일 stream에 격리하고, app-server 교체나 종료 시 오래된 listener·turn·대기 응답을 폐기한다. 조기 `turn/started`, 실패 terminal, 권한 prototype 키를 포함한 집중 테스트 44개가 통과했다.

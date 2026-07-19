@@ -377,7 +377,7 @@ git commit -m "feat(codex): manage device OAuth sessions"
 - Consumes: `CodexTurnRequest`, `CodexDynamicToolDescriptor[]`, 저장된 `threadId`, RPC 알림과 서버 발 요청.
 - Produces: `startTurn(request, sink)`, `interrupt(streamId)`, `resolveToolCall()`, `resolveApproval()`.
 
-- [ ] **Step 1: thread와 이벤트 매핑 실패 테스트 작성**
+- [x] **Step 1: thread와 이벤트 매핑 실패 테스트 작성**
 
 ```ts
 it('starts a workspace-scoped thread with tools and developer instructions', async () => {
@@ -405,13 +405,13 @@ it('forwards dynamic tools and permission approvals without broadening scope', a
 })
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/main/services/codex/turn-runtime.test.ts`
 
 Expected: 모듈 부재로 FAIL한다.
 
-- [ ] **Step 3: 최소 런타임 구현**
+- [x] **Step 3: 최소 런타임 구현**
 
 ```ts
 // Codex thread와 turn 이벤트를 Neru 스트림·도구·승인 이벤트로 변환한다.
@@ -442,13 +442,13 @@ rpc.respond(requestId, {
 
 승인 응답은 원 요청에 포함된 권한의 부분집합만 허용하고, 세션 허용일 때만 `scope: 'session'`을 넣는다. 알 수 없는 승인 종류는 자동 거절한다.
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/main/services/codex/turn-runtime.test.ts apps/stage-tamagotchi/src/main/services/codex/manager.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add airi/apps/stage-tamagotchi/src/main/services/codex
