@@ -1,3 +1,4 @@
+// 배포용 Sites 메타데이터를 Vite 빌드 결과에 포함하는 플러그인
 import { access, cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Plugin } from "vite";

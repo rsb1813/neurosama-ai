@@ -34,3 +34,16 @@ test("removes the disposable preview and dependency", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   await assert.rejects(access(new URL("../app/_sites-preview", templateRoot)));
 });
+
+test("removes unused authentication and database starter files", async () => {
+  const packageJson = await readFile(new URL("../package.json", import.meta.url), "utf8");
+  assert.doesNotMatch(packageJson, /drizzle-orm|drizzle-kit|db:generate/);
+
+  await Promise.all([
+    "../app/chatgpt-auth.ts",
+    "../db",
+    "../examples",
+    "../drizzle",
+    "../drizzle.config.ts",
+  ].map((path) => assert.rejects(access(new URL(path, import.meta.url)))));
+});

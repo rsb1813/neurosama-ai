@@ -1,10 +1,9 @@
-/** Cloudflare Worker entry point for the vinext-starter template. */
+// Vinext 앱 라우터와 이미지 최적화를 제공하는 Cloudflare Worker 진입점
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 
 interface Env {
   ASSETS: Fetcher;
-  DB: D1Database;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
