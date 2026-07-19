@@ -237,3 +237,5 @@
 - 기존 `.meridian/docs`, `.meridian/plans`, `WORKSPACE.md`, `checklist.md`, `context-notes.md` 형식은 유지해 Claude Code와 Codex가 같은 프로젝트 문서를 읽을 수 있게 한다.
 - `plugin-creator` 스크립트의 실제 기본값에 따라 플러그인 원본은 `C:\Users\jolib\plugins\meridian`, 개인 마켓플레이스는 `C:\Users\jolib\.agents\plugins\marketplace.json`에 둔다.
 - 원본 Meridian의 MIT 라이선스와 출처를 보존하고, 로컬 플러그인은 Codex 호환 포팅판임을 명확히 표시한다.
+- 승인된 설계를 `docs/superpowers/plans/2026-07-19-codex-meridian-port.md`의 다섯 작업으로 구체화했다. 개인 플러그인 원본에는 별도 Git 저장소를 만들지 않고, 저장소에는 계획과 설치 결과 이력만 의미 단위로 커밋한다.
+- 실제 공식 생성 스크립트 이름은 `scaffold_plugin.py`가 아니라 `plugin-creator/scripts/create_basic_plugin.py`다. 초기 등록은 이 스크립트의 `--with-skills --with-marketplace` 흐름을 사용한다.
