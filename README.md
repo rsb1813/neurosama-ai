@@ -67,7 +67,6 @@ neurosama-ai/
 │  ├─ apps/stage-tamagotchi/        # Electron desktop app (auto-spawns the gateway)
 │  ├─ services/neru-audio/          # Python GPU voice gateway (STT + TTS, OpenAI-compatible)
 │  └─ …                             # rest of AIRI
-├─ .github/workflows/               # CI: @claude assistant, advisory PR review
 ├─ docs/                            # specs & plans
 └─ README · WORKSPACE · checklist   # project docs
 ```
@@ -121,9 +120,9 @@ merges without a person:
   GitHub issues for real findings, labeled `security` / `bug` / `claude-fix`.
 - **Issue → fix** (a routine on the `claude-fix` label) opens a fix PR on a
   `claude/*` branch.
-- **Advisory review** (`claude-fix-review.yml`) posts a `VERDICT:` recommendation
-  on each fix PR. It is **review-only** — read + comment, no merge power — so a
-  human always makes the final call. `master` is branch-protected.
+- **Automatic review** is provided by the Codex GitHub integration rather than
+  repository workflow files. It reviews PRs and leaves the final merge decision
+  to a human. `master` is branch-protected.
 
 ## Roadmap
 

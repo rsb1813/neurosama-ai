@@ -7,9 +7,9 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 
 **Repo:** public `rsb1813/neurosama-ai` on GitHub; `master` is branch-protected (PR required, no direct/force push, 0 required approvals). AIRI integration merged to master (PR #1). neru-audio gateway requires `Authorization: Bearer` token (`NERU_API_KEY`, default `sk-local-proxy`) + host/origin restriction + CORS preflight for localhost origins on `/v1/*`.
 
-**Autonomous dev pipeline (Claude, human-in-the-loop):**
+**Autonomous development and review pipeline (human-in-the-loop):**
 - Claude Routines: nightly **security audit** + **bug hunt** → GitHub issues; **issue→fix** on `claude-fix` label (use "issue labeled" trigger, NOT "opened") → `claude/*` fix PR.
-- GitHub Actions: `claude.yml` (@claude mentions), `claude-code-review.yml` (plugin review), `claude-fix-review.yml` (**review-only advisory** — `id-token: write` for OIDC, posts `VERDICT:` comment, no merge power). A human always merges.
+- Codex GitHub integration provides automatic PR review outside repository workflow files. Claude GitHub Actions were removed in PR #30. A human always merges.
 - ⚠️ Do NOT re-introduce auto-merge that lets one model both review untrusted PR content and merge/push (prompt-injection + token-exfil P0; removed in PR #9).
 
 **Recently merged to `master`:**
