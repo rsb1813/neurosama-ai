@@ -237,7 +237,7 @@
 - Codex 바이너리를 앱에 포함하거나 OAuth를 직접 구현하지 않는다. PATH에서 발견한 외부 Codex CLI의 공식 `app-server`를 Electron 메인 프로세스가 실행한다.
 - Device OAuth 토큰의 저장과 갱신은 Codex가 전담하며 Neru는 `auth.json`을 읽거나 토큰을 로그에 남기지 않는다.
 - Codex를 단순 텍스트 백엔드로 제한하지 않는다. 기존 AIRI 펑션 도구는 app-server `dynamicTools`로 연결하고 Codex 기본 파일·명령 도구도 유지한다.
-- 기본 실행 범위는 Neru 저장소의 workspace-write다. 범위 밖 파일, 추가 네트워크, 위험 명령은 app-server 승인 요청을 Neru 화면에 표시해 이번만 허용·세션 허용·거절 중 사용자가 선택한다.
+- 초기 구현은 Neru 저장소의 workspace-write를 기본 실행 범위로 삼았다. 이 결정은 아래의 `Codex OAuth 실행 설정 보강 결정`에서 기본 미설정·Codex 설정 상속으로 대체됐다.
 - 다른 제공자 실패 시 자동 폴백하지 않는다. OAuth 실패나 app-server 종료도 현재 설정을 보존하고 사용자가 명시적으로 재시도하거나 전환하게 한다.
 - 승인된 설계는 `docs/superpowers/specs/2026-07-19-neru-codex-oauth-provider-design.md`에 기록했다.
 - 구현 계획은 `docs/superpowers/plans/2026-07-19-neru-codex-oauth-provider.md`에 기록했다. 기존 xsAI 스트림을 대체하지 않고 `codex-oauth` provider ID만 별도 transport로 분기하며, Electron 메인의 app-server 매니저와 렌더러 사이에는 Eventa 직렬화 계약만 두는 구조다.
@@ -255,3 +255,15 @@
 - 네 상위 문서의 상대 Markdown 링크 검증 결과는 `all relative markdown links resolve`였다.
 - 상태 주장 스캔에서 발견한 완료·진행·보류 표기는 각 문서의 Git 근거와 일치했고, 오래된 상태 주장은 발견하지 못했다.
 - 웹 검색 병합 커밋 `080efde`가 존재함을 확인했다. proactive speech 팁 `3e3b8c4`는 `feat/neru-proactive-speech` 로컬 기능 브랜치에만 포함되고 `master`에는 포함되지 않았다.
+
+---
+
+## Codex OAuth 실행 설정 보강 결정 (2026-07-19)
+
+- 기존 구현은 모델을 `codex-configured` 센티널 하나로 고정하고 thread 시작 시 `sandbox: workspaceWrite`, `approvalPolicy: unlessTrusted`를 하드코딩한다.
+- 기본 동작은 Neru가 임의의 실행 설정을 강제하지 않고 사용자의 기존 Codex 설정을 상속하는 것으로 정했다.
+- 모델, 추론 강도, 서비스 등급, 작업 디렉터리, 샌드박스, 승인 정책, 승인 검토자는 각각 독립적으로 덮어쓸 수 있게 한다.
+- 상속을 선택한 값은 app-server RPC에서 생략하며, Neru는 사용자의 `config.toml`을 수정하지 않는다.
+- 모델과 지원 추론 강도는 하드코딩하지 않고 실행 중인 app-server의 `model/list` 응답을 사용한다.
+- Neru가 제공하는 동적 함수 도구는 항상 등록하되, Codex 자체 파일·명령 도구의 실행 범위는 상속되거나 명시적으로 덮어쓴 권한 설정을 따른다.
+- 개발 앱은 숨김 런처로 분리해 실행했으며 `http://localhost:5173`이 HTTP 200을 반환했다. 런타임 로그는 `C:\tmp\neru-desktop-out.log`와 `C:\tmp\neru-desktop-err.log`에 남는다.
