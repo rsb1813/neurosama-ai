@@ -37,3 +37,5 @@ Thumbs.db
 .playwright-mcp/
 neru-render-*.png
 neru-mouth-*.png
+
+.superpowers/
