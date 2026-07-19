@@ -25,12 +25,24 @@ test("server-renders the Neru product shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>Neru — Intelligence, with a stage presence\.<\/title>/i);
   assert.match(html, /Language/);
-  assert.match(html, /<option value="en"[^>]*>en<\/option>/);
-  assert.match(html, /<option value="zh-CN">zh-CN<\/option>/);
-  assert.match(html, /<option value="ja">ja<\/option>/);
-  assert.match(html, /<option value="ko">ko<\/option>/);
+  assert.match(html, /<option value="en"[^>]*>EN<\/option>/);
+  assert.match(html, /<option value="zh-CN">中文<\/option>/);
+  assert.match(html, /<option value="ja">日本語<\/option>/);
+  assert.match(html, /<option value="ko">한국어<\/option>/);
   assert.match(html, /Intelligence, with a stage presence\./);
   assert.match(html, /An open character experiment/);
+  assert.match(html, /A personality, not a prompt\./);
+  assert.match(html, /One conversation\. Four living layers\./);
+  assert.match(html, /A working character, still becoming\./);
+  assert.match(html, /Local-first by design\./);
+  assert.match(html, /Help shape what she becomes\./);
+  assert.match(html, /Korean input/);
+  assert.match(html, /Long-term memory/);
+  assert.match(html, /In progress/);
+  assert.match(html, /https:\/\/github\.com\/rsb1813\/neurosama-ai/);
+  assert.match(html, /https:\/\/github\.com\/rsb1813\/neurosama-ai\/blob\/master\/ROADMAP\.md/);
+  assert.match(html, /src="\/neru-render-airi\.png"/);
+  assert.doesNotMatch(html, /download|waitlist|public demo/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
