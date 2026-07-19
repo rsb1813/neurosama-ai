@@ -258,7 +258,7 @@ git commit -m "feat(codex): add app-server JSON-RPC client"
 - Consumes: Task 2의 `createCodexJsonRpcClient`, `inspectCodexCli`, `spawnCodexAppServer`.
 - Produces: `CodexManager.ensureStarted()`, `getStatus()`, `startDeviceLogin()`, `cancelLogin()`, `logout()`, `stop()`.
 
-- [ ] **Step 1: 상태 전이 실패 테스트 작성**
+- [x] **Step 1: 상태 전이 실패 테스트 작성**
 
 ```ts
 it('initializes experimental API and reads the account', async () => {
@@ -278,13 +278,13 @@ it('returns device URL and activates only after completion', async () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/main/services/codex/manager.test.ts`
 
 Expected: `manager.ts` 부재로 FAIL한다.
 
-- [ ] **Step 3: 최소 매니저 구현**
+- [x] **Step 3: 최소 매니저 구현**
 
 ```ts
 // Codex CLI 프로세스와 계정·대화 수명주기를 소유한다.
@@ -351,13 +351,13 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
 
 stderr에는 토큰이나 JSON 응답을 기록하지 않고 마지막 오류 메시지만 보관한다. `account/login/completed`, `account/updated` 알림으로 상태를 갱신한다.
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/main/services/codex/manager.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add airi/apps/stage-tamagotchi/src/main/services/codex/manager.ts airi/apps/stage-tamagotchi/src/main/services/codex/manager.test.ts

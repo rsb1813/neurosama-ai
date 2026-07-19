@@ -242,3 +242,7 @@
 - 승인된 설계는 `docs/superpowers/specs/2026-07-19-neru-codex-oauth-provider-design.md`에 기록했다.
 - 구현 계획은 `docs/superpowers/plans/2026-07-19-neru-codex-oauth-provider.md`에 기록했다. 기존 xsAI 스트림을 대체하지 않고 `codex-oauth` provider ID만 별도 transport로 분기하며, Electron 메인의 app-server 매니저와 렌더러 사이에는 Eventa 직렬화 계약만 두는 구조다.
 - 최신 공식 app-server 문서를 재확인해 연결마다 `initialize` 성공 뒤 ID 없는 `initialized` 알림을 보내야 하는 핸드셰이크를 계획에 추가했다. 현재 구현 셸의 PATH에는 `codex`가 없어 미설치 상태 UI와 실제 설치 안내를 수동 검증해야 한다.
+- Task 1은 새 설치의 LLM·STT·TTS를 모두 미설정으로 유지하고 네 제공자 선택지만 등록한다. 기존 사용자의 active 값과 자격 증명은 보존한다.
+- Task 2는 엄격한 `codex-cli X.Y.Z` 검사, JSONL 요청 상관, 동기 write 실패 정리, `initialize` 후 `initialized` 알림 계약을 구현했다.
+- Task 3은 app-server 단일 수명주기와 Device OAuth를 구현했다. 로그인 시작 시점부터 계정 알림을 버퍼링하고, 일치하는 성공 completion 뒤에만 인증 상태를 활성화한다. 중복 로그인, stop 경쟁, 외부 프로세스 종료를 회귀 테스트로 고정했으며 집중 테스트 15개가 통과했다.
+- Task 4부터는 공식 최상위 `developerInstructions`를 사용한다. 명령·파일 승인은 `accept`·`acceptForSession`·`decline`, 권한 승인은 요청된 부분집합과 선택적 `scope: 'session'`으로 구분하며 알 수 없는 서버 요청은 자동 승인하지 않는다.
