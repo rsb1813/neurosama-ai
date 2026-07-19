@@ -72,3 +72,25 @@ test("removes unused authentication and database starter files", async () => {
     "../drizzle.config.ts",
   ].map((path) => assert.rejects(access(new URL(path, import.meta.url)))));
 });
+
+test("runs every test suite from the default test command", async () => {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(packageJson.scripts.test, /node --test tests\/\*\.test\.mjs/);
+});
+
+test("keeps a light-paper focus outline in the dark join section", async () => {
+  const stylesheet = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(stylesheet, /\.join a:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--paper-light\)/s);
+});
+
+test("documents the local-only Neru landing workflow", async () => {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  assert.match(readme, /local-only private preview/i);
+  assert.match(readme, /npm run (dev|test|lint|build)/);
+  assert.doesNotMatch(readme, /auth|D1|Drizzle|db:generate/i);
+});
+
+test("does not package the removed optional Drizzle directory", async () => {
+  const plugin = await readFile(new URL("../build/sites-vite-plugin.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(plugin, /drizzle|access\(|\bcp\(/i);
+});

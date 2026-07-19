@@ -39,6 +39,7 @@ h2 { max-width:13ch; margin:0 0 1.25rem; font-size:clamp(2.5rem,5vw,5.3rem); lin
 .capabilities article>p:last-child { color:var(--muted); line-height:1.55; }
 .status { color:var(--brick); font-size:.7rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
 .join { padding:11rem 8vw; background:var(--ink); color:var(--paper-light); }
+.join a:focus-visible { outline:3px solid var(--paper-light); }
 .join .section-label { color:#c58b70; }
 .join>p { color:#cfc2b4; }
 .join-links { display:flex; flex-wrap:wrap; gap:1rem 2.5rem; margin-top:3rem; }

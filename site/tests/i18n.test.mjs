@@ -30,6 +30,22 @@ test("defines localized accessible labels for every locale", () => {
   }
 });
 
+test("defines localized editorial chrome for every locale", () => {
+  assert.deepEqual(COPY.en.chrome, {
+    characterStudy: "CHARACTER STUDY / 001",
+    folio: "NERU — ISSUE 01",
+    footer: "NERU / OPEN CHARACTER EXPERIMENT",
+  });
+
+  for (const locale of LOCALES) {
+    for (const value of Object.values(COPY[locale].chrome ?? {})) {
+      assert.equal(typeof value, "string");
+      assert.equal(value.trim().length > 0, true);
+    }
+    assert.equal(Object.keys(COPY[locale].chrome ?? {}).length, 3);
+  }
+});
+
 test("normalizes missing and invalid locale values to English", () => {
   assert.equal(normalizeLocale(null), "en");
   assert.equal(normalizeLocale("fr"), "en");

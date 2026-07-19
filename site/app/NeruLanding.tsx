@@ -62,9 +62,9 @@ export function NeruLanding() {
             <div className="hero-crop">
               <Image src="/neru-render-airi.png" width={2560} height={1440} priority unoptimized alt={copy.a11y.characterImageAlt} />
             </div>
-            <figcaption>CHARACTER STUDY / 001</figcaption>
+            <figcaption>{copy.chrome.characterStudy}</figcaption>
           </figure>
-          <p className="folio">NERU — ISSUE 01</p>
+          <p className="folio">{copy.chrome.folio}</p>
         </section>
         <section className="editorial-section meet">
           <p className="section-label">{copy.sections[0].label}</p>
@@ -114,7 +114,7 @@ export function NeruLanding() {
           </div>
         </section>
       </main>
-      <footer><span>NERU / OPEN CHARACTER EXPERIMENT</span><span>EN · 中文 · 日本語 · 한국어</span></footer>
+      <footer><span>{copy.chrome.footer}</span><span>EN · 中文 · 日本語 · 한국어</span></footer>
     </>
   );
 }
