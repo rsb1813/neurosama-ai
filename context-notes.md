@@ -247,3 +247,11 @@
 - Task 3은 app-server 단일 수명주기와 Device OAuth를 구현했다. 로그인 시작 시점부터 계정 알림을 버퍼링하고, 일치하는 성공 completion 뒤에만 인증 상태를 활성화한다. 중복 로그인, stop 경쟁, 외부 프로세스 종료를 회귀 테스트로 고정했으며 집중 테스트 15개가 통과했다.
 - Task 4부터는 공식 최상위 `developerInstructions`를 사용한다. 명령·파일 승인은 `accept`·`acceptForSession`·`decline`, 권한 승인은 요청된 부분집합과 선택적 `scope: 'session'`으로 구분하며 알 수 없는 서버 요청은 자동 승인하지 않는다.
 - Task 4는 thread·turn·동적 도구·승인 런타임을 구현했다. 도구와 승인은 RPC 세션 및 thread·turn 소유권으로 단일 stream에 격리하고, app-server 교체나 종료 시 오래된 listener·turn·대기 응답을 폐기한다. 조기 `turn/started`, 실패 terminal, 권한 prototype 키를 포함한 집중 테스트 44개가 통과했다.
+
+### 완료 검증 기록
+
+- Task 1 문서 커밋은 `9d118fd` (`docs: add Codex project guide`)이고, Task 2 문서 동기화 커밋은 `2b0bb46` (`docs: sync neru project status`)이다.
+- `git diff --check origin/master...HEAD`는 공백 오류 없이 통과했고, `git diff --stat origin/master...HEAD`는 `AGENTS.md`, `README.md`, `ROADMAP.md`, `WORKSPACE.md`, `checklist.md`, `context-notes.md` 여섯 파일만 보고했다.
+- 네 상위 문서의 상대 Markdown 링크 검증 결과는 `all relative markdown links resolve`였다.
+- 상태 주장 스캔에서 발견한 완료·진행·보류 표기는 각 문서의 Git 근거와 일치했고, 오래된 상태 주장은 발견하지 못했다.
+- 웹 검색 병합 커밋 `080efde`가 존재함을 확인했다. proactive speech 팁 `3e3b8c4`는 `feat/neru-proactive-speech` 로컬 기능 브랜치에만 포함되고 `master`에는 포함되지 않았다.

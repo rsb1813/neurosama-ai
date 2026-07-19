@@ -94,8 +94,8 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [~] 자막 오버레이(별도 창): 화면에 안 뜸 — `caption-speaker`도 동일하게 안 떠서 **기존 AIRI 공용 인프라 이슈로 판정, 별도 트랙 분리**(이중언어 블로커 아님, 채팅 패널 한국어 정상)
 
 ### M-G — 전체 루프 + barge-in
-- [ ] STT→LLM→TTS→아바타 엔드투엔드, 끼어들기
-- [ ] 검증: 왕복 ~1–3초, 말하면 답하고 끼어들면 멈춤
+- [x] barge-in 구현 및 자동 테스트 — PR #21로 병합
+- [ ] 수동 검증: STT→LLM→TTS→아바타 왕복 ~1–3초, 말하면 답하고 끼어들면 멈춤
 
 ### 폐기/보류
 - 자체 Vite 프론트(`frontend/`), `WebSocketAvatar`+`ws_server` 계획 → AIRI가 대체. **Task 2에서 루트 `backend/`·`frontend/` 실제 삭제 완료**(위 통합 마일스톤 참고)
@@ -120,10 +120,10 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 
 - [x] 루트 문서와 최근 Git 상태 대조
 - [x] 문서별 역할과 상태 기준 설계
-- [ ] 루트 `AGENTS.md` 작성
-- [ ] `WORKSPACE.md`, `ROADMAP.md`, `README.md` 상태 동기화
-- [ ] 문서 링크·경로·명령·Git 근거 검증
-- [ ] 문서 변경 커밋
+- [x] 루트 `AGENTS.md` 작성
+- [x] `WORKSPACE.md`, `ROADMAP.md`, `README.md` 상태 동기화
+- [x] 문서 링크·경로·명령·Git 근거 검증
+- [x] 문서 변경 커밋
 
 ---
 
@@ -135,6 +135,6 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [x] 설계 문서 작성과 자체 검토
 - [ ] 사용자의 작성된 설계 문서 검토
 - [x] 구현 계획 작성
-- [~] 테스트 우선 구현. Task 1~3 완료, Task 4 진행 중
+- [x] Task 1~8 구현과 집중 자동 테스트 완료
 - [ ] 실제 Codex Device Login·도구·승인 흐름 수동 검증
-- [ ] 타입 검사·관련 테스트·Electron 빌드 검증
+- [~] 타입 검사: 기존 VAD/모델 모듈 누락 오류가 남아 전체 통과하지 않음
