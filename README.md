@@ -67,7 +67,6 @@ neurosama-ai/
 │  ├─ apps/stage-tamagotchi/        # Electron desktop app (auto-spawns the gateway)
 │  ├─ services/neru-audio/          # Python GPU voice gateway (STT + TTS, OpenAI-compatible)
 │  └─ …                             # rest of AIRI
-├─ .github/workflows/               # CI: @claude assistant, advisory PR review
 ├─ docs/                            # specs & plans
 └─ README · WORKSPACE · checklist   # project docs
 ```
@@ -121,9 +120,9 @@ merges without a person:
   GitHub issues for real findings, labeled `security` / `bug` / `claude-fix`.
 - **Issue → fix** (a routine on the `claude-fix` label) opens a fix PR on a
   `claude/*` branch.
-- **Advisory review** (`claude-fix-review.yml`) posts a `VERDICT:` recommendation
-  on each fix PR. It is **review-only** — read + comment, no merge power — so a
-  human always makes the final call. `master` is branch-protected.
+- **Automatic review** is provided by the Codex GitHub integration rather than
+  repository workflow files. It reviews PRs and leaves the final merge decision
+  to a human. `master` is branch-protected.
 
 ## Roadmap
 
@@ -137,7 +136,10 @@ co-watching). The MVP (voice core) at a glance:
 - ☑ Live loop end-to-end (mic → STT → LLM → TTS → avatar), verified
 - ☑ neru persona / character card (preseeded, active)
 - ◐ Bilingual output — **English voice + Korean subtitles**: voice + chat-panel Korean working; caption overlay in progress
-- ☐ Barge-in (interrupt neru by speaking)
+- ☑ Barge-in (interrupt neru by speaking) — complete in code; manual mic verification pending
+- ☑ Long-term memory — completed and runtime-validated
+- ☑ Web search — completed (PR #26)
+- 🟡 Proactive speech — local implementation awaiting runtime verification and PR
 - ☐ neru's own witch Live2D model in the AIRI loader
 - ☐ Rebrand + packaged desktop build with a bundled runtime
 

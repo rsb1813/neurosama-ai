@@ -24,7 +24,7 @@ Chatterbox TTS + faster-whisper STT, OpenAI-compatible) + a pre-existing local
 OpenAI-compatible **LLM proxy** at `localhost:3456` (not our code — we point at it).
 
 Each numbered subproject below gets its own spec → plan → implementation cycle.
-We build **one vertical slice end-to-end, then expand** — so only #1 is active now.
+We build **one vertical slice end-to-end, then expand**; the roadmap remains sequential while completed side capabilities are tracked independently.
 
 ## Subprojects
 
@@ -32,13 +32,15 @@ We build **one vertical slice end-to-end, then expand** — so only #1 is active
 |---|------------|--------|-------|
 | **1** | **Real-time voice conversation core** (MVP) | 🔄 **In progress** | STT→LLM→TTS streaming + barge-in + avatar lip-sync + subtitles. Milestone detail below. |
 | 2 | Long-term memory | ✅ **Done** (PR #22) | `remember` LLM tool appends categorized facts to `MEMORY.md`; loaded at startup + injected into the prompt each turn for cross-session recall. Chose a plain markdown file over vector DB/RAG (YAGNI for current scale). Runtime-validated (save + recall across restart) and merged to master. |
-| 3 | Proactive speech | ⬜ Planned | Idle-timer / event-driven prompter. |
+| 3 | Proactive speech | Local implementation complete; runtime validation and PR pending | Idle-timer / event-driven prompter. |
 | 4 | Chat integration | ⬜ Planned | Twitch / YouTube chat, treated as untrusted input. |
 | 5 | Broadcasting | ⬜ Planned | OBS WebSocket compositing. |
 | 6 | **Game agent** | ⬜ Planned | Neuro Game SDK–style text action protocol; per-game controllers. |
 | 7 | **Computer control / coding agent** | ⬜ Planned | Human-like desktop control, built on Claude tool use. |
 | 8 | **Multi-persona (Evil neru)** | ⬜ Planned | Separate souls (e.g. Evil neru) that talk **to each other**. |
 | 9 | YouTube co-watching | ⬜ Planned | Watch-along. |
+
+Completed side capability: **Web search — Done (PR #26)**. The always-on `webSearch` LLM tool reaches self-hosted SearXNG through main-process IPC and degrades gracefully when unavailable; manual runtime verification succeeded.
 
 > Broadcasting (Twitch/YouTube/OBS) is explicitly **out of scope for the MVP**;
 > the avatar is in scope.
@@ -60,7 +62,7 @@ subtitles appear on screen; when the user starts talking, neru stops immediately
 | ↳ AIRI vendored fork + run; LLM wired; desktop packaging; audio gateway (`neru-audio`); provider preseed | ✅ Done |
 | **M-E — neru "witch" Live2D model in AIRI** | 🔄 **In progress (Phase 1 planned)** — model recovered (`~/Downloads/neru-witch-live2d.zip`); spec+plan for Phase 1 (render + auto blink/gaze/lip-sync + expression catalog) on `feat/neru-witch-avatar`. Phase 2 = emotion→expression wiring (not built in AIRI yet). |
 | **M-F — Bilingual output (English voice + Korean subtitles)** ★core | ✅ **Done** (PR #18 merged) — persona card + `<ko>` categoriser + routing; two streaming-boundary bugs fixed with regression tests (core-agent 76/76). English voice + Korean chat panel verified. Caption-overlay window is a pre-existing AIRI infra issue, deferred (chat-panel Korean works). |
-| **M-G — Full loop + barge-in** | ⬜ **Not started** — interrupt neru by speaking; verify ~1–3s round-trip. |
+| **M-G — Full loop + barge-in** | **Merged and automated tests complete** (PR #21); manual microphone verification remains pending. |
 
 ## Current architecture (as built)
 
