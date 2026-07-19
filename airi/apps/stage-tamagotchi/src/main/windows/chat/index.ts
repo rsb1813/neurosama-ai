@@ -1,6 +1,7 @@
 import type { I18n } from '../../libs/i18n'
 import type { ServerChannel } from '../../services/airi/channel-server'
 import type { McpStdioManager } from '../../services/airi/mcp-servers'
+import type { CodexController } from '../../services/codex/service'
 import type { WidgetsWindowManager } from '../widgets'
 
 import { join, resolve } from 'node:path'
@@ -18,6 +19,7 @@ export function setupChatWindowReusableFunc(params: {
   serverChannel: ServerChannel
   mcpStdioManager: McpStdioManager
   i18n: I18n
+  codexController: CodexController
 }) {
   return createReusableWindow(async () => {
     const window = new BrowserWindow({
@@ -44,6 +46,7 @@ export function setupChatWindowReusableFunc(params: {
       serverChannel: params.serverChannel,
       mcpStdioManager: params.mcpStdioManager,
       i18n: params.i18n,
+      codexController: params.codexController,
     })
 
     await load(window, withHashRoute(baseUrl(resolve(getElectronMainDirname(), '..', 'renderer')), '/chat'))

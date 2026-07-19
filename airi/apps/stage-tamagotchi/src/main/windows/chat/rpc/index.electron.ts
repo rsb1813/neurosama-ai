@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron'
 import type { I18n } from '../../../libs/i18n'
 import type { ServerChannel } from '../../../services/airi/channel-server'
 import type { McpStdioManager } from '../../../services/airi/mcp-servers'
+import type { CodexController } from '../../../services/codex/service'
 import type { WidgetsWindowManager } from '../../widgets'
 
 import { defineInvokeHandler } from '@moeru/eventa'
@@ -12,6 +13,7 @@ import { ipcMain } from 'electron'
 import { electronOpenMainDevtools } from '../../../../shared/eventa'
 import { createMcpServersService } from '../../../services/airi/mcp-servers'
 import { createWidgetsService } from '../../../services/airi/widgets'
+import { createCodexService } from '../../../services/codex/service'
 import { setupBaseWindowElectronInvokes } from '../../shared/window'
 
 export async function setupChatWindowElectronInvokes(params: {
@@ -20,6 +22,7 @@ export async function setupChatWindowElectronInvokes(params: {
   serverChannel: ServerChannel
   mcpStdioManager: McpStdioManager
   i18n: I18n
+  codexController: CodexController
 }) {
   // TODO: once we refactored eventa to support window-namespaced contexts,
   // we can remove the setMaxListeners call below since eventa will be able to dispatch and
@@ -32,6 +35,7 @@ export async function setupChatWindowElectronInvokes(params: {
 
   createWidgetsService({ context, widgetsManager: params.widgetsManager, window: params.window })
   createMcpServersService({ context, manager: params.mcpStdioManager })
+  createCodexService({ context, controller: params.codexController, window: params.window })
 
   defineInvokeHandler(context, electronOpenMainDevtools, () => params.window.webContents.openDevTools({ mode: 'detach' }))
 }

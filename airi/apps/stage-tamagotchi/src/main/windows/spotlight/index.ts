@@ -4,6 +4,7 @@ import type { globalAppConfigSchema } from '../../configs/global'
 import type { Config } from '../../libs/electron/persistence'
 import type { I18n } from '../../libs/i18n'
 import type { ServerChannel } from '../../services/airi/channel-server'
+import type { CodexController } from '../../services/codex/service'
 import type { GlobalShortcutService } from '../../services/electron/global-shortcut'
 
 import { join, resolve } from 'node:path'
@@ -24,6 +25,7 @@ import {
 import { isSafeSpotlightAccelerator } from '../../../shared/spotlight-shortcut'
 import { baseUrl, getElectronMainDirname, load, withHashRoute } from '../../libs/electron/location'
 import { createReusableWindow } from '../../libs/electron/window-manager'
+import { createCodexService } from '../../services/codex/service'
 import { setupBaseWindowElectronInvokes, transparentWindowConfig } from '../shared/window'
 
 const SPOTLIGHT_WINDOW_WIDTH = 720
@@ -56,6 +58,7 @@ export function setupSpotlightWindowManager(params: {
   chatWindow: () => Promise<BrowserWindow>
   globalShortcut: GlobalShortcutService
   appConfig: Config<typeof globalAppConfigSchema>
+  codexController: CodexController
 }): SpotlightWindowManager {
   const log = useLogg('spotlight-window').useGlobalConfig()
   const rendererBase = baseUrl(resolve(getElectronMainDirname(), '..', 'renderer'))
@@ -122,6 +125,7 @@ export function setupSpotlightWindowManager(params: {
 
     const { context } = createContext(ipcMain, window)
     await setupBaseWindowElectronInvokes({ context, window, i18n: params.i18n, serverChannel: params.serverChannel })
+    createCodexService({ context, controller: params.codexController, window })
 
     // Only the Spotlight window may call these private invokes.
     const isFromSpotlightWindow = (senderId?: number) => window.webContents.id === senderId

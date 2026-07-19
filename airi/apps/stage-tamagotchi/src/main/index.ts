@@ -25,7 +25,7 @@ import { nullFileLoggerHandle, setupFileLogger } from './app/file-logger'
 import { installSingleInstanceGuard } from './app/single-instance'
 import { createArtistryConfig } from './configs/artistry'
 import { createGlobalAppConfig } from './configs/global'
-import { emitAppBeforeQuit, emitAppReady, emitAppWindowAllClosed } from './libs/bootkit/lifecycle'
+import { emitAppBeforeQuit, emitAppReady, emitAppWindowAllClosed, onAppBeforeQuit } from './libs/bootkit/lifecycle'
 import { setElectronMainDirname } from './libs/electron/location'
 import { createI18n } from './libs/i18n'
 import { createWindowAuthManagerService } from './services/airi/auth'
@@ -35,6 +35,8 @@ import { setupBuiltInServer } from './services/airi/http-server'
 import { setupMcpStdioManager } from './services/airi/mcp-servers'
 import { setupExtensionHost } from './services/airi/plugins'
 import { setupArtistryBridge } from './services/airi/widgets/artistry-bridge'
+import { createCodexManager } from './services/codex/manager'
+import { createCodexController } from './services/codex/service'
 import { setupAutoUpdater } from './services/electron/auto-updater'
 import { setupGlobalShortcutService } from './services/electron/global-shortcut'
 import { setupNeruAudioManager } from './services/neru-audio'
@@ -171,6 +173,17 @@ app.whenReady().then(async () => {
     build: async () => setupMcpStdioManager(),
   })
 
+  const codexController = injeca.provide('services:codex-controller', () => {
+    const controller = createCodexController({
+      manager: createCodexManager({
+        appVersion: app.getVersion(),
+        workspaceRoot: process.cwd(),
+      }),
+    })
+    onAppBeforeQuit(() => controller.stop())
+    return controller
+  })
+
   const widgetsManager = injeca.provide('windows:widgets', {
     dependsOn: { serverChannel, i18n },
     build: ({ dependsOn }) => setupWidgetsWindowManager(dependsOn),
@@ -206,22 +219,22 @@ app.whenReady().then(async () => {
   })
 
   const chatWindow = injeca.provide('windows:chat', {
-    dependsOn: { widgetsManager, serverChannel, mcpStdioManager, i18n },
+    dependsOn: { widgetsManager, serverChannel, mcpStdioManager, i18n, codexController },
     build: ({ dependsOn }) => setupChatWindowReusableFunc(dependsOn),
   })
 
   const spotlightWindow = injeca.provide('windows:spotlight', {
-    dependsOn: { serverChannel, i18n, chatWindow, globalShortcut, appConfig },
+    dependsOn: { serverChannel, i18n, chatWindow, globalShortcut, appConfig, codexController },
     build: ({ dependsOn }) => setupSpotlightWindowManager(dependsOn),
   })
 
   const settingsWindow = injeca.provide('windows:settings', {
-    dependsOn: { widgetsManager, beatSync, autoUpdater, devtoolsWindow: devtoolsMarkdownStressWindow, serverChannel, godotStageManager, mcpStdioManager, i18n, windowAuthManager, globalShortcut, spotlightWindow },
+    dependsOn: { widgetsManager, beatSync, autoUpdater, devtoolsWindow: devtoolsMarkdownStressWindow, serverChannel, godotStageManager, mcpStdioManager, i18n, windowAuthManager, globalShortcut, spotlightWindow, codexController },
     build: async ({ dependsOn }) => setupSettingsWindowReusableFunc(dependsOn),
   })
 
   const mainWindow = injeca.provide('windows:main', {
-    dependsOn: { settingsWindow, chatWindow, widgetsManager, noticeWindow, beatSync, autoUpdater, serverChannel, godotStageManager, mcpStdioManager, i18n, onboardingWindowManager, windowAuthManager },
+    dependsOn: { settingsWindow, chatWindow, widgetsManager, noticeWindow, beatSync, autoUpdater, serverChannel, godotStageManager, mcpStdioManager, i18n, onboardingWindowManager, windowAuthManager, codexController },
     build: async ({ dependsOn }) => setupMainWindow({
       ...dependsOn,
       onWindowCreated: (window) => {

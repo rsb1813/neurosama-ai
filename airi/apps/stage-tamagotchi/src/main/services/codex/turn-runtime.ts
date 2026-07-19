@@ -1,47 +1,21 @@
+import type {
+  CodexApprovalDecision,
+  CodexBridgeEvent,
+  CodexJsonValue,
+  CodexToolResult,
+  CodexTurnRequest,
+} from '../../../shared/eventa/codex'
 // Codex thread와 turn 이벤트를 Neru 스트림, 도구, 승인 이벤트로 변환한다.
 import type { CodexJsonRpcClient, JsonRpcNotification, JsonRpcServerRequest } from './types'
 
 /** Codex app-server에 등록하는 동적 함수 도구 설명이다. */
-export interface CodexDynamicToolDescriptor {
-  type: 'function'
-  name: string
-  description: string
-  inputSchema: Readonly<Record<string, unknown>>
-}
-
-/** Codex thread와 turn을 시작하는 데 필요한 Neru 요청이다. */
-export interface CodexTurnRequest {
-  streamId: string
-  threadId?: string
-  cwd: string
-  model: string
-  developerInstructions: string
-  dynamicTools: readonly CodexDynamicToolDescriptor[]
-  userInput: string
-}
-
-/** 동적 도구 실행 결과를 app-server에 돌려보내는 값이다. */
-export interface CodexToolResult {
-  success: boolean
-  text: string
-}
-
-/** 승인 UI가 선택한 제한된 Codex 권한 응답이다. */
-export interface CodexApprovalDecision {
-  type: 'accept' | 'acceptForSession' | 'decline'
-  /** permissions 승인일 때 요청 범위 안에서만 허용할 권한이다. */
-  permissions?: Readonly<Record<string, unknown>>
-}
-
-/** turn 런타임이 렌더러 bridge로 보내는 이벤트다. */
-export type CodexBridgeEvent
-  = | { type: 'text-delta', streamId: string, threadId: string, turnId: string, text: string }
-    | { type: 'finish', streamId: string, threadId: string, turnId: string }
-    | { type: 'interrupted', streamId: string, threadId: string, turnId: string }
-    | { type: 'error', streamId: string, threadId: string, turnId: string, message: string }
-    | { type: 'thread-resume-failed', streamId: string, threadId: string }
-    | { type: 'tool-call-request', streamId: string, threadId: string, turnId: string, callId: string, tool: string, arguments: unknown }
-    | { type: 'approval-request', streamId: string, threadId: string, turnId: string, requestId: string, approvalType: 'command' | 'file' | 'permissions', request: unknown }
+export type {
+  CodexApprovalDecision,
+  CodexBridgeEvent,
+  CodexDynamicToolDescriptor,
+  CodexToolResult,
+  CodexTurnRequest,
+} from '../../../shared/eventa/codex'
 
 /** turn 런타임이 살아 있는 RPC와 process 상태를 읽는 매니저 경계다. */
 export interface CodexTurnRuntimeManager {
@@ -363,7 +337,13 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
       type: approvalType,
       permissions: approvalType === 'permissions' && isRecord(message.params) ? message.params.permissions : undefined,
     })
-    stream.sink({ type: 'approval-request', streamId: stream.streamId, threadId: stream.threadId, turnId: owner.turnId, requestId, approvalType, request: message.params })
+    const request = readCodexJsonValue(message.params)
+    if (request === undefined) {
+      pendingApprovals.delete(requestId)
+      rpc.respondError(message.id, invalidServerRequest)
+      return
+    }
+    stream.sink({ type: 'approval-request', streamId: stream.streamId, threadId: stream.threadId, turnId: owner.turnId, requestId, approvalType, request })
   }
 
   function bindTurn(stream: TurnStream, turnId: string): void {
@@ -476,13 +456,16 @@ function readTurnCompletion(value: unknown): { threadId: string, turnId: string,
   return { ...owner, status }
 }
 
-function readToolCall(value: unknown): { callId: string, tool: string, arguments: unknown } | undefined {
+function readToolCall(value: unknown): { callId: string, tool: string, arguments: CodexJsonValue } | undefined {
   if (!isRecord(value) || typeof value.tool !== 'string')
     return undefined
   const callId = readNonEmptyText(value.callId)
   if (callId === undefined)
     return undefined
-  return { callId, tool: value.tool, arguments: value.arguments }
+  const argumentsValue = value.arguments === undefined ? {} : readCodexJsonValue(value.arguments)
+  if (argumentsValue === undefined)
+    return undefined
+  return { callId, tool: value.tool, arguments: argumentsValue }
 }
 
 function getApprovalType(method: string): PendingApproval['type'] | undefined {
@@ -552,4 +535,30 @@ function readNonEmptyText(value: unknown): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readCodexJsonValue(value: unknown): CodexJsonValue | undefined {
+  if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string')
+    return value
+  if (Array.isArray(value)) {
+    const items: CodexJsonValue[] = []
+    for (const item of value) {
+      const parsed = readCodexJsonValue(item)
+      if (parsed === undefined)
+        return undefined
+      items.push(parsed)
+    }
+    return items
+  }
+  if (!isRecord(value))
+    return undefined
+
+  const record = Object.create(null) as Record<string, CodexJsonValue>
+  for (const [key, item] of Object.entries(value)) {
+    const parsed = readCodexJsonValue(item)
+    if (parsed === undefined)
+      return undefined
+    record[key] = parsed
+  }
+  return record
 }

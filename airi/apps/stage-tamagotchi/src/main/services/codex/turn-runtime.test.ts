@@ -250,6 +250,8 @@ describe('createCodexTurnRuntime', () => {
     const { running } = await beginTurn(harness)
     harness.emitServerRequest('item/tool/call', 65, { threadId: 'thr-1', turnId: 'turn-1', callId: '', tool: 'remember' })
     expect(harness.errors).toContainEqual({ id: 65, code: -32600, message: 'Invalid Codex server request.' })
+    harness.emitServerRequest('item/tool/call', 67, { threadId: 'thr-1', turnId: 'turn-1', callId: 'invalid-json', tool: 'remember', arguments: () => {} })
+    expect(harness.errors).toContainEqual({ id: 67, code: -32600, message: 'Invalid Codex server request.' })
     harness.emitServerRequest('item/permissions/requestApproval', 66, { threadId: 'thr-1', turnId: 'turn-1', permissions: { fileSystem: { write: ['C:/repo'] } } })
     harness.runtime.resolveApproval('66', { type: 'accept', permissions: { fileSystem: { write: ['C:/repo'] }, __proto__: { polluted: true } } })
     expect(harness.responses).toContainEqual({ id: 66, result: { permissions: { fileSystem: { write: ['C:/repo'] } } } })

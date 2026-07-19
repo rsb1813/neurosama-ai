@@ -1,36 +1,12 @@
 // Codex app-server와 Device OAuth 계정의 런타임 수명주기를 관리한다.
 import type { CodexCliInspection, CodexJsonRpcClient, CodexLineIo, JsonRpcNotification } from './types'
+import type { CodexDeviceLogin, CodexRuntimeStatus } from '../../../shared/eventa/codex'
 
 import { inspectCodexCli, startCodexAppServer } from './cli'
 import { createCodexJsonRpcClient } from './json-rpc-client'
 
 /** Codex CLI와 app-server의 현재 런타임 상태를 UI에 전달하는 스냅샷이다. */
-export interface CodexRuntimeStatus {
-  /** 설치 검사와 기능 프로브가 지원하는 CLI를 확인했는지 나타낸다. */
-  cli: 'unknown' | 'supported' | 'unsupported'
-  /** 이 매니저가 소유한 단일 app-server 프로세스의 상태다. */
-  process: 'stopped' | 'running'
-  /** app-server가 알린 현재 인증 방식이며, 계정이 없으면 `null`이다. */
-  authMode: string | null
-  /** app-server가 알린 현재 구독 플랜이며, 계정이 없으면 `null`이다. */
-  planType: string | null
-  /** Device OAuth 요청의 진행 상태다. */
-  login: 'idle' | 'pending' | 'completed' | 'failed'
-  /** 토큰이나 서버 JSON을 포함하지 않는 사용자 표시용 오류다. */
-  error?: string
-}
-
-/** Codex app-server가 Device OAuth 시작 후 반환하는 사용자 승인 정보다. */
-export interface CodexDeviceLogin {
-  /** app-server가 완료와 취소 알림을 연결하는 로그인 식별자다. */
-  loginId: string
-  /** 사용자가 브라우저에서 열어야 하는 Device OAuth 검증 URL이다. */
-  verificationUrl: string
-  /** 검증 화면에 입력할 일회성 사용자 코드다. */
-  userCode: string
-  /** 현재 지원하는 Device OAuth 방식이다. */
-  type: 'chatgptDeviceCode'
-}
+export type { CodexDeviceLogin, CodexRuntimeStatus } from '../../../shared/eventa/codex'
 
 /** manager가 실제 child process에서 사용하는 최소 app-server 프로세스 표면이다. */
 export interface CodexAppServerProcess {
