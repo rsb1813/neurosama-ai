@@ -152,3 +152,6 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [ ] Codex 전용 설정 UI에 모델·추론 강도·서비스 등급·작업 폴더·권한·승인 설정 추가.
 - [ ] thread·turn 요청에서 상속 필드는 생략하고 명시적 덮어쓰기만 전달.
 - [ ] 관련 단위 테스트, 타입 검사, Electron 런타임 검증.
+- [x] 스크린샷으로 실제 데스크톱 제공자 경로가 기존 `settings/providers/chat/[providerId]`임을 확인.
+- [ ] 기존 제공자 경로에서 API 키 폼 대신 Codex OAuth 전용 카드를 렌더링.
+- [ ] 개발 서버 재로딩과 Electron 프로세스 종료를 구분해 튕김 증상을 재검증.

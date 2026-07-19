@@ -267,3 +267,5 @@
 - 모델과 지원 추론 강도는 하드코딩하지 않고 실행 중인 app-server의 `model/list` 응답을 사용한다.
 - Neru가 제공하는 동적 함수 도구는 항상 등록하되, Codex 자체 파일·명령 도구의 실행 범위는 상속되거나 명시적으로 덮어쓴 권한 설정을 따른다.
 - 개발 앱은 숨김 런처로 분리해 실행했으며 `http://localhost:5173`이 HTTP 200을 반환했다. 런타임 로그는 `C:\tmp\neru-desktop-out.log`와 `C:\tmp\neru-desktop-err.log`에 남는다.
+- 2026-07-20 스크린샷에서 실제 데스크톱이 기존 `settings/providers/chat/[providerId].vue`를 사용함을 확인했다. 이 경로는 모든 채팅 제공자에 API 키 폼을 무조건 렌더링했고, 전용 컴포넌트는 사용되지 않는 `v2` 경로에만 연결돼 있었다.
+- 같은 시점 로그에는 Electron 본체의 crash·quit가 없었다. Vite 의존성 최적화 뒤 렌더러 WebSocket이 정상 재로딩 코드 `1001`로 닫혔고, 3457 포트 중복으로 Neru 오디오 자식 프로세스만 code 3으로 종료됐다.
