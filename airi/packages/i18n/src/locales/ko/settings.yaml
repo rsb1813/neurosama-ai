@@ -1290,6 +1290,12 @@ pages:
       openai-compatible:
         description: OpenAI 호환
         title: OpenAI 호환
+      neru-local-proxy:
+        title: Neru 로컬 프록시
+        description: 직접 설정하는 로컬 OpenAI 호환 LLM 엔드포인트입니다.
+      codex-oauth:
+        title: Codex (OAuth)
+        description: 데스크톱 앱에서 디바이스 OAuth로 Codex 계정을 사용합니다.
       nvidia:
         description: build.nvidia.com
         title: NVIDIA NIM

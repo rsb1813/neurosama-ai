@@ -8,6 +8,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import { resolveLlmTools } from './llm-tool-resolver'
+import { getLlmTransport } from './llm-transports'
 
 export type { StreamEvent, StreamOptions } from '@proj-airi/core-agent'
 export { isContentArrayRelatedError, isToolRelatedError } from '@proj-airi/core-agent'
@@ -20,6 +21,23 @@ export const useLLM = defineStore('llm', () => {
     const key = modelKey(model, chatProvider)
     const { tools: customTools, ...streamOptions } = options ?? {}
     const builtinToolsResolver = () => resolveLlmTools({ customTools })
+    const transport = getLlmTransport(streamOptions.providerId)
+
+    if (transport) {
+      const tools = await builtinToolsResolver()
+      await transport({
+        providerId: streamOptions.providerId!,
+        sessionId: streamOptions.sessionId,
+        model,
+        messages,
+        tools: tools ?? [],
+        options: streamOptions,
+      })
+      return
+    }
+
+    if (streamOptions.providerId === 'codex-oauth')
+      throw new Error('Codex OAuth 전송기가 준비되지 않았습니다. 데스크톱 앱을 다시 시작하세요.')
 
     const runStream = () => coreStreamFrom({
       model,

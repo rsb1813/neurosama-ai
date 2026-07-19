@@ -1344,6 +1344,12 @@ pages:
       openai-compatible:
         description: OpenAI Compatible
         title: OpenAI Compatible
+      neru-local-proxy:
+        title: Neru Local Proxy
+        description: Your locally hosted OpenAI-compatible LLM endpoint.
+      codex-oauth:
+        title: Codex (OAuth)
+        description: Use your Codex account through device OAuth in the desktop app.
       nvidia:
         description: build.nvidia.com
         title: NVIDIA NIM
