@@ -112,6 +112,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
   let rpc: CodexJsonRpcClient | undefined
   let removeNotificationHandler: (() => void) | undefined
   let pendingLoginId: string | undefined
+  let pendingAccountStatus: Pick<CodexRuntimeStatus, 'authMode' | 'planType'> | undefined
   let starting: Promise<CodexRuntimeStatus> | undefined
   let lifecycleId = 0
 
@@ -183,12 +184,18 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
         rpc = undefined
         removeNotificationHandler?.()
         removeNotificationHandler = undefined
+        const hadPendingLogin = pendingLoginId !== undefined
         pendingLoginId = undefined
-        updateStatus({ ...status, process: 'stopped' })
+        pendingAccountStatus = undefined
+        updateStatus({
+          ...status,
+          process: 'stopped',
+          login: hadPendingLogin ? 'failed' : status.login,
+          error: hadPendingLogin ? 'Device sign-in was interrupted.' : status.error,
+        })
       })
       updateStatus({ ...status, cli: 'supported', process: 'running', error: undefined })
 
-      requiresExperimentalCapability = true
       await client.request('initialize', {
         clientInfo: { name: 'neru', title: 'Neru', version: deps.appVersion },
         capabilities: { experimentalApi: true },
@@ -198,6 +205,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
 
       // 공식 handshake는 initialize 성공 직후 이 ID 없는 알림을 요구한다.
       client.notify('initialized', {})
+      requiresExperimentalCapability = true
       const probe = await client.request<unknown>('thread/start', {
         cwd: deps.workspaceRoot,
         ephemeral: true,
@@ -253,20 +261,28 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
   async function startDeviceLogin(): Promise<CodexDeviceLogin> {
     const currentStatus = await ensureStarted()
     const client = rpc
+    const loginLifecycleId = lifecycleId
     if (client === undefined || currentStatus.cli === 'unsupported')
       throw new Error('Codex CLI is unavailable.')
 
     try {
       const response = await client.request<unknown>('account/login/start', { type: 'chatgptDeviceCode' })
+      if (rpc !== client || lifecycleId !== loginLifecycleId)
+        throw new DeviceLoginStoppedError()
+
       const login = readDeviceLogin(response)
       if (login === undefined)
         throw new Error('Invalid Device OAuth response.')
 
       pendingLoginId = login.loginId
+      pendingAccountStatus = undefined
       updateStatus({ ...status, login: 'pending', error: undefined })
       return login
     }
-    catch {
+    catch (error) {
+      if (error instanceof DeviceLoginStoppedError || rpc !== client || lifecycleId !== loginLifecycleId)
+        throw new Error('Device sign-in was stopped.')
+
       updateStatus({ ...status, login: 'failed', error: 'Device sign-in could not be started.' })
       throw new Error('Device sign-in could not be started.')
     }
@@ -285,6 +301,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
     }
 
     pendingLoginId = undefined
+    pendingAccountStatus = undefined
     updateStatus({ ...status, login: 'idle', error: undefined })
   }
 
@@ -306,12 +323,18 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
     lifecycleId++
     const client = rpc
     const loginId = pendingLoginId
-    if (client !== undefined && loginId !== undefined) {
-      // 종료는 로그인 취소 응답을 기다리지 않아야 app-server가 무응답이어도 누수되지 않는다.
-      void client.request('account/login/cancel', { loginId }).catch(() => undefined)
+    const activeProcess = process
+    if (client !== undefined && loginId !== undefined && activeProcess !== undefined) {
+      // 취소 JSONL 요청이 stdin에 기록된 뒤 짧게 기다리되, 무응답이면 반드시 종료로 진행한다.
+      await Promise.race([
+        client.request('account/login/cancel', { loginId }).then(() => undefined).catch(() => undefined),
+        waitForProcessExit(activeProcess),
+        waitForDelay(100),
+      ])
     }
 
     pendingLoginId = undefined
+    pendingAccountStatus = undefined
     disposeProcess()
     updateStatus({ ...status, process: 'stopped', login: 'idle' })
   }
@@ -329,6 +352,11 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
   function handleNotification(message: JsonRpcNotification): void {
     if (message.method === 'account/updated') {
       const accountStatus = readAccountStatus(message.params)
+      if (pendingLoginId !== undefined) {
+        pendingAccountStatus = accountStatus
+        return
+      }
+
       updateStatus({
         ...status,
         authMode: accountStatus.authMode,
@@ -346,8 +374,10 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
       return
 
     pendingLoginId = undefined
+    const bufferedAccountStatus = pendingAccountStatus
+    pendingAccountStatus = undefined
     updateStatus(completion.success
-      ? { ...status, login: 'completed', error: undefined }
+      ? { ...status, ...bufferedAccountStatus, login: 'completed', error: undefined }
       : { ...status, login: 'failed', error: 'Device sign-in failed.' })
   }
 
@@ -366,6 +396,16 @@ function stopProcess(process: CodexAppServerProcess): void {
   process.stdin.end()
   if (process.exitCode === null)
     process.kill()
+}
+
+function waitForProcessExit(process: CodexAppServerProcess): Promise<void> {
+  return new Promise((resolve) => {
+    process.on('exit', () => resolve())
+  })
+}
+
+function waitForDelay(delay: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, delay))
 }
 
 /** spawned child process의 stdout JSONL, stdin JSONL, exit를 Task 2 경계에 연결한다. */
@@ -456,3 +496,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 class CapabilityProbeError extends Error {}
+
+class DeviceLoginStoppedError extends Error {}
