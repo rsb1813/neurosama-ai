@@ -1,7 +1,7 @@
 "use client";
 // Neru 페이지의 언어 선택과 사용자 상호작용을 관리하는 클라이언트 컴포넌트
 import { useEffect, useState } from "react";
-import { COPY, DEFAULT_LOCALE, LOCALES, STORAGE_KEY, readStoredLocale, type Locale } from "./i18n.mjs";
+import { COPY, DEFAULT_LOCALE, LOCALES, STORAGE_KEY, readBrowserLocale, type Locale } from "./i18n.mjs";
 
 const GITHUB_URL = "https://github.com/rsb1813/neurosama-ai";
 
@@ -10,7 +10,7 @@ export function NeruLanding() {
   const copy = COPY[locale];
 
   useEffect(() => {
-    const storedLocale = readStoredLocale(window.localStorage);
+    const storedLocale = readBrowserLocale(() => window.localStorage);
     setLocale(storedLocale);
     document.documentElement.lang = storedLocale;
   }, []);

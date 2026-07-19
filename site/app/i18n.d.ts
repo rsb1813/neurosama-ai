@@ -18,3 +18,4 @@ export const STORAGE_KEY: "neru-locale";
 export const COPY: Record<Locale, SiteCopy>;
 export function normalizeLocale(value: unknown): Locale;
 export function readStoredLocale(storage?: Pick<Storage, "getItem"> | null): Locale;
+export function readBrowserLocale(storageProvider: () => Pick<Storage, "getItem"> | null | undefined): Locale;

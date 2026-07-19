@@ -93,3 +93,11 @@ export function readStoredLocale(storage) {
     return DEFAULT_LOCALE;
   }
 }
+
+export function readBrowserLocale(storageProvider) {
+  try {
+    return readStoredLocale(storageProvider());
+  } catch {
+    return DEFAULT_LOCALE;
+  }
+}
