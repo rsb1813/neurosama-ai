@@ -13,6 +13,7 @@ import { usePluginHostInspectorStore } from '@proj-airi/stage-ui/stores/devtools
 import { useDisplayModelsStore } from '@proj-airi/stage-ui/stores/display-models'
 import { useModsServerChannelStore } from '@proj-airi/stage-ui/stores/mods/api/channel-server'
 import { useContextBridgeStore } from '@proj-airi/stage-ui/stores/mods/api/context-bridge'
+import { useCodexAccountStore } from '@proj-airi/stage-ui/stores/codex-account'
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { useArtistryStore } from '@proj-airi/stage-ui/stores/modules/artistry'
 import { usePerfTracerBridgeStore } from '@proj-airi/stage-ui/stores/perf-tracer-bridge'
@@ -37,9 +38,14 @@ import {
 } from '../shared/eventa'
 import {
   codexBridgeEvent,
+  codexCancelDeviceLogin,
+  codexGetStatus,
+  codexLogout,
   codexInterruptTurn,
   codexResolveToolCall,
   codexStartTurn,
+  codexStartDeviceLogin,
+  codexStatusChanged,
 } from '../shared/eventa/codex'
 import {
   electronPluginUpdateCapability,
@@ -94,6 +100,7 @@ function createFullStageRuntime() {
   const pluginToolsStore = useTamagotchiPluginToolsStore()
   const stageWindowLifecycleStore = useStageWindowLifecycleStore()
   const settingsAudioDeviceStore = useSettingsAudioDevice()
+  const codexAccountStore = useCodexAccountStore()
   const artistryStore = useArtistryStore()
   const { activeProvider, artistryGlobals, activeModel, defaultPromptPrefix, providerOptions } = storeToRefs(artistryStore)
   const getServerChannelConfig = useElectronEventaInvoke(electronGetServerChannelConfig)
@@ -109,11 +116,28 @@ function createFullStageRuntime() {
   const getGodotStageStatus = useElectronEventaInvoke(electronGodotStageGetStatus)
   const syncArtistryConfig = useElectronEventaInvoke(artistrySyncConfig)
   const startCodexTurn = useElectronEventaInvoke(codexStartTurn)
+  const getCodexStatus = useElectronEventaInvoke(codexGetStatus)
+  const startCodexDeviceLogin = useElectronEventaInvoke(codexStartDeviceLogin)
+  const cancelCodexDeviceLogin = useElectronEventaInvoke(codexCancelDeviceLogin)
+  const logoutCodex = useElectronEventaInvoke(codexLogout)
   const interruptCodexTurn = useElectronEventaInvoke(codexInterruptTurn)
   const resolveCodexToolCall = useElectronEventaInvoke(codexResolveToolCall)
   const isAuxiliaryChatRoute = initialWindowRoutePath === '/chat'
   const isGodotStageRoute = () => route.path === '/' || route.path.startsWith('/settings')
   const isWidgetsWindowRoute = () => route.path === '/widgets'
+  codexAccountStore.setBridge({
+    getStatus: () => getCodexStatus(),
+    startDeviceLogin: () => startCodexDeviceLogin(),
+    cancelDeviceLogin: payload => cancelCodexDeviceLogin({ loginId: payload }),
+    logout: () => logoutCodex(),
+    onStatus: (handler) => {
+      const dispose = context.value.on(codexStatusChanged, (event) => {
+        if (event.body)
+          handler(event.body)
+      })
+      return typeof dispose === 'function' ? dispose : () => {}
+    },
+  })
   const codexBridge = initializeCodexBridge({
     startTurn: payload => startCodexTurn(payload),
     interruptTurn: payload => interruptCodexTurn(payload),
@@ -271,6 +295,7 @@ function createFullStageRuntime() {
       mcpToolsStore.dispose()
       pluginToolsStore.dispose()
       codexBridge.dispose()
+      codexAccountStore.setBridge(undefined)
     },
   }
 }
