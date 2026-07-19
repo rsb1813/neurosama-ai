@@ -27,6 +27,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import CodexOAuthProviderSettings from '../../../../../../components/settings/CodexOAuthProviderSettings.vue'
+
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute('v2/settings/providers/edit/[providerId]')
@@ -403,7 +405,10 @@ function handleDeleteProvider() {
         </div>
 
         <template v-else>
+          <CodexOAuthProviderSettings v-if="providerDefinition.id === 'codex-oauth'" />
+
           <ProviderBasicSettings
+            v-else
             :title="t('settings.pages.providers.common.section.basic.title')"
             :description="t('settings.pages.providers.common.section.basic.description')"
           >
