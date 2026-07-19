@@ -385,7 +385,7 @@ it('starts a workspace-scoped thread with tools and developer instructions', asy
   expect(rpc.request).toHaveBeenCalledWith('thread/start', expect.objectContaining({
     cwd: 'C:/repo', sandbox: 'workspaceWrite', approvalPolicy: 'unlessTrusted',
     dynamicTools: [expect.objectContaining({ name: 'remember' })],
-    config: { developer_instructions: 'You are Neru.' },
+    developerInstructions: 'You are Neru.',
   }))
 })
 
@@ -423,7 +423,11 @@ export interface CodexTurnRuntime {
 }
 ```
 
-새 thread는 `thread/start`, 저장된 ID는 `thread/resume`을 사용한다. 두 요청 모두 `cwd`, `sandbox: 'workspaceWrite'`, `approvalPolicy: 'unlessTrusted'`, `config.developer_instructions`, `dynamicTools`를 전달한다. 이후 `turn/start`에는 마지막 사용자 입력만 보내고 `item/agentMessage/delta`, `turn/completed`, `turn/interrupt`를 `streamId`별로 상관시킨다.
+새 thread는 `thread/start`, 저장된 ID는 `thread/resume`을 사용한다. 두 요청 모두 `cwd`, `sandbox: 'workspaceWrite'`, `approvalPolicy: 'unlessTrusted'`, 최상위 `developerInstructions`, `dynamicTools`를 전달한다. 이후 `turn/start`에는 마지막 사용자 입력만 보내고 `item/agentMessage/delta`, `turn/completed`, `turn/interrupt`를 `streamId`별로 상관시킨다.
+
+승인 요청은 세 종류를 구분한다. `item/commandExecution/requestApproval`과 `item/fileChange/requestApproval`은 이번만 허용을 `{ decision: 'accept' }`, 세션 허용을 `{ decision: 'acceptForSession' }`, 거절을 `{ decision: 'decline' }`로 응답한다. `item/permissions/requestApproval`은 요청보다 넓지 않은 권한 부분집합만 반환하며, 세션 허용일 때만 `scope: 'session'`을 포함하고 거절은 `{ permissions: {} }`로 응답한다. 알 수 없는 서버 요청은 자동 승인하지 않는다.
+
+현재 upstream에는 cold `thread/resume`에서 새 `developerInstructions`가 첫 turn에 늦게 반영될 수 있는 알려진 문제가 있다. 별도 우회나 자동 새 thread 생성은 추가하지 않고, 저장된 Neru 지시를 유지하며 resume 실패는 명시적인 `thread-resume-failed` 경로로 처리한다.
 
 `model === 'codex-configured'`이면 thread 요청의 `model` 필드를 생략해 사용자 Codex 설정을 사용한다. 저장된 thread resume이 not found 또는 invalid thread 오류로 실패하면 `thread-resume-failed` bridge event를 내보내고 실패한다. 렌더러는 해당 session의 stale thread ID를 지우며, 사용자가 재시도를 누른 다음 요청에서만 새 thread를 만든다.
 
