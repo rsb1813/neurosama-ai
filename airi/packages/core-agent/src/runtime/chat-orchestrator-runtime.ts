@@ -693,6 +693,8 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       })
 
       await deps.llm.stream(options.model, options.chatProvider, newMessages as Message[], {
+        providerId: activeProvider,
+        sessionId,
         abortSignal: activeAbortController.signal,
         headers,
         tools: options.tools,

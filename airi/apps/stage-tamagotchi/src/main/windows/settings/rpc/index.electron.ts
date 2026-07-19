@@ -5,6 +5,7 @@ import type { WindowAuthManager } from '../../../services/airi/auth'
 import type { ServerChannel } from '../../../services/airi/channel-server'
 import type { GodotStageManager } from '../../../services/airi/godot-stage'
 import type { McpStdioManager } from '../../../services/airi/mcp-servers'
+import type { CodexController } from '../../../services/codex/service'
 import type { AutoUpdater } from '../../../services/electron/auto-updater'
 import type { GlobalShortcutService } from '../../../services/electron/global-shortcut'
 import type { DevtoolsWindowManager } from '../../devtools'
@@ -25,6 +26,7 @@ import { createAuthService } from '../../../services/airi/auth'
 import { createGodotStageService } from '../../../services/airi/godot-stage'
 import { createMcpServersService } from '../../../services/airi/mcp-servers'
 import { createWidgetsService } from '../../../services/airi/widgets'
+import { createCodexService } from '../../../services/codex/service'
 import { createAutoUpdaterService } from '../../../services/electron'
 import { setupBaseWindowElectronInvokes } from '../../shared/window'
 
@@ -40,6 +42,7 @@ export async function setupSettingsWindowInvokes(params: {
   windowAuthManager: WindowAuthManager
   globalShortcut: GlobalShortcutService
   spotlightWindow: SpotlightWindowManager
+  codexController: CodexController
 }) {
   // TODO: once we refactored eventa to support window-namespaced contexts,
   // we can remove the setMaxListeners call below since eventa will be able to dispatch and
@@ -55,6 +58,7 @@ export async function setupSettingsWindowInvokes(params: {
   createMcpServersService({ context, manager: params.mcpStdioManager })
   createGodotStageService({ context, manager: params.godotStageManager, window: params.settingsWindow })
   createAuthService({ context, window: params.settingsWindow, windowAuthManager: params.windowAuthManager })
+  createCodexService({ context, controller: params.codexController, window: params.settingsWindow })
 
   // Register the global shortcut service for the settings window.
   params.globalShortcut.registerWindow({ context, window: params.settingsWindow })

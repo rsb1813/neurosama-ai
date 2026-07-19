@@ -124,3 +124,17 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [x] `WORKSPACE.md`, `ROADMAP.md`, `README.md` 상태 동기화
 - [x] 문서 링크·경로·명령·Git 근거 검증
 - [x] 문서 변경 커밋
+
+---
+
+## Neru Codex OAuth 제공자 (2026-07-19)
+
+- [x] 현재 `localhost:3456` LLM 프리시드와 AIRI 제공자 구조 조사
+- [x] Codex app-server Device OAuth·thread·도구·승인 프로토콜 확인
+- [x] 제공자 선택 방식과 권한 경계 사용자 승인
+- [x] 설계 문서 작성과 자체 검토
+- [ ] 사용자의 작성된 설계 문서 검토
+- [x] 구현 계획 작성
+- [x] Task 1~8 구현과 집중 자동 테스트 완료
+- [ ] 실제 Codex Device Login·도구·승인 흐름 수동 검증
+- [~] 타입 검사: 기존 VAD/모델 모듈 누락 오류가 남아 전체 통과하지 않음

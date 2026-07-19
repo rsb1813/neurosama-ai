@@ -11,6 +11,10 @@ export type StreamEvent
     | { type: 'error', error: any }
 
 export interface StreamOptions {
+  /** 현재 요청을 처리할 제공자 ID다. */
+  providerId?: string
+  /** 대화 연속성을 보존할 세션 ID다. */
+  sessionId?: string
   abortSignal?: AbortSignal
   headers?: Record<string, string>
   onStreamEvent?: (event: StreamEvent) => void | Promise<void>

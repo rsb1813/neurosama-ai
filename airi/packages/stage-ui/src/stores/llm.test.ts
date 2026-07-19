@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { isToolRelatedError, useLLM } from './llm'
+import { registerLlmTransport } from './llm-transports'
 import { useLlmToolsStore } from './llm-tools'
 
 const {
@@ -151,6 +152,30 @@ describe('isToolRelatedError', () => {
     await pending
 
     expect(onStreamEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('routes a registered provider through its custom transport', async () => {
+    const transport = vi.fn(async () => {})
+    const unregister = registerLlmTransport('codex-oauth', transport)
+    const messages = [{ role: 'user', content: 'hello' }] as Message[]
+
+    try {
+      await useLLM().stream('codex-configured', provider, messages, {
+        providerId: 'codex-oauth',
+        sessionId: 'session-1',
+      })
+    }
+    finally {
+      unregister()
+    }
+
+    expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+      providerId: 'codex-oauth',
+      sessionId: 'session-1',
+      model: 'codex-configured',
+      messages,
+    }))
+    expect(streamTextMock).not.toHaveBeenCalled()
   })
 
   it('ignores later error events after steps have resolved', async () => {

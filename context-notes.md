@@ -227,6 +227,27 @@
 - `ROADMAP.md`는 제품 비전과 단계 상태, `README.md`는 외부 소개와 실행법, `checklist.md`와 `context-notes.md`는 세부 이력 보존 역할을 유지한다.
 - 루트 `AGENTS.md`의 `Review guidelines`를 로컬·GitHub Codex 리뷰의 공통 기준으로 사용한다.
 
+---
+
+## Neru Codex OAuth 제공자 결정 (2026-07-19)
+
+- `localhost:3456` 로컬 프록시는 더 이상 LLM 기본값으로 프리시드하지 않는다. 로컬 프록시와 `Codex (OAuth)` 모두 설정 화면에서 사용자가 명시적으로 선택하는 옵션이다.
+- 첫 실행 제공자 선택 화면은 만들지 않는다. 새 설치는 LLM·STT·TTS 모두 미선택·미설정 상태로 두고 기존 사용자의 active 값과 자격 증명은 보존한다.
+- 로컬 LLM·STT·TTS와 Codex는 설정에서 고르는 선택지로만 등록한다. 범용성을 위해 `localhost:3456`, `localhost:3457`, API 키, 모델을 자동 생성하지 않는다.
+- Codex 바이너리를 앱에 포함하거나 OAuth를 직접 구현하지 않는다. PATH에서 발견한 외부 Codex CLI의 공식 `app-server`를 Electron 메인 프로세스가 실행한다.
+- Device OAuth 토큰의 저장과 갱신은 Codex가 전담하며 Neru는 `auth.json`을 읽거나 토큰을 로그에 남기지 않는다.
+- Codex를 단순 텍스트 백엔드로 제한하지 않는다. 기존 AIRI 펑션 도구는 app-server `dynamicTools`로 연결하고 Codex 기본 파일·명령 도구도 유지한다.
+- 기본 실행 범위는 Neru 저장소의 workspace-write다. 범위 밖 파일, 추가 네트워크, 위험 명령은 app-server 승인 요청을 Neru 화면에 표시해 이번만 허용·세션 허용·거절 중 사용자가 선택한다.
+- 다른 제공자 실패 시 자동 폴백하지 않는다. OAuth 실패나 app-server 종료도 현재 설정을 보존하고 사용자가 명시적으로 재시도하거나 전환하게 한다.
+- 승인된 설계는 `docs/superpowers/specs/2026-07-19-neru-codex-oauth-provider-design.md`에 기록했다.
+- 구현 계획은 `docs/superpowers/plans/2026-07-19-neru-codex-oauth-provider.md`에 기록했다. 기존 xsAI 스트림을 대체하지 않고 `codex-oauth` provider ID만 별도 transport로 분기하며, Electron 메인의 app-server 매니저와 렌더러 사이에는 Eventa 직렬화 계약만 두는 구조다.
+- 최신 공식 app-server 문서를 재확인해 연결마다 `initialize` 성공 뒤 ID 없는 `initialized` 알림을 보내야 하는 핸드셰이크를 계획에 추가했다. 현재 구현 셸의 PATH에는 `codex`가 없어 미설치 상태 UI와 실제 설치 안내를 수동 검증해야 한다.
+- Task 1은 새 설치의 LLM·STT·TTS를 모두 미설정으로 유지하고 네 제공자 선택지만 등록한다. 기존 사용자의 active 값과 자격 증명은 보존한다.
+- Task 2는 엄격한 `codex-cli X.Y.Z` 검사, JSONL 요청 상관, 동기 write 실패 정리, `initialize` 후 `initialized` 알림 계약을 구현했다.
+- Task 3은 app-server 단일 수명주기와 Device OAuth를 구현했다. 로그인 시작 시점부터 계정 알림을 버퍼링하고, 일치하는 성공 completion 뒤에만 인증 상태를 활성화한다. 중복 로그인, stop 경쟁, 외부 프로세스 종료를 회귀 테스트로 고정했으며 집중 테스트 15개가 통과했다.
+- Task 4부터는 공식 최상위 `developerInstructions`를 사용한다. 명령·파일 승인은 `accept`·`acceptForSession`·`decline`, 권한 승인은 요청된 부분집합과 선택적 `scope: 'session'`으로 구분하며 알 수 없는 서버 요청은 자동 승인하지 않는다.
+- Task 4는 thread·turn·동적 도구·승인 런타임을 구현했다. 도구와 승인은 RPC 세션 및 thread·turn 소유권으로 단일 stream에 격리하고, app-server 교체나 종료 시 오래된 listener·turn·대기 응답을 폐기한다. 조기 `turn/started`, 실패 terminal, 권한 prototype 키를 포함한 집중 테스트 44개가 통과했다.
+
 ### 완료 검증 기록
 
 - Task 1 문서 커밋은 `9d118fd` (`docs: add Codex project guide`)이고, Task 2 문서 동기화 커밋은 `2b0bb46` (`docs: sync neru project status`)이다.

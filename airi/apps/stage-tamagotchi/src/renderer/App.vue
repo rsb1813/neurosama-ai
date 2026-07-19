@@ -5,6 +5,7 @@ import { themeColorFromValue, useThemeColor } from '@proj-airi/stage-layouts/com
 import { artistrySyncConfig } from '@proj-airi/stage-shared'
 import { ToasterRoot } from '@proj-airi/stage-ui/components'
 import { useInferencePreload } from '@proj-airi/stage-ui/composables'
+import { NERU_SYSTEM_PROMPT } from '@proj-airi/stage-ui/constants/neru-persona'
 import { useSharedAnalyticsStore } from '@proj-airi/stage-ui/stores/analytics'
 import { useCharacterOrchestratorStore } from '@proj-airi/stage-ui/stores/character'
 import { useChatSessionStore } from '@proj-airi/stage-ui/stores/chat/session-store'
@@ -12,6 +13,7 @@ import { usePluginHostInspectorStore } from '@proj-airi/stage-ui/stores/devtools
 import { useDisplayModelsStore } from '@proj-airi/stage-ui/stores/display-models'
 import { useModsServerChannelStore } from '@proj-airi/stage-ui/stores/mods/api/channel-server'
 import { useContextBridgeStore } from '@proj-airi/stage-ui/stores/mods/api/context-bridge'
+import { useCodexAccountStore } from '@proj-airi/stage-ui/stores/codex-account'
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { useArtistryStore } from '@proj-airi/stage-ui/stores/modules/artistry'
 import { usePerfTracerBridgeStore } from '@proj-airi/stage-ui/stores/perf-tracer-bridge'
@@ -24,6 +26,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
 import ResizeHandler from './components/ResizeHandler.vue'
+import CodexApprovalDialog from './components/CodexApprovalDialog.vue'
 
 import {
   electronGetServerChannelConfig,
@@ -34,6 +37,18 @@ import {
   i18nGetLocale,
   i18nSetLocale,
 } from '../shared/eventa'
+import {
+  codexBridgeEvent,
+  codexCancelDeviceLogin,
+  codexGetStatus,
+  codexLogout,
+  codexInterruptTurn,
+  codexResolveToolCall,
+  codexResolveApproval,
+  codexStartTurn,
+  codexStartDeviceLogin,
+  codexStatusChanged,
+} from '../shared/eventa/codex'
 import {
   electronPluginUpdateCapability,
   pluginProtocolListProviders,
@@ -50,8 +65,10 @@ import {
 } from '../shared/eventa/plugin/host'
 import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
+import { initializeCodexBridge } from './bridges/codex'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
 import { useLanguage } from './composables/use-language'
+import { useCodexApprovalsStore } from './stores/codex-approvals'
 import { createChatSyncWindowLifecycle, resolveInitialChatSyncRoutePath } from './stores/chat-sync-lifecycle'
 import { useTamagotchiMcpToolsStore } from './stores/mcp-tools'
 import { useTamagotchiPluginToolsStore } from './stores/plugin-tools'
@@ -86,6 +103,8 @@ function createFullStageRuntime() {
   const pluginToolsStore = useTamagotchiPluginToolsStore()
   const stageWindowLifecycleStore = useStageWindowLifecycleStore()
   const settingsAudioDeviceStore = useSettingsAudioDevice()
+  const codexAccountStore = useCodexAccountStore()
+  const codexApprovalsStore = useCodexApprovalsStore()
   const artistryStore = useArtistryStore()
   const { activeProvider, artistryGlobals, activeModel, defaultPromptPrefix, providerOptions } = storeToRefs(artistryStore)
   const getServerChannelConfig = useElectronEventaInvoke(electronGetServerChannelConfig)
@@ -100,9 +119,49 @@ function createFullStageRuntime() {
   const reportPluginCapability = useElectronEventaInvoke(electronPluginUpdateCapability)
   const getGodotStageStatus = useElectronEventaInvoke(electronGodotStageGetStatus)
   const syncArtistryConfig = useElectronEventaInvoke(artistrySyncConfig)
+  const startCodexTurn = useElectronEventaInvoke(codexStartTurn)
+  const getCodexStatus = useElectronEventaInvoke(codexGetStatus)
+  const startCodexDeviceLogin = useElectronEventaInvoke(codexStartDeviceLogin)
+  const cancelCodexDeviceLogin = useElectronEventaInvoke(codexCancelDeviceLogin)
+  const logoutCodex = useElectronEventaInvoke(codexLogout)
+  const interruptCodexTurn = useElectronEventaInvoke(codexInterruptTurn)
+  const resolveCodexToolCall = useElectronEventaInvoke(codexResolveToolCall)
+  const resolveCodexApproval = useElectronEventaInvoke(codexResolveApproval)
   const isAuxiliaryChatRoute = initialWindowRoutePath === '/chat'
   const isGodotStageRoute = () => route.path === '/' || route.path.startsWith('/settings')
   const isWidgetsWindowRoute = () => route.path === '/widgets'
+  codexAccountStore.setBridge({
+    getStatus: () => getCodexStatus(),
+    startDeviceLogin: () => startCodexDeviceLogin(),
+    cancelDeviceLogin: payload => cancelCodexDeviceLogin({ loginId: payload }),
+    logout: () => logoutCodex(),
+    onStatus: (handler) => {
+      const dispose = context.value.on(codexStatusChanged, (event) => {
+        if (event.body)
+          handler(event.body)
+      })
+      return typeof dispose === 'function' ? dispose : () => {}
+    },
+  })
+  codexApprovalsStore.setBridge(payload => resolveCodexApproval(payload))
+  context.value.on(codexBridgeEvent, (event) => {
+    if (event.body?.type === 'approval-request')
+      codexApprovalsStore.enqueue(event.body)
+  })
+  const codexBridge = initializeCodexBridge({
+    startTurn: payload => startCodexTurn(payload),
+    interruptTurn: payload => interruptCodexTurn(payload),
+    resolveToolCall: payload => resolveCodexToolCall(payload),
+    onEvent: (handler) => {
+      const dispose = context.value.on(codexBridgeEvent, (event) => {
+        if (event.body)
+          return handler(event.body)
+      })
+      return typeof dispose === 'function' ? dispose : () => {}
+    },
+    cwd: '',
+    developerInstructions: NERU_SYSTEM_PROMPT,
+  })
 
   function syncGodotStageRenderer(state: { state: 'stopped' | 'starting' | 'running' | 'stopping' | 'error' }) {
     if (state.state === 'running') {
@@ -245,6 +304,9 @@ function createFullStageRuntime() {
         contextBridgeStore.dispose()
       mcpToolsStore.dispose()
       pluginToolsStore.dispose()
+      codexBridge.dispose()
+      codexAccountStore.setBridge(undefined)
+      codexApprovalsStore.setBridge(undefined)
     },
   }
 }
@@ -309,6 +371,7 @@ onUnmounted(() => {
     <Toaster />
   </ToasterRoot>
   <ResizeHandler v-if="!isSpotlightWindowRoute" />
+  <CodexApprovalDialog />
   <RouterView />
 </template>
 
