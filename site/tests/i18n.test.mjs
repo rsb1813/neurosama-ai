@@ -14,6 +14,22 @@ test("defines four complete locales with English as the default", () => {
   }
 });
 
+test("defines localized accessible labels for every locale", () => {
+  assert.deepEqual(COPY.en.a11y, {
+    homeLabel: "Neru home",
+    primaryNavigation: "Primary navigation",
+    characterImageAlt: "Neru's witch Live2D character model",
+  });
+
+  for (const locale of LOCALES) {
+    for (const label of Object.values(COPY[locale].a11y ?? {})) {
+      assert.equal(typeof label, "string");
+      assert.equal(label.trim().length > 0, true);
+    }
+    assert.equal(Object.keys(COPY[locale].a11y ?? {}).length, 3);
+  }
+});
+
 test("normalizes missing and invalid locale values to English", () => {
   assert.equal(normalizeLocale(null), "en");
   assert.equal(normalizeLocale("fr"), "en");

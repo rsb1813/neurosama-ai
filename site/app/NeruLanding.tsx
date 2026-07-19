@@ -31,8 +31,8 @@ export function NeruLanding() {
   return (
     <>
       <header className="masthead">
-        <a className="wordmark" href="#character" aria-label="Neru home">NERU / AI VTUBER</a>
-        <nav aria-label="Primary navigation">
+        <a className="wordmark" href="#character" aria-label={copy.a11y.homeLabel}>NERU / AI VTUBER</a>
+        <nav aria-label={copy.a11y.primaryNavigation}>
           <a href="#character">{copy.nav[0]}</a>
           <a href="#system">{copy.nav[1]}</a>
           <a href="#contribute">{copy.nav[2]}</a>
@@ -60,7 +60,7 @@ export function NeruLanding() {
           </div>
           <figure className="hero-figure">
             <div className="hero-crop">
-              <Image src="/neru-render-airi.png" width={2560} height={1440} priority unoptimized alt="Neru's witch Live2D character model" />
+              <Image src="/neru-render-airi.png" width={2560} height={1440} priority unoptimized alt={copy.a11y.characterImageAlt} />
             </div>
             <figcaption>CHARACTER STUDY / 001</figcaption>
           </figure>

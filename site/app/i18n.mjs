@@ -6,6 +6,7 @@ export const STORAGE_KEY = "neru-locale";
 export const COPY = {
   en: {
     language: "Language", nav: ["Character", "System", "Contribute"],
+    a11y: { homeLabel: "Neru home", primaryNavigation: "Primary navigation", characterImageAlt: "Neru's witch Live2D character model" },
     hero: { eyebrow: "An open character experiment", title: "Intelligence, with a stage presence.", body: "Meet Neru, a playful AI witch learning to listen, speak, remember, and grow.", primary: "View on GitHub", secondary: "See how she works" },
     sections: [
       { label: "01 — Meet Neru", title: "A personality, not a prompt.", body: "Warm, witty, and a little cheeky, Neru understands Korean and performs in an English voice with Korean subtitles." },
@@ -25,6 +26,7 @@ export const COPY = {
   },
   "zh-CN": {
     language: "语言", nav: ["角色", "系统", "参与贡献"],
+    a11y: { homeLabel: "Neru 主页", primaryNavigation: "主导航", characterImageAlt: "Neru 的魔女 Live2D 角色模型" },
     hero: { eyebrow: "一场开放的角色实验", title: "拥有舞台感的智能。", body: "认识 Neru——一位正在学习倾听、说话、记忆与成长的俏皮 AI 魔女。", primary: "在 GitHub 查看", secondary: "了解她如何运作" },
     sections: [
       { label: "01 — 认识 Neru", title: "不是提示词，而是个性。", body: "温暖、机敏又有一点调皮。Neru 能理解韩语，以英语声音表演，并显示韩语字幕。" },
@@ -44,6 +46,7 @@ export const COPY = {
   },
   ja: {
     language: "言語", nav: ["キャラクター", "システム", "コントリビュート"],
+    a11y: { homeLabel: "Neru ホーム", primaryNavigation: "メインナビゲーション", characterImageAlt: "Neruの魔女Live2Dキャラクターモデル" },
     hero: { eyebrow: "オープンなキャラクター実験", title: "舞台に立つ、知性。", body: "聞き、話し、記憶し、成長することを学ぶ、遊び心のあるAI魔女Neru。", primary: "GitHubで見る", secondary: "仕組みを見る" },
     sections: [
       { label: "01 — Neruとは", title: "プロンプトではなく、人格。", body: "温かく、機知に富み、少し生意気。Neruは韓国語を理解し、英語の声と韓国語字幕で演じます。" },
@@ -63,6 +66,7 @@ export const COPY = {
   },
   ko: {
     language: "언어", nav: ["캐릭터", "시스템", "기여하기"],
+    a11y: { homeLabel: "Neru 홈", primaryNavigation: "주요 탐색", characterImageAlt: "Neru의 마녀 Live2D 캐릭터 모델" },
     hero: { eyebrow: "열린 캐릭터 실험", title: "무대 위에 선 지능.", body: "듣고, 말하고, 기억하고, 성장하는 법을 배우는 장난기 많은 AI 마녀 Neru를 만나보세요.", primary: "GitHub에서 보기", secondary: "작동 방식 보기" },
     sections: [
       { label: "01 — Neru를 만나다", title: "프롬프트가 아닌, 하나의 성격.", body: "따뜻하고 재치 있으며 조금은 짓궂습니다. Neru는 한국어를 이해하고 영어 음성과 한국어 자막으로 연기합니다." },

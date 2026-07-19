@@ -4,6 +4,7 @@ export type SectionCopy = { label: string; title: string; body: string };
 export type CapabilityCopy = { state: string; title: string; body: string };
 export type SiteCopy = {
   language: string;
+  a11y: { homeLabel: string; primaryNavigation: string; characterImageAlt: string };
   nav: [string, string, string];
   hero: { eyebrow: string; title: string; body: string; primary: string; secondary: string };
   sections: [SectionCopy, SectionCopy, SectionCopy, SectionCopy, SectionCopy];
