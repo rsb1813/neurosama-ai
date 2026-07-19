@@ -82,6 +82,7 @@ function createManagerHarness(options: HarnessOptions = {}): ManagerHarness {
       return {} as T
     },
     respond() {},
+    respondError() {},
     notify(method: string, params: unknown) {
       calls.push({ method, params })
     },

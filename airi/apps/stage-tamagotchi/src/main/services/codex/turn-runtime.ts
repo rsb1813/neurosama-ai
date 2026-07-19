@@ -35,17 +35,20 @@ export interface CodexApprovalDecision {
 
 /** turn 런타임이 렌더러 bridge로 보내는 이벤트다. */
 export type CodexBridgeEvent
-  = | { type: 'text-delta', streamId: string, text: string }
-    | { type: 'finish', streamId: string, threadId: string }
-    | { type: 'interrupted', streamId: string, threadId: string }
+  = | { type: 'text-delta', streamId: string, threadId: string, turnId: string, text: string }
+    | { type: 'finish', streamId: string, threadId: string, turnId: string }
+    | { type: 'interrupted', streamId: string, threadId: string, turnId: string }
+    | { type: 'error', streamId: string, threadId: string, turnId: string, message: string }
     | { type: 'thread-resume-failed', streamId: string, threadId: string }
-    | { type: 'tool-call-request', callId: string, tool: string, arguments: unknown }
-    | { type: 'approval-request', requestId: string, approvalType: 'command' | 'file' | 'permissions', request: unknown }
+    | { type: 'tool-call-request', streamId: string, threadId: string, turnId: string, callId: string, tool: string, arguments: unknown }
+    | { type: 'approval-request', streamId: string, threadId: string, turnId: string, requestId: string, approvalType: 'command' | 'file' | 'permissions', request: unknown }
 
-/** turn 런타임이 살아 있는 RPC만 읽는 매니저 경계다. */
+/** turn 런타임이 살아 있는 RPC와 process 상태를 읽는 매니저 경계다. */
 export interface CodexTurnRuntimeManager {
   ensureStarted: () => Promise<unknown>
   getRpc: () => CodexJsonRpcClient | undefined
+  /** process가 중지되면 이전 RPC 세션의 stream과 보류 요청을 폐기한다. */
+  onStatusChange?: (handler: (status: { process: 'stopped' | 'running' }) => void) => () => void
 }
 
 /** turn 런타임을 생성하는 의존성이다. */
@@ -61,51 +64,71 @@ export interface CodexTurnRuntime {
   resolveApproval: (requestId: string, decision: CodexApprovalDecision) => void
 }
 
-interface ActiveStream {
+interface TurnStream {
+  streamId: string
+  threadId: string
+  rpc: CodexJsonRpcClient
+  sink: (event: CodexBridgeEvent) => void
+  completion: Promise<{ threadId: string }>
+  resolve: (result: { threadId: string }) => void
+  reject: (error: Error) => void
+  turnId?: string
+}
+
+interface PendingToolCall {
+  rpc: CodexJsonRpcClient
+  id: number
   streamId: string
   threadId: string
   turnId: string
-  sink: (event: CodexBridgeEvent) => void
-  resolve: (result: { threadId: string }) => void
 }
 
-interface StartingStream {
-  streamId: string
-  threadId: string
-  sink: (event: CodexBridgeEvent) => void
-}
-
-interface PendingApproval {
-  id: number
+interface PendingApproval extends PendingToolCall {
   type: 'command' | 'file' | 'permissions'
   permissions?: unknown
 }
 
+interface RpcSession {
+  rpc: CodexJsonRpcClient
+  removeNotificationHandler: () => void
+  removeServerRequestHandler: () => void
+}
+
+const invalidServerRequest = { code: -32600, message: 'Invalid Codex server request.' }
+const unsupportedServerRequest = { code: -32601, message: 'Unsupported Codex server request.' }
+const dangerousPermissionKeys = new Set(['__proto__', 'constructor', 'prototype'])
+
 /**
  * Codex의 thread·turn 프로토콜을 Neru의 스트림 경계로 연결한다.
  *
- * 단일 runtime 인스턴스가 RPC 구독과 보류 중인 도구·승인 응답을 소유합니다. 저장된
- * thread의 resume은 절대로 새 thread 생성으로 대체하지 않습니다.
+ * RPC 세션마다 구독·보류 요청·stream 소유권을 함께 유지합니다. 같은 thread에서 두 turn을
+ * 동시에 시작하지 않아, app-server의 `threadId`·`turnId` 상관관계가 한 stream만 가리킵니다.
  */
 export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRuntime {
-  const activeStreams = new Map<string, ActiveStream>()
-  const startingStreams = new Map<string, StartingStream>()
-  const pendingToolCalls = new Map<string, number>()
+  const streamsByThread = new Map<string, TurnStream>()
+  const streamsByTurn = new Map<string, TurnStream>()
+  const streamsById = new Map<string, TurnStream>()
+  const pendingToolCalls = new Map<string, PendingToolCall>()
   const pendingApprovals = new Map<string, PendingApproval>()
-  let subscribedClient: CodexJsonRpcClient | undefined
+  let session: RpcSession | undefined
+
+  deps.manager.onStatusChange?.((status) => {
+    if (status.process === 'stopped')
+      endSession(new Error('Codex app-server stopped.'))
+  })
 
   async function startTurn(request: CodexTurnRequest, sink: (event: CodexBridgeEvent) => void): Promise<{ threadId: string }> {
     await deps.manager.ensureStarted()
-    const client = deps.manager.getRpc()
-    if (client === undefined)
+    const rpc = deps.manager.getRpc()
+    if (rpc === undefined)
       throw new Error('Codex app-server is unavailable.')
 
-    subscribe(client)
+    attachSession(rpc)
+
     const resumeThreadId = request.threadId
-    const isResume = resumeThreadId !== undefined
     let threadId: string
     try {
-      const response = await client.request<unknown>(isResume ? 'thread/resume' : 'thread/start', createThreadParams(request))
+      const response = await rpc.request<unknown>(resumeThreadId === undefined ? 'thread/start' : 'thread/resume', createThreadParams(request))
       const receivedThreadId = readThreadId(response)
       if (receivedThreadId === undefined)
         throw new Error('Codex returned an invalid thread response.')
@@ -117,159 +140,286 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
       throw error
     }
 
-    const starting = { streamId: request.streamId, threadId, sink }
-    startingStreams.set(threadId, starting)
-    let turnId: string
+    if (streamsByThread.has(threadId))
+      throw new Error('Codex turn is already active for this thread.')
+
+    const stream = createStream(request, threadId, rpc, sink)
+    streamsByThread.set(threadId, stream)
+    streamsById.set(request.streamId, stream)
+
     try {
-      const response = await client.request<unknown>('turn/start', {
+      const response = await rpc.request<unknown>('turn/start', {
         threadId,
         input: [{ type: 'text', text: request.userInput }],
       })
-      const receivedTurnId = readTurnId(response)
-      if (receivedTurnId === undefined)
-        throw new Error('Codex returned an invalid turn response.')
-      turnId = receivedTurnId
+      const responseTurnId = readTurnId(response)
+      if (responseTurnId === undefined) {
+        failStream(stream)
+        return stream.completion
+      }
+
+      if (stream.turnId !== undefined && stream.turnId !== responseTurnId) {
+        failStream(stream)
+        return stream.completion
+      }
+
+      bindTurn(stream, responseTurnId)
     }
-    finally {
-      if (startingStreams.get(threadId) === starting)
-        startingStreams.delete(threadId)
+    catch {
+      failStream(stream)
+      return stream.completion
     }
 
-    return new Promise((resolve) => {
-      activeStreams.set(turnId, { ...starting, turnId, resolve })
-    })
+    return stream.completion
   }
 
   async function interrupt(streamId: string): Promise<void> {
-    const activeStream = [...activeStreams.values()].find(stream => stream.streamId === streamId)
-    if (activeStream === undefined)
+    const stream = streamsById.get(streamId)
+    if (stream === undefined || stream.turnId === undefined || stream.rpc !== session?.rpc)
       return
 
-    const client = deps.manager.getRpc()
-    if (client === undefined)
-      return
-
-    await client.request('turn/interrupt', { threadId: activeStream.threadId, turnId: activeStream.turnId })
+    await stream.rpc.request('turn/interrupt', { threadId: stream.threadId, turnId: stream.turnId })
   }
 
   function resolveToolCall(callId: string, result: CodexToolResult): void {
-    const requestId = pendingToolCalls.get(callId)
-    if (requestId === undefined)
+    const pending = pendingToolCalls.get(callId)
+    if (pending === undefined)
       return
 
+    // UI 응답은 한 번만 소비하고, 교체된 RPC에는 절대로 응답하지 않습니다.
     pendingToolCalls.delete(callId)
-    const client = deps.manager.getRpc()
-    if (client === undefined)
+    if (pending.rpc !== session?.rpc)
       return
 
-    client.respond(requestId, {
+    pending.rpc.respond(pending.id, {
       contentItems: [{ type: 'inputText', text: result.text }],
       success: result.success,
     })
   }
 
   function resolveApproval(requestId: string, decision: CodexApprovalDecision): void {
-    const pendingApproval = pendingApprovals.get(requestId)
-    if (pendingApproval === undefined)
+    const pending = pendingApprovals.get(requestId)
+    if (pending === undefined)
       return
 
+    // UI 응답은 한 번만 소비하고, 교체된 RPC에는 절대로 응답하지 않습니다.
     pendingApprovals.delete(requestId)
-    const client = deps.manager.getRpc()
-    if (client === undefined)
+    if (pending.rpc !== session?.rpc)
       return
 
-    if (pendingApproval.type === 'permissions') {
+    if (pending.type === 'permissions') {
       const permissions = decision.type === 'decline'
         ? {}
-        : restrictPermissions(pendingApproval.permissions, decision.permissions)
-      client.respond(pendingApproval.id, decision.type === 'acceptForSession'
+        : restrictPermissions(pending.permissions, decision.permissions)
+      pending.rpc.respond(pending.id, decision.type === 'acceptForSession'
         ? { permissions, scope: 'session' }
         : { permissions })
       return
     }
 
-    client.respond(pendingApproval.id, { decision: decision.type })
+    pending.rpc.respond(pending.id, { decision: decision.type })
   }
 
-  function subscribe(client: CodexJsonRpcClient): void {
-    if (subscribedClient === client)
+  function attachSession(rpc: CodexJsonRpcClient): void {
+    if (session?.rpc === rpc)
       return
 
-    subscribedClient = client
-    client.onNotification(handleNotification)
-    client.onServerRequest(handleServerRequest)
+    endSession(new Error('Codex app-server connection changed.'))
+    session = {
+      rpc,
+      removeNotificationHandler: rpc.onNotification(message => handleNotification(rpc, message)),
+      removeServerRequestHandler: rpc.onServerRequest(message => handleServerRequest(rpc, message)),
+    }
   }
 
-  function handleNotification(message: JsonRpcNotification): void {
+  function endSession(error: Error): void {
+    session?.removeNotificationHandler()
+    session?.removeServerRequestHandler()
+    session = undefined
+
+    for (const stream of streamsById.values())
+      stream.reject(error)
+    streamsByThread.clear()
+    streamsByTurn.clear()
+    streamsById.clear()
+    pendingToolCalls.clear()
+    pendingApprovals.clear()
+  }
+
+  function handleNotification(rpc: CodexJsonRpcClient, message: JsonRpcNotification): void {
+    if (rpc !== session?.rpc)
+      return
+
+    if (message.method === 'turn/started') {
+      const owner = readTurnOwner(message.params)
+      if (owner === undefined)
+        return
+
+      const stream = streamsByThread.get(owner.threadId)
+      if (stream === undefined || stream.rpc !== rpc)
+        return
+
+      if (stream.turnId !== undefined && stream.turnId !== owner.turnId) {
+        failStream(stream)
+        return
+      }
+
+      bindTurn(stream, owner.turnId)
+      return
+    }
+
     if (message.method === 'item/agentMessage/delta') {
       const delta = readTextDelta(message.params)
       if (delta === undefined)
         return
 
-      const activeStream = activeStreams.get(delta.turnId)
-      if (activeStream === undefined || activeStream.threadId !== delta.threadId)
+      const stream = streamsByTurn.get(delta.turnId)
+      if (stream === undefined || stream.rpc !== rpc || stream.threadId !== delta.threadId)
         return
 
-      activeStream.sink({ type: 'text-delta', streamId: activeStream.streamId, text: delta.text })
+      stream.sink({ type: 'text-delta', streamId: stream.streamId, threadId: stream.threadId, turnId: delta.turnId, text: delta.text })
       return
     }
 
-    if (message.method !== 'turn/completed')
-      return
+    if (message.method === 'turn/completed')
+      handleCompletion(rpc, message.params)
+  }
 
-    const completion = readTurnCompletion(message.params)
+  function handleCompletion(rpc: CodexJsonRpcClient, value: unknown): void {
+    const completion = readTurnCompletion(value)
     if (completion === undefined)
       return
 
-    const activeStream = activeStreams.get(completion.turnId)
-    if (activeStream === undefined || activeStream.threadId !== completion.threadId)
+    const stream = streamsByTurn.get(completion.turnId)
+    if (stream === undefined || stream.rpc !== rpc || stream.threadId !== completion.threadId)
       return
 
-    activeStreams.delete(completion.turnId)
-    activeStream.sink(completion.status === 'interrupted'
-      ? { type: 'interrupted', streamId: activeStream.streamId, threadId: activeStream.threadId }
-      : { type: 'finish', streamId: activeStream.streamId, threadId: activeStream.threadId })
-    activeStream.resolve({ threadId: activeStream.threadId })
+    if (completion.status === 'completed') {
+      completeStream(stream, 'finish')
+      return
+    }
+    if (completion.status === 'interrupted') {
+      completeStream(stream, 'interrupted')
+      return
+    }
+
+    // failed, 누락된 status, 알려지지 않은 status 모두 서버 세부 정보를 노출하지 않고 실패합니다.
+    failStream(stream)
   }
 
-  function handleServerRequest(message: JsonRpcServerRequest): void {
-    if (message.method === 'item/tool/call') {
-      const toolCall = readToolCall(message.params)
-      if (toolCall === undefined) {
-        subscribedClient?.respond(message.id, { contentItems: [], success: false })
-        return
-      }
-
-      pendingToolCalls.set(toolCall.callId, message.id)
-      emitToActiveStreams({
-        type: 'tool-call-request',
-        callId: toolCall.callId,
-        tool: toolCall.tool,
-        arguments: toolCall.arguments,
-      })
+  function handleServerRequest(rpc: CodexJsonRpcClient, message: JsonRpcServerRequest): void {
+    if (rpc !== session?.rpc) {
+      rpc.respondError(message.id, invalidServerRequest)
       return
     }
 
     const approvalType = getApprovalType(message.method)
+    if (message.method !== 'item/tool/call' && approvalType === undefined) {
+      rpc.respondError(message.id, unsupportedServerRequest)
+      return
+    }
+
+    const owner = readTurnOwner(message.params)
+    if (owner === undefined) {
+      rpc.respondError(message.id, invalidServerRequest)
+      return
+    }
+
+    const stream = streamsByTurn.get(owner.turnId)
+    if (stream === undefined || stream.rpc !== rpc || stream.threadId !== owner.threadId) {
+      rpc.respondError(message.id, invalidServerRequest)
+      return
+    }
+
+    if (message.method === 'item/tool/call') {
+      const toolCall = readToolCall(message.params)
+      if (toolCall === undefined || pendingToolCalls.has(toolCall.callId)) {
+        rpc.respondError(message.id, invalidServerRequest)
+        return
+      }
+
+      pendingToolCalls.set(toolCall.callId, { rpc, id: message.id, streamId: stream.streamId, threadId: stream.threadId, turnId: stream.turnId ?? owner.turnId })
+      stream.sink({ type: 'tool-call-request', streamId: stream.streamId, threadId: stream.threadId, turnId: owner.turnId, callId: toolCall.callId, tool: toolCall.tool, arguments: toolCall.arguments })
+      return
+    }
+
     if (approvalType === undefined) {
-      subscribedClient?.respond(message.id, { decision: 'decline' })
+      rpc.respondError(message.id, unsupportedServerRequest)
       return
     }
 
     const requestId = String(message.id)
-    const permissions = approvalType === 'permissions' ? readPermissions(message.params) : undefined
-    pendingApprovals.set(requestId, { id: message.id, type: approvalType, permissions })
-    emitToActiveStreams({ type: 'approval-request', requestId, approvalType, request: message.params })
+    if (pendingApprovals.has(requestId)) {
+      rpc.respondError(message.id, invalidServerRequest)
+      return
+    }
+
+    pendingApprovals.set(requestId, {
+      rpc,
+      id: message.id,
+      streamId: stream.streamId,
+      threadId: stream.threadId,
+      turnId: stream.turnId ?? owner.turnId,
+      type: approvalType,
+      permissions: approvalType === 'permissions' && isRecord(message.params) ? message.params.permissions : undefined,
+    })
+    stream.sink({ type: 'approval-request', streamId: stream.streamId, threadId: stream.threadId, turnId: owner.turnId, requestId, approvalType, request: message.params })
   }
 
-  function emitToActiveStreams(event: CodexBridgeEvent): void {
-    for (const activeStream of activeStreams.values())
-      activeStream.sink(event)
-    for (const startingStream of startingStreams.values())
-      startingStream.sink(event)
+  function bindTurn(stream: TurnStream, turnId: string): void {
+    if (stream.turnId === turnId)
+      return
+
+    stream.turnId = turnId
+    streamsByTurn.set(turnId, stream)
+  }
+
+  function completeStream(stream: TurnStream, type: 'finish' | 'interrupted'): void {
+    const turnId = stream.turnId
+    if (turnId === undefined) {
+      failStream(stream)
+      return
+    }
+
+    removeStream(stream)
+    stream.sink({ type, streamId: stream.streamId, threadId: stream.threadId, turnId })
+    stream.resolve({ threadId: stream.threadId })
+  }
+
+  function failStream(stream: TurnStream): void {
+    const turnId = stream.turnId
+    removeStream(stream)
+    if (turnId !== undefined)
+      stream.sink({ type: 'error', streamId: stream.streamId, threadId: stream.threadId, turnId, message: 'Codex turn failed.' })
+    stream.reject(new Error('Codex turn failed.'))
+  }
+
+  function removeStream(stream: TurnStream): void {
+    streamsByThread.delete(stream.threadId)
+    streamsById.delete(stream.streamId)
+    if (stream.turnId !== undefined)
+      streamsByTurn.delete(stream.turnId)
   }
 
   return { startTurn, interrupt, resolveToolCall, resolveApproval }
+}
+
+function createStream(
+  request: CodexTurnRequest,
+  threadId: string,
+  rpc: CodexJsonRpcClient,
+  sink: (event: CodexBridgeEvent) => void,
+): TurnStream {
+  let resolve: (result: { threadId: string }) => void = () => {}
+  let reject: (error: Error) => void = () => {}
+  const completion = new Promise<{ threadId: string }>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  // `turn/started`가 `turn/start` 응답보다 먼저 실패해도, 호출자가 응답을 기다리는 동안
+  // Node가 미처리 rejection으로 취급하지 않도록 관찰자를 즉시 연결합니다.
+  void completion.catch(() => {})
+  return { streamId: request.streamId, threadId, rpc, sink, completion, resolve, reject }
 }
 
 function createThreadParams(request: CodexTurnRequest): Record<string, unknown> {
@@ -288,42 +438,51 @@ function createThreadParams(request: CodexTurnRequest): Record<string, unknown> 
 }
 
 function readThreadId(value: unknown): string | undefined {
-  if (!isRecord(value) || !isRecord(value.thread) || typeof value.thread.id !== 'string')
+  if (!isRecord(value) || !isRecord(value.thread))
     return undefined
-  return value.thread.id
+  return readNonEmptyText(value.thread.id)
 }
 
 function readTurnId(value: unknown): string | undefined {
-  if (!isRecord(value) || !isRecord(value.turn) || typeof value.turn.id !== 'string')
+  if (!isRecord(value) || !isRecord(value.turn))
     return undefined
-  return value.turn.id
+  return readNonEmptyText(value.turn.id)
+}
+
+function readTurnOwner(value: unknown): { threadId: string, turnId: string } | undefined {
+  if (!isRecord(value))
+    return undefined
+
+  const threadId = readNonEmptyText(value.threadId)
+  const turnId = readNonEmptyText(value.turnId) ?? (isRecord(value.turn) ? readNonEmptyText(value.turn.id) : undefined)
+  return threadId !== undefined && turnId !== undefined ? { threadId, turnId } : undefined
 }
 
 function readTextDelta(value: unknown): { threadId: string, turnId: string, text: string } | undefined {
-  if (!isRecord(value)
-    || typeof value.threadId !== 'string'
-    || typeof value.turnId !== 'string'
-    || typeof value.delta !== 'string') {
+  const owner = readTurnOwner(value)
+  if (owner === undefined || !isRecord(value) || typeof value.delta !== 'string')
     return undefined
-  }
-  return { threadId: value.threadId, turnId: value.turnId, text: value.delta }
+  return { ...owner, text: value.delta }
 }
 
-function readTurnCompletion(value: unknown): { threadId: string, turnId: string, status: string } | undefined {
-  if (!isRecord(value)
-    || typeof value.threadId !== 'string'
-    || !isRecord(value.turn)
-    || typeof value.turn.id !== 'string'
-    || typeof value.turn.status !== 'string') {
+function readTurnCompletion(value: unknown): { threadId: string, turnId: string, status: string | undefined } | undefined {
+  const owner = readTurnOwner(value)
+  if (owner === undefined || !isRecord(value))
     return undefined
-  }
-  return { threadId: value.threadId, turnId: value.turn.id, status: value.turn.status }
+
+  const status = isRecord(value.turn) && typeof value.turn.status === 'string'
+    ? value.turn.status
+    : undefined
+  return { ...owner, status }
 }
 
 function readToolCall(value: unknown): { callId: string, tool: string, arguments: unknown } | undefined {
-  if (!isRecord(value) || typeof value.callId !== 'string' || typeof value.tool !== 'string')
+  if (!isRecord(value) || typeof value.tool !== 'string')
     return undefined
-  return { callId: value.callId, tool: value.tool, arguments: value.arguments }
+  const callId = readNonEmptyText(value.callId)
+  if (callId === undefined)
+    return undefined
+  return { callId, tool: value.tool, arguments: value.arguments }
 }
 
 function getApprovalType(method: string): PendingApproval['type'] | undefined {
@@ -336,10 +495,6 @@ function getApprovalType(method: string): PendingApproval['type'] | undefined {
   return undefined
 }
 
-function readPermissions(value: unknown): unknown {
-  return isRecord(value) ? value.permissions : undefined
-}
-
 function restrictPermissions(requested: unknown, selected: unknown): Record<string, unknown> {
   const permitted = restrictPermissionValue(requested, selected)
   return isRecord(permitted) ? permitted : {}
@@ -349,16 +504,20 @@ function restrictPermissionValue(requested: unknown, selected: unknown): unknown
   if (Array.isArray(requested) && Array.isArray(selected)) {
     return selected.filter(selection => requested.some(request => equalJsonValue(request, selection)))
   }
-  if (isRecord(requested) && isRecord(selected)) {
-    const permitted: Record<string, unknown> = {}
-    for (const [key, selection] of Object.entries(selected)) {
-      const value = restrictPermissionValue(requested[key], selection)
-      if (hasPermissionValue(value))
-        permitted[key] = value
-    }
-    return permitted
+  if (!isRecord(requested) || !isRecord(selected))
+    return equalJsonValue(requested, selected) ? selected : undefined
+
+  const permitted: Record<string, unknown> = {}
+  for (const key of Object.keys(selected)) {
+    // JSON 객체여도 __proto__ 대입은 일반 객체의 prototype을 바꿀 수 있으므로 항상 제외합니다.
+    if (dangerousPermissionKeys.has(key) || !Object.hasOwn(requested, key))
+      continue
+
+    const value = restrictPermissionValue(requested[key], selected[key])
+    if (hasPermissionValue(value))
+      permitted[key] = value
   }
-  return equalJsonValue(requested, selected) ? selected : undefined
+  return permitted
 }
 
 function hasPermissionValue(value: unknown): boolean {
@@ -376,14 +535,19 @@ function equalJsonValue(left: unknown, right: unknown): boolean {
     return left.length === right.length && left.every((value, index) => equalJsonValue(value, right[index]))
   if (isRecord(left) && isRecord(right)) {
     const leftKeys = Object.keys(left)
-    return leftKeys.length === Object.keys(right).length
-      && leftKeys.every(key => equalJsonValue(left[key], right[key]))
+    const rightKeys = Object.keys(right)
+    return leftKeys.length === rightKeys.length
+      && leftKeys.every(key => Object.hasOwn(right, key) && equalJsonValue(left[key], right[key]))
   }
   return false
 }
 
 function isResumeFailure(error: unknown): boolean {
   return error instanceof Error && /not found|invalid thread/i.test(error.message)
+}
+
+function readNonEmptyText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

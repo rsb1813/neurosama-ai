@@ -93,6 +93,9 @@ export function createCodexJsonRpcClient(io: CodexLineIo): CodexJsonRpcClient {
     respond(id, result) {
       io.write({ id, result })
     },
+    respondError(id, error) {
+      io.write({ id, error })
+    },
     notify(method, params) {
       io.write({ method, params })
     },

@@ -51,6 +51,15 @@ function createFakeLineIo(): FakeLineIo {
 }
 
 describe('createCodexJsonRpcClient', () => {
+  it('returns fixed JSON-RPC errors for unsupported server requests', () => {
+    const io = createFakeLineIo()
+    const client = createCodexJsonRpcClient(io)
+
+    client.respondError(61, { code: -32601, message: 'Unsupported Codex server request.' })
+
+    expect(io.writes).toContainEqual({ id: 61, error: { code: -32601, message: 'Unsupported Codex server request.' } })
+  })
+
   it('matches responses and exposes notifications and server requests', async () => {
     const io = createFakeLineIo()
     const client = createCodexJsonRpcClient(io)

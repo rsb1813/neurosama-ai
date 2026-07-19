@@ -43,6 +43,8 @@ export interface CodexJsonRpcClient {
   request: <T>(method: string, params: unknown) => Promise<T>
   /** 서버 요청에 같은 ID로 결과를 반환한다. */
   respond: (id: number, result: unknown) => void
+  /** 지원하지 않거나 검증에 실패한 서버 요청을 고정 JSON-RPC 오류로 종료한다. */
+  respondError: (id: number, error: JsonRpcError) => void
   /** ID 없는 JSON-RPC 알림을 전송한다. */
   notify: (method: string, params: unknown) => void
   /** 서버가 보낸 ID 없는 알림을 구독하고 구독 해제 함수를 반환한다. */
