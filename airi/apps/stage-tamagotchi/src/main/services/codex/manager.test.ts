@@ -164,6 +164,16 @@ function createFakeProcess(): FakeProcess {
 }
 
 describe('createCodexManager', () => {
+  it('exposes the live RPC only while the app-server is running', async () => {
+    const harness = createManagerHarness()
+
+    expect(harness.manager.getRpc()).toBeUndefined()
+    await harness.manager.ensureStarted()
+    expect(harness.manager.getRpc()).toBeDefined()
+    await harness.manager.stop()
+    expect(harness.manager.getRpc()).toBeUndefined()
+  })
+
   it('shares one in-flight start across concurrent ensureStarted calls', async () => {
     const harness = createManagerHarness()
 

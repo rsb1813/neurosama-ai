@@ -77,6 +77,8 @@ export interface CodexManager {
   ensureStarted: () => Promise<CodexRuntimeStatus>
   /** 외부에서 변경할 수 없는 현재 런타임 스냅샷을 반환한다. */
   getStatus: () => CodexRuntimeStatus
+  /** 실행 중인 app-server의 RPC만 반환하며, 중지 상태에서는 `undefined`를 반환한다. */
+  getRpc: () => CodexJsonRpcClient | undefined
   /** 상태 변경을 구독하며, 반환 함수로 구독을 해제한다. */
   onStatusChange: (handler: (status: CodexRuntimeStatus) => void) => () => void
   /** app-server가 관리하는 ChatGPT Device OAuth를 시작한다. */
@@ -120,6 +122,10 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
   function getStatus(): CodexRuntimeStatus {
     // 외부 호출자가 내부 runtime snapshot을 바꾸지 못하도록 매번 복사본을 준다.
     return { ...status }
+  }
+
+  function getRpc(): CodexJsonRpcClient | undefined {
+    return rpc
   }
 
   function updateStatus(next: CodexRuntimeStatus): void {
@@ -394,6 +400,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
   return {
     ensureStarted,
     getStatus,
+    getRpc,
     onStatusChange,
     startDeviceLogin,
     cancelLogin,
