@@ -346,6 +346,54 @@ describe('createCodexManager', () => {
     expect(harness.manager.getStatus()).toMatchObject({ process: 'stopped', login: 'idle' })
   })
 
+  it('rejects a duplicate Device OAuth start before it reaches the app-server', async () => {
+    const harness = createManagerHarness({ deferredMethods: ['account/login/start'] })
+
+    await harness.manager.ensureStarted()
+    const firstLogin = harness.manager.startDeviceLogin()
+    await Promise.resolve()
+
+    const secondLogin = harness.manager.startDeviceLogin().then(
+      () => 'resolved',
+      error => String(error),
+    )
+    const timeout = new Promise<'timed out'>(resolve => setTimeout(resolve, 0, 'timed out'))
+
+    await expect(Promise.race([secondLogin, timeout])).resolves.toBe('Error: Device sign-in is already in progress.')
+    expect(harness.calls.filter(call => call.method === 'account/login/start')).toHaveLength(1)
+
+    harness.resolveRequest('account/login/start', {
+      type: 'chatgptDeviceCode',
+      loginId: 'login-1',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD-1234',
+    })
+    await firstLogin
+  })
+
+  it('buffers account updates that arrive before a Device OAuth start response', async () => {
+    const harness = createManagerHarness({ deferredMethods: ['account/login/start'] })
+
+    await harness.manager.ensureStarted()
+    const login = harness.manager.startDeviceLogin()
+    await Promise.resolve()
+    harness.notify('account/updated', { authMode: 'chatgpt', planType: 'plus' })
+
+    expect(harness.manager.getStatus()).toMatchObject({ authMode: null, planType: null, login: 'pending' })
+
+    harness.resolveRequest('account/login/start', {
+      type: 'chatgptDeviceCode',
+      loginId: 'login-1',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD-1234',
+    })
+    await login
+    expect(harness.manager.getStatus()).toMatchObject({ authMode: null, planType: null, login: 'pending' })
+
+    harness.notify('account/login/completed', { loginId: 'login-1', success: true, error: null })
+    expect(harness.manager.getStatus()).toMatchObject({ authMode: 'chatgpt', planType: 'plus', login: 'completed' })
+  })
+
   it('gives a pending cancel request a bounded grace period before killing the process', async () => {
     const harness = createManagerHarness({ deferredMethods: ['account/login/cancel'] })
 

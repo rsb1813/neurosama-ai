@@ -113,6 +113,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
   let removeNotificationHandler: (() => void) | undefined
   let pendingLoginId: string | undefined
   let pendingAccountStatus: Pick<CodexRuntimeStatus, 'authMode' | 'planType'> | undefined
+  let isDeviceLoginStarting = false
   let starting: Promise<CodexRuntimeStatus> | undefined
   let lifecycleId = 0
 
@@ -184,9 +185,10 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
         rpc = undefined
         removeNotificationHandler?.()
         removeNotificationHandler = undefined
-        const hadPendingLogin = pendingLoginId !== undefined
+        const hadPendingLogin = pendingLoginId !== undefined || isDeviceLoginStarting
         pendingLoginId = undefined
         pendingAccountStatus = undefined
+        isDeviceLoginStarting = false
         updateStatus({
           ...status,
           process: 'stopped',
@@ -264,7 +266,12 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
     const loginLifecycleId = lifecycleId
     if (client === undefined || currentStatus.cli === 'unsupported')
       throw new Error('Codex CLI is unavailable.')
+    if (pendingLoginId !== undefined || isDeviceLoginStarting)
+      throw new Error('Device sign-in is already in progress.')
 
+    isDeviceLoginStarting = true
+    pendingAccountStatus = undefined
+    updateStatus({ ...status, login: 'pending', error: undefined })
     try {
       const response = await client.request<unknown>('account/login/start', { type: 'chatgptDeviceCode' })
       if (rpc !== client || lifecycleId !== loginLifecycleId)
@@ -275,14 +282,15 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
         throw new Error('Invalid Device OAuth response.')
 
       pendingLoginId = login.loginId
-      pendingAccountStatus = undefined
-      updateStatus({ ...status, login: 'pending', error: undefined })
+      isDeviceLoginStarting = false
       return login
     }
     catch (error) {
       if (error instanceof DeviceLoginStoppedError || rpc !== client || lifecycleId !== loginLifecycleId)
         throw new Error('Device sign-in was stopped.')
 
+      isDeviceLoginStarting = false
+      pendingAccountStatus = undefined
       updateStatus({ ...status, login: 'failed', error: 'Device sign-in could not be started.' })
       throw new Error('Device sign-in could not be started.')
     }
@@ -302,6 +310,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
 
     pendingLoginId = undefined
     pendingAccountStatus = undefined
+    isDeviceLoginStarting = false
     updateStatus({ ...status, login: 'idle', error: undefined })
   }
 
@@ -335,6 +344,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
 
     pendingLoginId = undefined
     pendingAccountStatus = undefined
+    isDeviceLoginStarting = false
     disposeProcess()
     updateStatus({ ...status, process: 'stopped', login: 'idle' })
   }
@@ -352,7 +362,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
   function handleNotification(message: JsonRpcNotification): void {
     if (message.method === 'account/updated') {
       const accountStatus = readAccountStatus(message.params)
-      if (pendingLoginId !== undefined) {
+      if (pendingLoginId !== undefined || isDeviceLoginStarting) {
         pendingAccountStatus = accountStatus
         return
       }
