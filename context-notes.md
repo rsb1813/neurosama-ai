@@ -226,3 +226,14 @@
 - `master`에 머지된 기능과 로컬 브랜치에서만 완료된 작업을 분리한다. `feat/neru-proactive-speech`는 구현·자동 검증 완료지만 수동 런타임 검증과 원격 PR이 남은 상태로 기록한다.
 - `ROADMAP.md`는 제품 비전과 단계 상태, `README.md`는 외부 소개와 실행법, `checklist.md`와 `context-notes.md`는 세부 이력 보존 역할을 유지한다.
 - 루트 `AGENTS.md`의 `Review guidelines`를 로컬·GitHub Codex 리뷰의 공통 기준으로 사용한다.
+
+---
+
+## Codex Meridian 포팅 결정 (2026-07-19)
+
+- 사용자는 프로젝트 문서 탐색과 계획·완료 검증을 우선하며, 오류 때문에 거의 사용하지 못한 세션 학습은 제외하기로 했다.
+- 포팅 방식은 짧은 진입 흐름과 세부 스킬을 결합한 혼합형으로 확정했다. `start`, `plan`, `checkpoint`, `finish` 네 스킬만 제공한다.
+- Claude의 `SessionStart`, `PreCompact`, `Stop` 등 생명주기 훅은 Codex에 억지로 복제하지 않는다. 자동 선택은 스킬 설명에 맡기고 강제 규칙은 저장소 `AGENTS.md`가 담당한다.
+- 기존 `.meridian/docs`, `.meridian/plans`, `WORKSPACE.md`, `checklist.md`, `context-notes.md` 형식은 유지해 Claude Code와 Codex가 같은 프로젝트 문서를 읽을 수 있게 한다.
+- `plugin-creator` 스크립트의 실제 기본값에 따라 플러그인 원본은 `C:\Users\jolib\plugins\meridian`, 개인 마켓플레이스는 `C:\Users\jolib\.agents\plugins\marketplace.json`에 둔다.
+- 원본 Meridian의 MIT 라이선스와 출처를 보존하고, 로컬 플러그인은 Codex 호환 포팅판임을 명확히 표시한다.
