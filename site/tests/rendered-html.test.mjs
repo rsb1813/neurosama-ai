@@ -46,6 +46,14 @@ test("server-renders the Neru product shell", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
+test("publishes site-specific social metadata from the request host", async () => {
+  const html = await (await render()).text();
+  assert.match(html, /<meta(?=[^>]*property="og:title")(?=[^>]*content="Neru — Intelligence, with a stage presence\.")[^>]*>/i);
+  assert.match(html, /<meta(?=[^>]*property="og:image")(?=[^>]*content="http:\/\/localhost\/og\.png")[^>]*>/i);
+  assert.match(html, /<meta(?=[^>]*name="twitter:card")(?=[^>]*content="summary_large_image")[^>]*>/i);
+  await access(new URL("../public/og.png", import.meta.url));
+});
+
 test("removes the disposable preview and dependency", async () => {
   const packageJson = await readFile(new URL("../package.json", import.meta.url), "utf8");
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
