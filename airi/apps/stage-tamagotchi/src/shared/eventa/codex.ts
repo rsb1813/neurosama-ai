@@ -45,12 +45,36 @@ export interface CodexDynamicToolDescriptor {
   inputSchema: CodexJsonObject
 }
 
+/** app-server 모델 선택기에 표시할 정규화된 추론 강도다. */
+export interface CodexReasoningEffort {
+  value: string
+  label: string
+}
+
+/** app-server `model/list`에서 렌더러에 필요한 항목만 정규화한 모델이다. */
+export interface CodexModel {
+  id: string
+  name: string
+  supportedReasoningEfforts: CodexReasoningEffort[]
+  serviceTiers: string[]
+}
+
+/** 비어 있는 필드는 사용자의 기존 Codex 설정을 상속하는 실행 덮어쓰기다. */
+export interface CodexRuntimeOverrides {
+  model?: string
+  effort?: string
+  serviceTier?: string
+  cwd?: string
+  sandbox?: 'readOnly' | 'workspaceWrite' | 'dangerFullAccess'
+  approvalPolicy?: 'unlessTrusted' | 'onRequest' | 'never'
+  approvalsReviewer?: 'user' | 'auto_review'
+}
+
 /** 하나의 Codex thread와 turn을 시작하는 렌더러 요청이다. */
 export interface CodexTurnRequest {
   streamId: string
   threadId?: string
-  cwd: string
-  model: string
+  overrides: CodexRuntimeOverrides
   developerInstructions: string
   dynamicTools: readonly CodexDynamicToolDescriptor[]
   userInput: string
@@ -93,6 +117,8 @@ export interface CodexApprovalResolution {
 
 /** 현재 Codex 상태를 읽는다. */
 export const codexGetStatus = defineInvokeEventa<CodexRuntimeStatus>('eventa:invoke:electron:codex:status')
+/** 현재 계정과 설치본에서 사용할 수 있는 모델 목록을 읽는다. */
+export const codexListModels = defineInvokeEventa<CodexModel[]>('eventa:invoke:electron:codex:models:list')
 /** Device OAuth를 시작한다. */
 export const codexStartDeviceLogin = defineInvokeEventa<CodexDeviceLogin>('eventa:invoke:electron:codex:login:start')
 /** 일치하는 Device OAuth 로그인을 취소한다. */

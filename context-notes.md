@@ -269,3 +269,6 @@
 - 개발 앱은 숨김 런처로 분리해 실행했으며 `http://localhost:5173`이 HTTP 200을 반환했다. 런타임 로그는 `C:\tmp\neru-desktop-out.log`와 `C:\tmp\neru-desktop-err.log`에 남는다.
 - 2026-07-20 스크린샷에서 실제 데스크톱이 기존 `settings/providers/chat/[providerId].vue`를 사용함을 확인했다. 이 경로는 모든 채팅 제공자에 API 키 폼을 무조건 렌더링했고, 전용 컴포넌트는 사용되지 않는 `v2` 경로에만 연결돼 있었다.
 - 같은 시점 로그에는 Electron 본체의 crash·quit가 없었다. Vite 의존성 최적화 뒤 렌더러 WebSocket이 정상 재로딩 코드 `1001`로 닫혔고, 3457 포트 중복으로 Neru 오디오 자식 프로세스만 code 3으로 종료됐다.
+- 실제 연쇄 튕김은 기능 코드 편집 중 Pinia HMR이 기존 `codex-account` 인스턴스에 새 `overrides` 상태를 추가하지 못해 `account.overrides`가 `undefined`가 된 것이 직접 원인이었다. 작업 트리의 Electron과 5173 개발 서버만 종료하고 다시 시작한 뒤 메인 프로세스 `RUNNING`, WebSocket 연결, HTTP 200을 확인했으며 같은 오류는 재발하지 않았다.
+- 기존 경로는 `codex-oauth`에서 전용 컴포넌트로 분기한다. 전용 화면은 Device OAuth 계정, `model/list` 기반 모델·추론 강도·서비스 티어, 작업 디렉터리·샌드박스·승인 정책·승인 검토자 덮어쓰기를 제공한다. 모든 선택값의 초기값은 미설정이며, 미설정 필드는 app-server 요청에서 생략해 Codex 설정을 상속한다.
+- 검증은 Codex 서비스·turn 런타임·렌더러 브리지·설정 경로 34개와 계정 저장소 2개 테스트, 변경 파일 ESLint, `stage-tamagotchi` `vue-tsc --noEmit`을 통과했다. `stage-pages` 단독 타입 검사는 기존 `models/inference-service-providers`, `models/characters` 누락에서만 5건 실패했다.

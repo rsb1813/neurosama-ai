@@ -1,3 +1,4 @@
+// Codex thread와 turn의 실행 수명주기, 도구 호출, 승인을 관리한다.
 import type {
   CodexApprovalDecision,
   CodexBridgeEvent,
@@ -122,10 +123,7 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
     streamsById.set(request.streamId, stream)
 
     try {
-      const response = await rpc.request<unknown>('turn/start', {
-        threadId,
-        input: [{ type: 'text', text: request.userInput }],
-      })
+      const response = await rpc.request<unknown>('turn/start', createTurnParams(request, threadId))
       const responseTurnId = readTurnId(response)
       if (responseTurnId === undefined) {
         failStream(stream)
@@ -403,17 +401,46 @@ function createStream(
 }
 
 function createThreadParams(request: CodexTurnRequest): Record<string, unknown> {
+  const overrides = request.overrides ?? {}
   const params: Record<string, unknown> = {
-    cwd: request.cwd,
-    sandbox: 'workspaceWrite',
-    approvalPolicy: 'unlessTrusted',
     developerInstructions: request.developerInstructions,
     dynamicTools: request.dynamicTools,
   }
   if (request.threadId !== undefined)
     params.threadId = request.threadId
-  if (request.model !== 'codex-configured')
-    params.model = request.model
+  if (overrides.cwd !== undefined)
+    params.cwd = overrides.cwd
+  if (overrides.sandbox !== undefined)
+    params.sandbox = overrides.sandbox
+  if (overrides.approvalPolicy !== undefined)
+    params.approvalPolicy = overrides.approvalPolicy
+  if (overrides.approvalsReviewer !== undefined)
+    params.approvalsReviewer = overrides.approvalsReviewer
+  if (overrides.model !== undefined)
+    params.model = overrides.model
+  return params
+}
+
+function createTurnParams(request: CodexTurnRequest, threadId: string): Record<string, unknown> {
+  const overrides = request.overrides ?? {}
+  const params: Record<string, unknown> = {
+    threadId,
+    input: [{ type: 'text', text: request.userInput }],
+  }
+  if (overrides.cwd !== undefined)
+    params.cwd = overrides.cwd
+  if (overrides.sandbox !== undefined)
+    params.sandboxPolicy = { type: overrides.sandbox }
+  if (overrides.approvalPolicy !== undefined)
+    params.approvalPolicy = overrides.approvalPolicy
+  if (overrides.approvalsReviewer !== undefined)
+    params.approvalsReviewer = overrides.approvalsReviewer
+  if (overrides.model !== undefined)
+    params.model = overrides.model
+  if (overrides.effort !== undefined)
+    params.effort = overrides.effort
+  if (overrides.serviceTier !== undefined)
+    params.serviceTier = overrides.serviceTier
   return params
 }
 

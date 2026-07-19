@@ -179,7 +179,6 @@ app.whenReady().then(async () => {
         appVersion: app.getVersion(),
         workspaceRoot: process.cwd(),
       }),
-      workspaceRoot: process.cwd(),
     })
     onAppBeforeQuit(() => controller.stop())
     return controller

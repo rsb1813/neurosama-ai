@@ -1,15 +1,17 @@
 // Codex Electron 이벤트를 AIRI 스트림과 로컬 도구 실행으로 연결한다.
-import type { Message, Tool } from '@xsai/shared-chat'
 import type { LlmTransport, LlmTransportRequest } from '@proj-airi/stage-ui/stores/llm-transports'
+import type { Message, Tool } from '@xsai/shared-chat'
 
 import type {
   CodexBridgeEvent,
   CodexDynamicToolDescriptor,
   CodexJsonObject,
+  CodexRuntimeOverrides,
   CodexToolCallResolution,
   CodexTurnRequest,
 } from '../../shared/eventa/codex'
 
+import { errorMessageFrom } from '@moeru/std'
 import { registerLlmTransport } from '@proj-airi/stage-ui/stores/llm-transports'
 
 const THREAD_IDS_STORAGE_KEY = 'neru/codex/thread-ids'
@@ -19,7 +21,7 @@ export interface CodexBridgeDeps {
   interruptTurn: (payload: { streamId: string }) => Promise<void>
   resolveToolCall: (payload: CodexToolCallResolution) => Promise<void>
   onEvent: (handler: (event: CodexBridgeEvent) => void | Promise<void>) => () => void
-  cwd: string
+  getRuntimeOverrides: () => CodexRuntimeOverrides
   developerInstructions: string
 }
 
@@ -96,7 +98,7 @@ async function executeToolCall(event: Extract<CodexBridgeEvent, { type: 'tool-ca
     await resolveToolCall({ callId: event.callId, result: { success: true, text: toolResultText(result) } })
   }
   catch (error) {
-    await resolveToolCall({ callId: event.callId, result: { success: false, text: error instanceof Error ? error.message : String(error) } })
+    await resolveToolCall({ callId: event.callId, result: { success: false, text: errorMessageFrom(error) ?? String(error) } })
   }
 }
 
@@ -121,10 +123,12 @@ export function initializeCodexBridge(deps: CodexBridgeDeps): { transport: LlmTr
       if (event.streamId !== streamId)
         return
 
-      if (event.type === 'text-delta')
+      if (event.type === 'text-delta') {
         await request.options.onStreamEvent?.({ type: 'text-delta', text: event.text })
-      else if (event.type === 'tool-call-request')
+      }
+      else if (event.type === 'tool-call-request') {
         await executeToolCall(event, tools, deps.resolveToolCall)
+      }
       else if (event.type === 'finish') {
         await request.options.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
         resolveTerminal()
@@ -146,8 +150,7 @@ export function initializeCodexBridge(deps: CodexBridgeDeps): { transport: LlmTr
       const result = await deps.startTurn({
         streamId,
         threadId: request.sessionId ? readThreadIds()[request.sessionId] : undefined,
-        cwd: deps.cwd,
-        model: request.model,
+        overrides: deps.getRuntimeOverrides(),
         developerInstructions: deps.developerInstructions,
         dynamicTools: dynamicTools(request.tools),
         userInput: messageText(request.messages),

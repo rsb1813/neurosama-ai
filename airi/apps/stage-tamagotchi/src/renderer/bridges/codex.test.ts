@@ -19,7 +19,7 @@ function createHarness() {
       handler = next
       return () => { handler = undefined }
     },
-    cwd: 'C:/workspace',
+    getRuntimeOverrides: () => ({ model: 'gpt-x', effort: 'high' }),
     developerInstructions: 'You are Neru.',
   })
 
@@ -87,5 +87,23 @@ describe('Codex renderer bridge', () => {
 
     expect(tool.execute).toHaveBeenCalledWith({ text: 'x' }, expect.any(Object))
     expect(harness.resolveToolCall).toHaveBeenCalledWith({ callId: 'call-1', result: { success: true, text: 'saved' } })
+  })
+
+  it('forwards the current runtime overrides with every turn', async () => {
+    const harness = createHarness()
+    const stream = harness.bridge.transport({
+      providerId: 'codex-oauth',
+      sessionId: 'session-1',
+      model: 'codex-configured',
+      messages: [{ role: 'user', content: 'Use my settings.' }],
+      tools: [],
+      options: {},
+    })
+
+    await vi.waitFor(() => expect(harness.startTurn).toHaveBeenCalledOnce())
+    const request = harness.startTurn.mock.calls[0][0]
+    expect(request.overrides).toEqual({ model: 'gpt-x', effort: 'high' })
+    await harness.emit({ type: 'finish', streamId: request.streamId, threadId: 'thread-1', turnId: 'turn-1' })
+    await stream
   })
 })

@@ -29,6 +29,7 @@ type MainContext = ReturnType<typeof createContext>['context']
 
 interface CodexInvokeHandlers {
   getStatus: () => CodexRuntimeStatus
+  listModels: () => Promise<unknown>
   startDeviceLogin: () => Promise<{ loginId: string, verificationUrl: string, userCode: string, type: 'chatgptDeviceCode' }>
   cancelDeviceLogin: (payload: { loginId: string }) => Promise<void>
   logout: () => Promise<void>
@@ -46,6 +47,7 @@ interface ServiceHarness {
     cancelLogin: ReturnType<typeof vi.fn>
     getStatus: ReturnType<typeof vi.fn>
     logout: ReturnType<typeof vi.fn>
+    request: ReturnType<typeof vi.fn>
     startDeviceLogin: ReturnType<typeof vi.fn>
     stop: ReturnType<typeof vi.fn>
   }
@@ -77,6 +79,19 @@ function createHarness(): ServiceHarness {
     cancelLogin: vi.fn(async () => {}),
     getStatus: vi.fn(() => status),
     logout: vi.fn(async () => {}),
+    request: vi.fn(async (method: string) => method === 'model/list'
+      ? {
+          data: [{
+            model: 'gpt-x',
+            displayName: 'GPT X',
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'low', description: 'Low' },
+              { reasoningEffort: 'high', description: 'High' },
+            ],
+            serviceTiers: ['default', 'fast'],
+          }],
+        }
+      : {}),
     startDeviceLogin: vi.fn(async () => ({
       loginId: 'login-1',
       verificationUrl: 'https://auth.openai.com/device',
@@ -88,7 +103,7 @@ function createHarness(): ServiceHarness {
   const manager: CodexManager = {
     ...managerSpies,
     ensureStarted: vi.fn(async () => status),
-    getRpc: vi.fn(() => undefined),
+    getRpc: vi.fn(() => ({ request: managerSpies.request } as never)),
     onStatusChange: vi.fn((handler) => {
       statusHandlers.add(handler)
       return () => statusHandlers.delete(handler)
@@ -124,8 +139,7 @@ function createHarness(): ServiceHarness {
 
 const turnRequest: CodexTurnRequest = {
   streamId: 'stream-1',
-  cwd: 'C:/workspace',
-  model: 'codex-configured',
+  overrides: {},
   developerInstructions: 'Follow the project rules.',
   dynamicTools: [],
   userInput: 'Hello',
@@ -148,6 +162,21 @@ describe('codex Eventa service', () => {
     expect(harness.managerSpies.startDeviceLogin).toHaveBeenCalledOnce()
     expect(harness.managerSpies.cancelLogin).toHaveBeenCalledWith('login-1')
     expect(harness.managerSpies.logout).toHaveBeenCalledOnce()
+  })
+
+  it('preserves app-server model, reasoning effort and service tier order', async () => {
+    const harness = createHarness()
+
+    await expect(harness.handlers.listModels()).resolves.toEqual([{
+      id: 'gpt-x',
+      name: 'GPT X',
+      supportedReasoningEfforts: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' },
+      ],
+      serviceTiers: ['default', 'fast'],
+    }])
+    expect(harness.managerSpies.request).toHaveBeenCalledWith('model/list', {})
   })
 
   it('routes turn, interrupt, tool result and approval decision invokes to the shared runtime', async () => {

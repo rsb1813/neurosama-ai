@@ -15,6 +15,12 @@ describe('Codex account store', () => {
     consciousness.activeProvider = ''
     consciousness.activeModel = ''
     setActivePinia(createPinia())
+    const values = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    })
   })
 
   it('does not activate Codex before login completion', async () => {
@@ -35,5 +41,23 @@ describe('Codex account store', () => {
     await store.selectCodex()
     expect(consciousness.activeProvider).toBe('codex-oauth')
     expect(consciousness.activeModel).toBe('codex-configured')
+  })
+
+  it('normalizes unsupported saved model options back to Codex inheritance', () => {
+    const store = useCodexAccountStore()
+    store.overrides.model = 'gpt-x'
+    store.overrides.effort = 'ultra'
+    store.overrides.serviceTier = 'fast'
+
+    store.applyModels([{
+      id: 'gpt-x',
+      name: 'GPT X',
+      supportedReasoningEfforts: [{ value: 'high', label: 'High' }],
+      serviceTiers: ['default'],
+    }])
+
+    expect(store.overrides.model).toBe('gpt-x')
+    expect(store.overrides.effort).toBeUndefined()
+    expect(store.overrides.serviceTier).toBeUndefined()
   })
 })
