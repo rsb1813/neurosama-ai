@@ -100,3 +100,27 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 ### 폐기/보류
 - 자체 Vite 프론트(`frontend/`), `WebSocketAvatar`+`ws_server` 계획 → AIRI가 대체. **Task 2에서 루트 `backend/`·`frontend/` 실제 삭제 완료**(위 통합 마일스톤 참고)
 - 백엔드 provider 클래스(STT/TTS/LLM)는 폐기 아님 — Chatterbox TTS·faster-whisper STT는 `airi/services/neru-audio` HTTP 게이트웨이 안에서 재사용됨
+
+---
+
+## Codex 개인 설정 마이그레이션 (2026-07-19)
+
+- [x] Claude와 Codex 전역 지침 차이 및 두 개인 스킬 원본 조사
+- [x] 마이그레이션 범위와 제외 항목 설계 문서화
+- [x] Codex 전역 `AGENTS.md` 백업 및 범용 규칙 선별 병합
+- [x] 사용자 피드백 반영 — 미완성 `brutal-critique` 마이그레이션 제외
+- [x] `clone-website` Codex 스킬 변환 및 검증
+- [x] 기존 RTK 바이너리를 Codex 전역 `RTK.md`와 `AGENTS.md`에 연결하고 검증
+- [x] Claude 전용 토큰·설정 변경 여부와 최종 구조 검증
+- [x] 변경 결과와 백업 경로 기록
+
+---
+
+## Codex 프로젝트 컨텍스트 초기화 문서 (2026-07-19)
+
+- [x] 루트 문서와 최근 Git 상태 대조
+- [x] 문서별 역할과 상태 기준 설계
+- [ ] 루트 `AGENTS.md` 작성
+- [ ] `WORKSPACE.md`, `ROADMAP.md`, `README.md` 상태 동기화
+- [ ] 문서 링크·경로·명령·Git 근거 검증
+- [ ] 문서 변경 커밋

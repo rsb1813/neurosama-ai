@@ -194,3 +194,35 @@
 **알려진 미해결**: 패키지된 `airi.exe`엔 Python이 없어 `neru-audio` 자동 기동이 dev(`uv run`)에서만 동작 — 패키징 시 게이트웨이를 어떻게 번들링할지(PyInstaller, 별도 설치 스크립트 등)는 후속 결정 사항.
 
 **후속 스펙**: (a) 패키지 Python 번들링 결정, (b) 이중언어(영어 음성+한국어 자막) — `neru-persona-reference.md` 기반 캐릭터 카드 스펙, (c) neru 마녀 Live2D 모델(Cubism4) AIRI 로더 연결, (d) 리브랜딩(productName airi→neru).
+
+---
+
+## Codex 개인 설정 마이그레이션 결정 (2026-07-19)
+
+- 최초 범위는 전역 지침 정리와 `brutal-critique`, `clone-website` 스킬 마이그레이션이었으나, 설계 검토에서 `brutal-critique`를 제외하고 RTK Codex 통합을 추가했다. 일반 훅, MCP, 플러그인은 계속 범위에서 제외한다.
+- 전역 지침은 `CLAUDE.md` 전체 복사가 아니라 범용 규칙의 선별 병합을 택했다. Claude 모델 라인업, Claude 전용 모델 ID, 강제 위임 정책은 Codex 정책과 충돌할 수 있어 제외한다. `@RTK.md`는 Codex 전용 파일을 가리키도록 추가한다.
+- 스킬 설치 위치는 현재 Codex 매뉴얼과 런타임 검색 경로에 맞춰 `$HOME/.agents/skills`를 사용한다.
+- `clone-website`의 픽셀 단위 조사·명세·빌드·시각 QA는 유지하되, `$ARGUMENTS`와 특정 MCP·worktree·병렬 에이전트 강제는 Codex 도구 가용성과 세션 권한을 따르는 표현으로 바꾼다.
+- 원본은 수정하지 않고 대상 파일을 먼저 백업한 뒤 설치한다.
+- 사용자 설계 검토에서 미완성 `brutal-critique`는 마이그레이션 대상에서 제외됐다. Claude 원본도 삭제하지 않는다.
+- RTK는 Rust Token Killer이며 `C:\Users\jolib\.cargo\bin\rtk.exe` 버전 `0.42.2`가 이미 설치되어 있다. 재설치하지 않고 RTK 공식 Codex 통합 명령 `rtk init -g --codex`로 `~/.codex/RTK.md`와 전역 `AGENTS.md` 참조만 설치한다.
+- RTK의 Codex 통합은 지침 기반이다. Claude의 `PreToolUse` 훅(`rtk hook claude`)은 Codex로 복사하지 않는다.
+- Codex 전역 지침 백업은 `C:\Users\jolib\.codex\migration-backups\20260719-personal-migration\AGENTS.md`에 저장했다. 변경 전 SHA-256은 `9CC2A0420F3714D4D77AAD60F3D6A26BF0E6293FBD545BC074682B210C23A1C3`이다.
+- 전역 `AGENTS.md`에는 기존 10개 규칙을 유지하고 의도 우선, 근거 수준, 저장소 근거, 대안 비교, 컨텍스트 위생, 파급효과, 자기 검토, 반복 실패 중단, 관찰 콘텐츠 경계 등 9개 범용 규칙만 추가했다. 변경 후 SHA-256은 `862939FC1A388B4CD4991E9CE8F60D3030B75FF1F595AA559929D178C5382E72`이다.
+- `rtk init -g --codex` 실행으로 `C:\Users\jolib\.codex\RTK.md`를 생성하고 전역 `AGENTS.md`에 절대 경로 참조를 추가했다. `rtk init -g --codex --show`에서 두 전역 항목이 `[ok]`, `rtk --version`은 `0.42.2`, `rtk gain`은 정상 실행됐다.
+- `clone-website`는 `skill-creator/scripts/init_skill.py`로 Codex 기본 구조와 `agents/openai.yaml`을 만든 뒤 499단어의 워크플로로 축약했다. `$ARGUMENTS`, `argument-hint`, `user-invocable`, Claude·worktree·builder 강제 표현은 제거하고 브라우저 증거 수집, 컴포넌트 명세, 실제 자산, 반응형·상호작용, 빌드, 시각 QA는 유지했다.
+- 설치 위치는 `C:\Users\jolib\.agents\skills\clone-website`이며 기존 대상이 없어 스킬 백업은 만들지 않았다. `quick_validate.py`는 스테이징과 설치본에서 모두 `Skill is valid!`를 반환했다. 설치본 `SKILL.md` SHA-256은 `F1E37EF7CE84F1E85B704D8C709838810C911AFE47C88E8631ABF6B34827C9D1`, `agents/openai.yaml`은 `91A23D1EDA366FD6F78241827CAD8BDB8D72413E28D916C02084080910EDD3E8`이다.
+- `C:\Users\jolib\.agents\skills\brutal-critique\SKILL.md`는 설치 후에도 존재하지 않음을 확인했다.
+- 최종 무결성 검사에서 Claude 원본 `CLAUDE.md`, `clone-website/SKILL.md`, `settings.json`의 SHA-256은 모두 작업 전과 일치했다. 따라서 Claude 훅 설정을 포함한 원본 세 파일은 변경하지 않았다.
+- Codex `config.toml`은 작업 전 해시 `32FA007856EDC5952B9FC71A473A192A1CA002A7E31544069FA4EB9F46FAC837`에서 00:35:15에 `0BB1A52032BA326D06183A586E69A164471F19B207B18B6D14E2B6EA2E438E5E`로 동시 변경됐다. RTK 설치 대상인 `AGENTS.md`·`RTK.md`의 수정 시각은 각각 00:27:15·00:27:50이며, 전후 키 목록상 `service_tier`가 사라진 차이가 확인됐다. 사용자 또는 Codex 앱의 동시 상태 변경을 덮어쓰지 않기 위해 복구하지 않았고, 기존 MCP·플러그인·훅 섹션의 존재는 다시 확인했다.
+- 최종 검증은 보호된 Claude 해시 3/3, AGENTS 백업 해시, 범용 지침 9개, RTK 참조 정확히 1개, 설치 스킬 해시 2/2, `brutal-critique` 부재를 모두 통과했다. `quick_validate.py`는 설치본에서 `Skill is valid!`, `rtk init -g --codex --show`는 전역 두 항목을 `[ok]`로 보고했다.
+
+---
+
+## Codex 프로젝트 컨텍스트 초기화 결정 (2026-07-19)
+
+- 저장소 루트에 Codex가 자동으로 읽는 `AGENTS.md`를 새 진입점으로 둔다.
+- `AGENTS.md`에는 안정적인 구조·규칙·검증 방법만 두고, 변동이 잦은 상태와 다음 작업은 `WORKSPACE.md`에서 관리한다.
+- `master`에 머지된 기능과 로컬 브랜치에서만 완료된 작업을 분리한다. `feat/neru-proactive-speech`는 구현·자동 검증 완료지만 수동 런타임 검증과 원격 PR이 남은 상태로 기록한다.
+- `ROADMAP.md`는 제품 비전과 단계 상태, `README.md`는 외부 소개와 실행법, `checklist.md`와 `context-notes.md`는 세부 이력 보존 역할을 유지한다.
+- 루트 `AGENTS.md`의 `Review guidelines`를 로컬·GitHub Codex 리뷰의 공통 기준으로 사용한다.
