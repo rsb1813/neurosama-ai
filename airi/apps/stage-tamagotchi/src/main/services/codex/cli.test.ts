@@ -14,7 +14,23 @@ describe('inspectCodexCli', () => {
     ['codex-cli 0.144.4', true],
     ['codex-cli 0.144.3', false],
     ['unexpected', false],
+    ['codex-cli 0.144.4-beta', false],
+    ['unexpected 0.144.4', false],
+    ['codex-cli 0.144.4.1', false],
   ])('checks the supported Codex version', async (stdout, supported) => {
-    await expect(inspectCodexCli(fakeExec(stdout))).resolves.toMatchObject({ supported })
+    await expect(inspectCodexCli(fakeExec(stdout))).resolves.toMatchObject({
+      installed: true,
+      supported,
+    })
+  })
+
+  it('reports a missing CLI instead of throwing executor failures', async () => {
+    const executor: CodexCliExecutor = async () => Promise.reject(new Error('spawn codex ENOENT'))
+
+    await expect(inspectCodexCli(executor)).resolves.toMatchObject({
+      installed: false,
+      supported: false,
+      error: 'spawn codex ENOENT',
+    })
   })
 })

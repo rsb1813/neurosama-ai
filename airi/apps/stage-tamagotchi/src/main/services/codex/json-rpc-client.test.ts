@@ -11,6 +11,7 @@ interface FakeLineIo extends CodexLineIo {
   pushLine: (line: string) => void
   exit: (code: number | null) => void
   respondWhileWriting?: (message: unknown) => void
+  writeError?: Error
 }
 
 function createFakeLineIo(): FakeLineIo {
@@ -21,6 +22,8 @@ function createFakeLineIo(): FakeLineIo {
   return {
     writes,
     write(message) {
+      if (this.writeError !== undefined)
+        throw this.writeError
       writes.push(message)
       this.respondWhileWriting?.(message)
     },
@@ -85,6 +88,21 @@ describe('createCodexJsonRpcClient', () => {
     client.notify('initialized', {})
 
     expect(io.writes).toEqual([{ method: 'initialized', params: {} }])
+  })
+
+  it('rejects write failures without retaining a request for later messages or exit', async () => {
+    const io = createFakeLineIo()
+    const client = createCodexJsonRpcClient(io)
+    io.writeError = new Error('broken pipe')
+
+    await expect(client.request('thread/start', {})).rejects.toThrow('broken pipe')
+
+    io.writeError = undefined
+    io.push({ id: 1, result: 'late response' })
+    io.exit(1)
+
+    await expect(client.request('thread/start', {})).rejects.toThrow('Codex app-server exited')
+    expect(io.writes).toEqual([])
   })
 
   it('ignores malformed lines and responses without a matching request', async () => {

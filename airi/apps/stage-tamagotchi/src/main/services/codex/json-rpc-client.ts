@@ -80,7 +80,14 @@ export function createCodexJsonRpcClient(io: CodexLineIo): CodexJsonRpcClient {
           resolve: value => resolve(value as T),
           reject,
         })
-        io.write({ id, method, params })
+        try {
+          io.write({ id, method, params })
+        }
+        catch (error) {
+          // write 실패는 서버가 응답할 수 없음을 뜻하므로 해당 ID의 대기 항목을 즉시 제거한다.
+          pendingRequests.delete(id)
+          reject(error)
+        }
       })
     },
     respond(id, result) {

@@ -56,10 +56,14 @@ export type CodexCliExecutor = () => Promise<string>
 
 /** 설치된 Codex CLI의 호환성 검사 결과다. */
 export interface CodexCliInspection {
+  /** 버전 명령을 실행할 수 있어 Codex CLI가 현재 PATH에서 발견됐는지 여부다. */
+  installed: boolean
   /** CLI 출력에서 추출한 세 부분 버전이며 추출하지 못하면 없다. */
   version?: string
   /** 최소 지원 버전 이상인지 여부다. */
   supported: boolean
+  /** CLI를 실행하지 못했을 때 반환하는 오류 설명이다. */
+  error?: string
 }
 
 /** app-server 프로토콜을 지원하는 최소 Codex CLI 버전이다. */

@@ -5,6 +5,8 @@ import type { CodexCliExecutor, CodexCliInspection } from './types'
 
 import { execFile, spawn } from 'node:child_process'
 
+import { errorMessageFrom } from '@moeru/std'
+
 import { MIN_CODEX_VERSION } from './types'
 
 /**
@@ -16,12 +18,22 @@ import { MIN_CODEX_VERSION } from './types'
  *   -> `codex --version`
  */
 export async function inspectCodexCli(execute: CodexCliExecutor = executeCodexVersion): Promise<CodexCliInspection> {
-  const stdout = await execute()
-  const version = extractVersion(stdout)
+  try {
+    const stdout = await execute()
+    const version = extractVersion(stdout)
 
-  return {
-    version,
-    supported: version !== undefined && isSupportedVersion(version),
+    return {
+      installed: true,
+      version,
+      supported: version !== undefined && isSupportedVersion(version),
+    }
+  }
+  catch (error) {
+    return {
+      installed: false,
+      supported: false,
+      error: errorMessageFrom(error) ?? 'Unable to inspect Codex CLI.',
+    }
   }
 }
 
@@ -53,7 +65,7 @@ function executeCodexVersion(): Promise<string> {
 }
 
 function extractVersion(stdout: string): string | undefined {
-  return /\b\d+\.\d+\.\d+\b/.exec(stdout)?.[0]
+  return /^codex-cli (\d+\.\d+\.\d+)$/.exec(stdout.trim())?.[1]
 }
 
 function isSupportedVersion(version: string): boolean {
