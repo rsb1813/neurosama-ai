@@ -240,3 +240,4 @@
 - 기본 실행 범위는 Neru 저장소의 workspace-write다. 범위 밖 파일, 추가 네트워크, 위험 명령은 app-server 승인 요청을 Neru 화면에 표시해 이번만 허용·세션 허용·거절 중 사용자가 선택한다.
 - 다른 제공자 실패 시 자동 폴백하지 않는다. OAuth 실패나 app-server 종료도 현재 설정을 보존하고 사용자가 명시적으로 재시도하거나 전환하게 한다.
 - 승인된 설계는 `docs/superpowers/specs/2026-07-19-neru-codex-oauth-provider-design.md`에 기록했다.
+- 구현 계획은 `docs/superpowers/plans/2026-07-19-neru-codex-oauth-provider.md`에 기록했다. 기존 xsAI 스트림을 대체하지 않고 `codex-oauth` provider ID만 별도 transport로 분기하며, Electron 메인의 app-server 매니저와 렌더러 사이에는 Eventa 직렬화 계약만 두는 구조다.
