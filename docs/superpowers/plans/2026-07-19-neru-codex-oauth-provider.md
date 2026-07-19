@@ -11,9 +11,9 @@
 ## Global Constraints
 
 - 첫 실행 제공자 선택 화면을 추가하지 않는다.
-- 새 설치에서 active LLM과 LLM 자격 증명을 만들지 않는다.
-- 기존 사용자의 active provider와 자격 증명은 덮어쓰지 않는다.
-- STT/TTS `localhost:3457` 프리시드는 유지한다.
+- 새 설치에서 LLM·STT·TTS의 active provider, active model, 자격 증명을 만들지 않는다.
+- 기존 사용자의 LLM·STT·TTS active 값과 자격 증명은 덮어쓰지 않는다.
+- 로컬 LLM·STT·TTS 제공자는 기본값이 아니라 설정에서 고르는 선택지로만 등록한다.
 - 로컬 프록시와 Codex 어느 쪽도 기본값이나 자동 폴백으로 사용하지 않는다.
 - Codex 바이너리를 번들하지 않고 PATH의 `codex`를 사용한다.
 - 최소 지원 버전은 `codex-cli 0.144.4`이며 버전 확인 뒤 기능 초기화도 검증한다.
@@ -39,84 +39,84 @@
 
 ---
 
-### Task 1: LLM 기본 프리시드를 제거하고 두 옵션만 등록
+### Task 1: provider 기본 프리시드를 제거하고 선택지만 등록
 
 **Files:**
 - Modify: `airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts`
 - Modify: `airi/apps/stage-tamagotchi/src/renderer/neruPreseed.test.ts`
 
 **Interfaces:**
-- Consumes: 기존 localStorage 키 `settings/credentials/providers`, `settings/providers/added`, `settings/consciousness/*`.
-- Produces: `neru-local-proxy`와 `codex-oauth`가 보이되 active LLM과 LLM credential은 생성하지 않는 프리시드.
+- Consumes: 기존 localStorage 키 `settings/credentials/providers`, `settings/providers/added`, `settings/consciousness/*`, `settings/hearing/*`, `settings/speech/*`.
+- Produces: 로컬 LLM·Codex·로컬 STT·로컬 TTS가 보이되 active 값과 credential은 생성하지 않는 선택지 등록.
 
-- [ ] **Step 1: 실패 테스트를 추가**
+- [x] **Step 1: 실패 테스트를 추가**
 
 ```ts
-it('does not choose or configure an LLM on a fresh install', () => {
+it('does not choose or configure providers on a fresh install', () => {
   preseedNeruProviders()
   expect(localStorage.getItem('settings/consciousness/active-provider')).toBeNull()
   expect(localStorage.getItem('settings/consciousness/active-model')).toBeNull()
-  const credentials = JSON.parse(localStorage.getItem('settings/credentials/providers')!)
-  expect(credentials['neru-local-proxy']).toBeUndefined()
-  expect(credentials['codex-oauth']).toBeUndefined()
+  expect(localStorage.getItem('settings/hearing/active-provider')).toBeNull()
+  expect(localStorage.getItem('settings/hearing/active-model')).toBeNull()
+  expect(localStorage.getItem('settings/speech/active-provider')).toBeNull()
+  expect(localStorage.getItem('settings/speech/active-model')).toBeNull()
+  expect(localStorage.getItem('settings/credentials/providers')).toBeNull()
 })
 
-it('lists both LLM choices and preserves an existing selection', () => {
+it('lists provider choices and preserves existing settings', () => {
   localStorage.setItem('settings/consciousness/active-provider', 'openai-compatible')
   localStorage.setItem('settings/consciousness/active-model', 'existing-model')
+  localStorage.setItem('settings/hearing/active-provider', 'existing-stt')
+  localStorage.setItem('settings/speech/active-provider', 'existing-tts')
+  const credentials = { existing: { apiKey: 'kept' } }
+  localStorage.setItem('settings/credentials/providers', JSON.stringify(credentials))
   preseedNeruProviders()
   const added = JSON.parse(localStorage.getItem('settings/providers/added')!)
-  expect(added).toMatchObject({ 'neru-local-proxy': true, 'codex-oauth': true })
+  expect(added).toMatchObject({
+    'neru-local-proxy': true,
+    'codex-oauth': true,
+    'openai-compatible-audio-transcription': true,
+    'openai-compatible-audio-speech': true,
+  })
   expect(localStorage.getItem('settings/consciousness/active-provider')).toBe('openai-compatible')
   expect(localStorage.getItem('settings/consciousness/active-model')).toBe('existing-model')
-})
-
-it('keeps the local STT and TTS preseed', () => {
-  preseedNeruProviders()
-  expect(localStorage.getItem('settings/hearing/active-provider')).toBe('openai-compatible-audio-transcription')
-  expect(localStorage.getItem('settings/speech/active-provider')).toBe('openai-compatible-audio-speech')
+  expect(localStorage.getItem('settings/hearing/active-provider')).toBe('existing-stt')
+  expect(localStorage.getItem('settings/speech/active-provider')).toBe('existing-tts')
+  expect(JSON.parse(localStorage.getItem('settings/credentials/providers')!)).toEqual(credentials)
 })
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/renderer/neruPreseed.test.ts`
 
-Expected: 첫 테스트는 기존 `openai-compatible` 프리시드 때문에 FAIL하고 두 옵션 테스트도 FAIL한다.
+Expected: 기존 LLM·STT·TTS 강제 프리시드 때문에 FAIL한다.
 
-- [ ] **Step 3: 최소 프리시드 수정**
+- [x] **Step 3: 최소 프리시드 수정**
 
 ```ts
 export function preseedNeruProviders(): void {
   const STT = 'openai-compatible-audio-transcription'
   const TTS = 'openai-compatible-audio-speech'
 
-  mergeObject('settings/credentials/providers', {
-    [STT]: { apiKey: 'sk-local-proxy', baseUrl: 'http://localhost:3457/v1/', model: 'large-v3' },
-    [TTS]: { apiKey: 'sk-local-proxy', baseUrl: 'http://localhost:3457/v1/', model: 'chatterbox' },
-  })
   mergeObject('settings/providers/added', {
     'neru-local-proxy': true,
     'codex-oauth': true,
     [STT]: true,
     [TTS]: true,
   })
-  assertRaw('settings/hearing/active-provider', STT)
-  assertRaw('settings/hearing/active-model', 'large-v3')
-  assertRaw('settings/speech/active-provider', TTS)
-  assertRaw('settings/speech/active-model', 'chatterbox')
   assertRaw('onboarding/completed', 'true')
   // 이 블록 아래의 expression, stage model, Neru card 시드 코드는 수정하지 않는다.
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/renderer/neruPreseed.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add airi/apps/stage-tamagotchi/src/renderer/neruPreseed.ts airi/apps/stage-tamagotchi/src/renderer/neruPreseed.test.ts
