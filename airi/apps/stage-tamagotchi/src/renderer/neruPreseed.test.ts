@@ -7,6 +7,37 @@ import { preseedNeruProviders } from './neruPreseed'
 const STAGE_MODEL_KEY = 'settings/stage/model'
 const SEEDED_KEY = 'neru/stage-model-seeded'
 
+describe('preseedNeruProviders — LLM opt-in', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('does not choose or configure an LLM on a fresh install', () => {
+    preseedNeruProviders()
+    expect(localStorage.getItem('settings/consciousness/active-provider')).toBeNull()
+    expect(localStorage.getItem('settings/consciousness/active-model')).toBeNull()
+    const credentials = JSON.parse(localStorage.getItem('settings/credentials/providers')!)
+    expect(credentials['neru-local-proxy']).toBeUndefined()
+    expect(credentials['codex-oauth']).toBeUndefined()
+  })
+
+  it('lists both LLM choices and preserves an existing selection', () => {
+    localStorage.setItem('settings/consciousness/active-provider', 'openai-compatible')
+    localStorage.setItem('settings/consciousness/active-model', 'existing-model')
+    preseedNeruProviders()
+    const added = JSON.parse(localStorage.getItem('settings/providers/added')!)
+    expect(added).toMatchObject({ 'neru-local-proxy': true, 'codex-oauth': true })
+    expect(localStorage.getItem('settings/consciousness/active-provider')).toBe('openai-compatible')
+    expect(localStorage.getItem('settings/consciousness/active-model')).toBe('existing-model')
+  })
+
+  it('keeps the local STT and TTS preseed', () => {
+    preseedNeruProviders()
+    expect(localStorage.getItem('settings/hearing/active-provider')).toBe('openai-compatible-audio-transcription')
+    expect(localStorage.getItem('settings/speech/active-provider')).toBe('openai-compatible-audio-speech')
+  })
+})
+
 describe('preseedNeruProviders — stage model (seed once)', () => {
   beforeEach(() => {
     localStorage.clear()

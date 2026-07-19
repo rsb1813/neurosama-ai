@@ -1,14 +1,13 @@
-// AIRI provider를 로컬 서비스로 프리시드 — 온보딩 없이 LLM(3456)·STT/TTS(3457) 연결
+// AIRI provider를 로컬 서비스로 프리시드 — 온보딩 없이 STT/TTS(3457) 연결 및 LLM 선택지 등록
 //
-// neru는 로컬 스택만 가리키는 단일 목적 어플라이언스라 이 키들은 neru 소유 설정으로
+// neru는 STT/TTS 로컬 스택을 가리키는 단일 목적 어플라이언스라 이 키들은 neru 소유 설정으로
 // 취급해 매 기동 시 authoritative하게 단언한다. 초기 구현은 "값이 없을 때만" 기록했으나,
 // 이 방식은 dev localStorage에 AIRI 기본값(빈 active-provider, speech="speech-noop",
 // 우리 provider가 빠진 added/credentials 카탈로그)이 이미 박혀 있으면 전부 건너뛰어
 // 프리시드가 무력화된다(실측 확인). 따라서 스칼라 키는 덮어쓰고, 여러 provider가
 // 공유하는 객체(credentials/added)는 기존 카탈로그를 보존한 채 우리 항목만 병합한다.
 //
-// 트레이드오프: active-provider를 매번 단언하므로 사용자가 UI에서 provider를 바꿔도
-// 다음 기동에 로컬 스택으로 되돌아간다 — 어플라이언스 성격상 의도된 동작이다.
+// LLM provider와 활성 선택은 사용자가 제어하므로 프리시드하지 않는다.
 
 import { NERU_SYSTEM_PROMPT } from '@proj-airi/stage-ui/constants/neru-persona'
 import { NERU_WITCH_PRESET_ID } from '@proj-airi/stage-ui/constants/neru-witch'
@@ -66,7 +65,6 @@ function assertNeruCard(systemPrompt: string): void {
 }
 
 export function preseedNeruProviders(): void {
-  const LLM = 'openai-compatible'
   const STT = 'openai-compatible-audio-transcription'
   const TTS = 'openai-compatible-audio-speech'
 
@@ -74,15 +72,17 @@ export function preseedNeruProviders(): void {
   // 쓰려면 게이트웨이의 NERU_API_KEY도 함께 맞춰야 한다. model은 hearing/speech 스토어의
   // configured 판정이 참조하므로 provider 설정에도 함께 넣는다(게이트웨이는 무시).
   mergeObject('settings/credentials/providers', {
-    [LLM]: { apiKey: 'sk-local-proxy', baseUrl: 'http://localhost:3456/v1/', model: 'claude-opus-4-7' },
     [STT]: { apiKey: 'sk-local-proxy', baseUrl: 'http://localhost:3457/v1/', model: 'large-v3' },
     [TTS]: { apiKey: 'sk-local-proxy', baseUrl: 'http://localhost:3457/v1/', model: 'chatterbox' },
   })
-  mergeObject('settings/providers/added', { [LLM]: true, [STT]: true, [TTS]: true })
+  mergeObject('settings/providers/added', {
+    'neru-local-proxy': true,
+    'codex-oauth': true,
+    [STT]: true,
+    [TTS]: true,
+  })
 
   // 각 모듈이 프리시드된 provider를 가리키게(모델명은 게이트웨이가 무시).
-  assertRaw('settings/consciousness/active-provider', LLM)
-  assertRaw('settings/consciousness/active-model', 'claude-opus-4-7')
   assertRaw('settings/hearing/active-provider', STT)
   assertRaw('settings/hearing/active-model', 'large-v3')
   assertRaw('settings/speech/active-provider', TTS)
