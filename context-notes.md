@@ -226,3 +226,17 @@
 - `master`에 머지된 기능과 로컬 브랜치에서만 완료된 작업을 분리한다. `feat/neru-proactive-speech`는 구현·자동 검증 완료지만 수동 런타임 검증과 원격 PR이 남은 상태로 기록한다.
 - `ROADMAP.md`는 제품 비전과 단계 상태, `README.md`는 외부 소개와 실행법, `checklist.md`와 `context-notes.md`는 세부 이력 보존 역할을 유지한다.
 - 루트 `AGENTS.md`의 `Review guidelines`를 로컬·GitHub Codex 리뷰의 공통 기준으로 사용한다.
+
+---
+
+## Neru Codex OAuth 제공자 결정 (2026-07-19)
+
+- `localhost:3456` 로컬 프록시는 더 이상 LLM 기본값으로 프리시드하지 않는다. 로컬 프록시와 `Codex (OAuth)` 모두 설정 화면에서 사용자가 명시적으로 선택하는 옵션이다.
+- 첫 실행 제공자 선택 화면은 만들지 않는다. 새 설치는 LLM 미선택 상태로 두고 기존 사용자의 active provider와 자격 증명은 보존한다.
+- STT와 TTS의 `localhost:3457` `neru-audio` 프리시드는 이번 변경에서 유지한다.
+- Codex 바이너리를 앱에 포함하거나 OAuth를 직접 구현하지 않는다. PATH에서 발견한 외부 Codex CLI의 공식 `app-server`를 Electron 메인 프로세스가 실행한다.
+- Device OAuth 토큰의 저장과 갱신은 Codex가 전담하며 Neru는 `auth.json`을 읽거나 토큰을 로그에 남기지 않는다.
+- Codex를 단순 텍스트 백엔드로 제한하지 않는다. 기존 AIRI 펑션 도구는 app-server `dynamicTools`로 연결하고 Codex 기본 파일·명령 도구도 유지한다.
+- 기본 실행 범위는 Neru 저장소의 workspace-write다. 범위 밖 파일, 추가 네트워크, 위험 명령은 app-server 승인 요청을 Neru 화면에 표시해 이번만 허용·세션 허용·거절 중 사용자가 선택한다.
+- 다른 제공자 실패 시 자동 폴백하지 않는다. OAuth 실패나 app-server 종료도 현재 설정을 보존하고 사용자가 명시적으로 재시도하거나 전환하게 한다.
+- 승인된 설계는 `docs/superpowers/specs/2026-07-19-neru-codex-oauth-provider-design.md`에 기록했다.
