@@ -136,9 +136,9 @@ git commit -m "feat(neru): make LLM providers opt-in"
 
 **Interfaces:**
 - Consumes: `ChildProcessWithoutNullStreams`, 줄 단위 JSON 문자열.
-- Produces: `CodexJsonRpcClient.request<T>()`, `respond()`, `onNotification()`, `onServerRequest()`, `inspectCodexCli()`.
+- Produces: `CodexJsonRpcClient.request<T>()`, `notify()`, `respond()`, `onNotification()`, `onServerRequest()`, `inspectCodexCli()`.
 
-- [ ] **Step 1: JSON-RPC와 버전 실패 테스트 작성**
+- [x] **Step 1: JSON-RPC와 버전 실패 테스트 작성**
 
 ```ts
 it('matches responses and exposes notifications and server requests', async () => {
@@ -157,6 +157,13 @@ it('rejects all pending calls when the process exits', async () => {
   await expect(pending).rejects.toThrow('Codex app-server exited')
 })
 
+it('sends client notifications without an id', () => {
+  const io = createFakeLineIo()
+  const client = createCodexJsonRpcClient(io)
+  client.notify('initialized', {})
+  expect(io.writes).toContainEqual({ method: 'initialized', params: {} })
+})
+
 it.each([
   ['codex-cli 0.144.4', true],
   ['codex-cli 0.144.3', false],
@@ -166,13 +173,13 @@ it.each([
 })
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/main/services/codex/json-rpc-client.test.ts apps/stage-tamagotchi/src/main/services/codex/cli.test.ts`
 
 Expected: 모듈이 없어 FAIL한다.
 
-- [ ] **Step 3: 공용 타입과 최소 클라이언트 구현**
+- [x] **Step 3: 공용 타입과 최소 클라이언트 구현**
 
 ```ts
 // Codex app-server JSON-RPC 메시지와 런타임 상태를 정의한다.
@@ -205,9 +212,18 @@ export function createCodexJsonRpcClient(io: CodexLineIo) {
   return {
     request<T>(method: string, params: unknown): Promise<T> {
       const id = nextId++
-      io.write({ id, method, params })
-      return new Promise<T>((resolve, reject) => pending.set(id, { resolve: value => resolve(value as T), reject }))
+      return new Promise<T>((resolve, reject) => {
+        pending.set(id, { resolve: value => resolve(value as T), reject })
+        try {
+          io.write({ id, method, params })
+        }
+        catch (error) {
+          pending.delete(id)
+          reject(error)
+        }
+      })
     },
+    notify(method: string, params: unknown) { io.write({ method, params }) },
     respond(id: number, result: unknown) { io.write({ id, result }) },
     onNotification(handler: (message: JsonRpcNotification) => void) { notifications.add(handler); return () => notifications.delete(handler) },
     onServerRequest(handler: (message: JsonRpcServerRequest) => void) { serverRequests.add(handler); return () => serverRequests.delete(handler) },
@@ -215,15 +231,15 @@ export function createCodexJsonRpcClient(io: CodexLineIo) {
 }
 ```
 
-`cli.ts`는 `execFile('codex', ['--version'])` 결과를 semver로 비교하고 `spawn('codex', ['app-server'], { stdio: 'pipe', windowsHide: true })`만 노출한다. `shell: true`는 사용하지 않는다.
+`cli.ts`는 `execFile('codex', ['--version'])`의 정확한 `codex-cli X.Y.Z` 형식만 비교하고, 실행 실패는 throw 대신 `{ installed: false, supported: false, error }`로 반환한다. app-server는 `spawn('codex', ['app-server'], { stdio: 'pipe', windowsHide: true })`만 노출하며 `shell: true`는 사용하지 않는다.
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `cd airi && pnpm exec vitest run apps/stage-tamagotchi/src/main/services/codex/json-rpc-client.test.ts apps/stage-tamagotchi/src/main/services/codex/cli.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add airi/apps/stage-tamagotchi/src/main/services/codex
@@ -293,6 +309,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
     process = deps.spawn()
     rpc = createCodexJsonRpcClient(createChildProcessLineIo(process))
     await rpc.request('initialize', { clientInfo: { name: 'neru', version: deps.appVersion }, capabilities: { experimentalApi: true } })
+    rpc.notify('initialized', {})
     const probe = await rpc.request<{ thread: { id: string } }>('thread/start', {
       cwd: deps.workspaceRoot,
       ephemeral: true,

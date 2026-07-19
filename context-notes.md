@@ -241,3 +241,4 @@
 - 다른 제공자 실패 시 자동 폴백하지 않는다. OAuth 실패나 app-server 종료도 현재 설정을 보존하고 사용자가 명시적으로 재시도하거나 전환하게 한다.
 - 승인된 설계는 `docs/superpowers/specs/2026-07-19-neru-codex-oauth-provider-design.md`에 기록했다.
 - 구현 계획은 `docs/superpowers/plans/2026-07-19-neru-codex-oauth-provider.md`에 기록했다. 기존 xsAI 스트림을 대체하지 않고 `codex-oauth` provider ID만 별도 transport로 분기하며, Electron 메인의 app-server 매니저와 렌더러 사이에는 Eventa 직렬화 계약만 두는 구조다.
+- 최신 공식 app-server 문서를 재확인해 연결마다 `initialize` 성공 뒤 ID 없는 `initialized` 알림을 보내야 하는 핸드셰이크를 계획에 추가했다. 현재 구현 셸의 PATH에는 `codex`가 없어 미설치 상태 UI와 실제 설치 안내를 수동 검증해야 한다.
