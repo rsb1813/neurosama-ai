@@ -53,11 +53,13 @@ rest is the AIRI fork.
 |-------|------|------|
 | `airi/` (Project AIRI fork) | Desktop app: avatar, chat UI, orchestration, subtitles | Vue 3 · Electron · pnpm monorepo |
 | `airi/services/neru-audio/` | OpenAI-compatible GPU voice gateway on `127.0.0.1:3457` | Python · FastAPI · Chatterbox TTS · faster-whisper STT |
-| Local LLM proxy (external) | Chat completions, OpenAI-compatible | `localhost:3456` |
+| Local LLM proxy (optional) | User-configured OpenAI-compatible chat endpoint | e.g. `localhost:3456` |
+| Codex (OAuth) (optional) | Desktop Codex app-server through Device OAuth | PATH `codex` CLI |
 
 The desktop app (`airi/apps/stage-tamagotchi`, Electron) **auto-spawns** the
-gateway in development and connects to all three services (LLM, STT, TTS)
-without an onboarding step, via preseeded provider settings.
+gateway in development. LLM, STT, and TTS providers are selectable in Settings;
+Neru does not create an active provider, model, endpoint, or credential on a new install.
+Choose either a configured local OpenAI-compatible endpoint or Codex (OAuth) for chat.
 
 ## Repository layout
 
