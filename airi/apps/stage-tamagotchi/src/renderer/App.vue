@@ -5,6 +5,7 @@ import { themeColorFromValue, useThemeColor } from '@proj-airi/stage-layouts/com
 import { artistrySyncConfig } from '@proj-airi/stage-shared'
 import { ToasterRoot } from '@proj-airi/stage-ui/components'
 import { useInferencePreload } from '@proj-airi/stage-ui/composables'
+import { NERU_SYSTEM_PROMPT } from '@proj-airi/stage-ui/constants/neru-persona'
 import { useSharedAnalyticsStore } from '@proj-airi/stage-ui/stores/analytics'
 import { useCharacterOrchestratorStore } from '@proj-airi/stage-ui/stores/character'
 import { useChatSessionStore } from '@proj-airi/stage-ui/stores/chat/session-store'
@@ -35,6 +36,12 @@ import {
   i18nSetLocale,
 } from '../shared/eventa'
 import {
+  codexBridgeEvent,
+  codexInterruptTurn,
+  codexResolveToolCall,
+  codexStartTurn,
+} from '../shared/eventa/codex'
+import {
   electronPluginUpdateCapability,
   pluginProtocolListProviders,
   pluginProtocolListProvidersEventName,
@@ -50,6 +57,7 @@ import {
 } from '../shared/eventa/plugin/host'
 import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
 import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
+import { initializeCodexBridge } from './bridges/codex'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
 import { useLanguage } from './composables/use-language'
 import { createChatSyncWindowLifecycle, resolveInitialChatSyncRoutePath } from './stores/chat-sync-lifecycle'
@@ -100,9 +108,26 @@ function createFullStageRuntime() {
   const reportPluginCapability = useElectronEventaInvoke(electronPluginUpdateCapability)
   const getGodotStageStatus = useElectronEventaInvoke(electronGodotStageGetStatus)
   const syncArtistryConfig = useElectronEventaInvoke(artistrySyncConfig)
+  const startCodexTurn = useElectronEventaInvoke(codexStartTurn)
+  const interruptCodexTurn = useElectronEventaInvoke(codexInterruptTurn)
+  const resolveCodexToolCall = useElectronEventaInvoke(codexResolveToolCall)
   const isAuxiliaryChatRoute = initialWindowRoutePath === '/chat'
   const isGodotStageRoute = () => route.path === '/' || route.path.startsWith('/settings')
   const isWidgetsWindowRoute = () => route.path === '/widgets'
+  const codexBridge = initializeCodexBridge({
+    startTurn: payload => startCodexTurn(payload),
+    interruptTurn: payload => interruptCodexTurn(payload),
+    resolveToolCall: payload => resolveCodexToolCall(payload),
+    onEvent: (handler) => {
+      const dispose = context.value.on(codexBridgeEvent, (event) => {
+        if (event.body)
+          return handler(event.body)
+      })
+      return typeof dispose === 'function' ? dispose : () => {}
+    },
+    cwd: '',
+    developerInstructions: NERU_SYSTEM_PROMPT,
+  })
 
   function syncGodotStageRenderer(state: { state: 'stopped' | 'starting' | 'running' | 'stopping' | 'error' }) {
     if (state.state === 'running') {
@@ -245,6 +270,7 @@ function createFullStageRuntime() {
         contextBridgeStore.dispose()
       mcpToolsStore.dispose()
       pluginToolsStore.dispose()
+      codexBridge.dispose()
     },
   }
 }

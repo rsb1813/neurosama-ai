@@ -43,7 +43,7 @@ export interface CodexController {
 }
 
 /** 하나의 app-server manager를 여러 Electron 창의 Eventa context에 안전하게 연결한다. */
-export function createCodexController(params: { manager: CodexManager }): CodexController {
+export function createCodexController(params: { manager: CodexManager, workspaceRoot?: string }): CodexController {
   const contexts = new Set<EventaContext>()
   const runtime = createCodexTurnRuntime({ manager: params.manager })
   const removeStatusListener = params.manager.onStatusChange((status) => {
@@ -61,7 +61,10 @@ export function createCodexController(params: { manager: CodexManager }): CodexC
     startDeviceLogin: () => params.manager.startDeviceLogin(),
     cancelLogin: loginId => params.manager.cancelLogin(loginId),
     logout: () => params.manager.logout(),
-    startTurn: (request, sink) => runtime.startTurn(request, sink),
+    startTurn: (request, sink) => runtime.startTurn({
+      ...request,
+      cwd: request.cwd || params.workspaceRoot || process.cwd(),
+    }, sink),
     interrupt: streamId => runtime.interrupt(streamId),
     resolveToolCall: (callId, result) => runtime.resolveToolCall(callId, result),
     resolveApproval: (requestId, decision) => runtime.resolveApproval(requestId, decision),
