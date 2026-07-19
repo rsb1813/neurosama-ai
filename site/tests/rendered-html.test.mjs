@@ -24,6 +24,11 @@ test("server-renders the Neru product shell", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Neru — Intelligence, with a stage presence\.<\/title>/i);
+  assert.match(html, /Language/);
+  assert.match(html, /<option value="en"[^>]*>en<\/option>/);
+  assert.match(html, /<option value="zh-CN">zh-CN<\/option>/);
+  assert.match(html, /<option value="ja">ja<\/option>/);
+  assert.match(html, /<option value="ko">ko<\/option>/);
   assert.match(html, /Intelligence, with a stage presence\./);
   assert.match(html, /An open character experiment/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
