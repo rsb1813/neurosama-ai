@@ -16,6 +16,11 @@ import { registerLlmTransport } from '@proj-airi/stage-ui/stores/llm-transports'
 
 const THREAD_IDS_STORAGE_KEY = 'neru/codex/thread-ids'
 
+interface StoredThread {
+  threadId: string
+  signature: string
+}
+
 export interface CodexBridgeDeps {
   startTurn: (request: CodexTurnRequest) => Promise<{ threadId: string }>
   interruptTurn: (payload: { streamId: string }) => Promise<void>
@@ -25,7 +30,7 @@ export interface CodexBridgeDeps {
   developerInstructions: string
 }
 
-function readThreadIds(): Record<string, string> {
+function readThreadIds(): Record<string, unknown> {
   try {
     const value = JSON.parse(localStorage.getItem(THREAD_IDS_STORAGE_KEY) ?? '{}')
     return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {}
@@ -35,13 +40,38 @@ function readThreadIds(): Record<string, string> {
   }
 }
 
-function writeThreadId(sessionId: string | undefined, threadId: string) {
+function writeThreadId(sessionId: string | undefined, threadId: string, signature: string) {
   if (!sessionId)
     return
 
   const threadIds = readThreadIds()
-  threadIds[sessionId] = threadId
+  threadIds[sessionId] = { threadId, signature }
   localStorage.setItem(THREAD_IDS_STORAGE_KEY, JSON.stringify(threadIds))
+}
+
+function storedThread(value: unknown): StoredThread | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return undefined
+
+  const candidate = value as Partial<StoredThread>
+  if (typeof candidate.threadId !== 'string' || typeof candidate.signature !== 'string')
+    return undefined
+
+  return { threadId: candidate.threadId, signature: candidate.signature }
+}
+
+function developerInstructions(messages: Message[], fallback: string): string {
+  const systemMessage = messages.find(message => message.role === 'system')
+  return systemMessage && typeof systemMessage.content === 'string' && systemMessage.content.trim()
+    ? systemMessage.content
+    : fallback
+}
+
+async function threadSignature(instructions: string, model: string | undefined): Promise<string> {
+  const input = new TextEncoder().encode(JSON.stringify([model ?? null, instructions]))
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input))
+  const hex = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `v1:${hex}`
 }
 
 function messageText(messages: Message[]): string {
@@ -153,15 +183,21 @@ export function initializeCodexBridge(deps: CodexBridgeDeps): { transport: LlmTr
     })
 
     try {
+      const overrides = deps.getRuntimeOverrides()
+      const instructions = developerInstructions(request.messages, deps.developerInstructions)
+      const signature = await threadSignature(instructions, overrides.model)
+      const previousThread = request.sessionId
+        ? storedThread(readThreadIds()[request.sessionId])
+        : undefined
       const result = await deps.startTurn({
         streamId,
-        threadId: request.sessionId ? readThreadIds()[request.sessionId] : undefined,
-        overrides: deps.getRuntimeOverrides(),
-        developerInstructions: deps.developerInstructions,
+        threadId: previousThread?.signature === signature ? previousThread.threadId : undefined,
+        overrides,
+        developerInstructions: instructions,
         dynamicTools: dynamicTools(request.tools),
         userInput: messageText(request.messages),
       })
-      writeThreadId(request.sessionId, result.threadId)
+      writeThreadId(request.sessionId, result.threadId, signature)
       await terminal
     }
     finally {

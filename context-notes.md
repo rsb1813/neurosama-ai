@@ -328,3 +328,11 @@
 - 요청의 현재 시스템 메시지를 우선하고 고정 Neru 프롬프트는 시스템 메시지가 없을 때만 폴백으로 사용한다.
 - 최종 시스템 지침과 실제 Codex 모델로 thread 서명을 만들고, 서명이 같을 때만 기존 thread를 재사용한다. 페르소나나 모델 변경 시 새 thread를 시작해 이전 응답 스타일의 영향을 차단한다.
 - 기존 문자열 thread 저장값은 서명이 없으므로 최초 요청에서 새 thread로 전환한다. 전체 AIRI 과거 대화 이식은 이번 범위에 포함하지 않는다.
+
+### 구현 및 자동 검증 결과
+
+- renderer bridge가 요청의 첫 번째 비어 있지 않은 `system` 메시지를 `developerInstructions`로 전달하며, 없으면 기존 `NERU_SYSTEM_PROMPT`를 사용하도록 구현했다.
+- 최종 developer instructions와 실제 Codex 모델 override를 SHA-256으로 서명해 `{ threadId, signature }` 형태로 저장한다. 같은 서명만 resume하고 프롬프트나 모델이 바뀌면 새 thread를 시작한다.
+- 기존 문자열 thread 저장값은 resume하지 않고, 다음 성공 요청에서 서명된 객체 형식으로 자동 교체한다.
+- bridge 집중 테스트 9개, stage-ui LLM 회귀 테스트 31개, stage-tamagotchi `vue-tsc --noEmit`이 통과했다.
+- 대상 ESLint에는 이번 변경으로 추가된 오류가 없고, 테스트 파일에 작업 전부터 있던 `style/max-statements-per-line`과 `test/prefer-lowercase-title` 오류 2개만 남아 있다.
