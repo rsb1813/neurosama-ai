@@ -93,35 +93,35 @@ describe('preseedNeruProviders — Live2D performance (seed once)', () => {
     localStorage.clear()
   })
 
-  it('seeds a 30 FPS and 1x render baseline on a fresh profile', () => {
+  it('keeps the original Live2D defaults unset on a fresh profile', () => {
     preseedNeruProviders()
 
-    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('30')
-    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1')
-    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBe('true')
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBeNull()
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBeNull()
+    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBeNull()
   })
 
-  it('migrates only the legacy AIRI defaults', () => {
-    localStorage.setItem(LIVE2D_FPS_KEY, '0')
-    localStorage.setItem(LIVE2D_SCALE_KEY, '2')
+  it('restores values written by the Neru performance seed', () => {
+    localStorage.setItem(LIVE2D_FPS_KEY, '30')
+    localStorage.setItem(LIVE2D_SCALE_KEY, '1')
+    localStorage.setItem(LIVE2D_PERFORMANCE_SEEDED_KEY, 'true')
 
     preseedNeruProviders()
 
-    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('30')
-    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1')
-  })
-
-  it('preserves custom values before and after the seed', () => {
-    localStorage.setItem(LIVE2D_FPS_KEY, '60')
-    localStorage.setItem(LIVE2D_SCALE_KEY, '1.5')
-    preseedNeruProviders()
-    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('60')
-    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1.5')
-
-    localStorage.setItem(LIVE2D_FPS_KEY, '0')
-    localStorage.setItem(LIVE2D_SCALE_KEY, '2')
-    preseedNeruProviders()
     expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('0')
     expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('2')
+    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBeNull()
+  })
+
+  it('preserves values changed after the performance seed', () => {
+    localStorage.setItem(LIVE2D_FPS_KEY, '60')
+    localStorage.setItem(LIVE2D_SCALE_KEY, '1.5')
+    localStorage.setItem(LIVE2D_PERFORMANCE_SEEDED_KEY, 'true')
+
+    preseedNeruProviders()
+
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('60')
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1.5')
+    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBeNull()
   })
 })
