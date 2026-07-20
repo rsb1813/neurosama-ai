@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Live2DLipSync, Live2DLipSyncOptions } from '@proj-airi/model-driver-lipsync'
 import type { Profile } from '@proj-airi/model-driver-lipsync/shared/wlipsync'
-import type { SpeechProviderWithExtraOptions } from '@xsai-ext/providers/utils'
+import type { ChatProvider, SpeechProviderWithExtraOptions } from '@xsai-ext/providers/utils'
 import type { UnElevenLabsOptions } from 'unspeech'
 
 import type { EmotionPayload } from '../../constants/emotions'
@@ -32,6 +32,7 @@ import { useAuthProviderSync } from '../../composables/use-auth-provider-sync'
 import { useDuckDb } from '../../composables/use-duck-db'
 import { useIOTraceBridge } from '../../composables/use-io-trace-bridge'
 import { initIOTracer } from '../../composables/use-io-tracer'
+import { PROACTIVE_NUDGE, useProactiveSpeech } from '../../composables/use-proactive-speech'
 import { useSpeechPipelineAnalytics } from '../../composables/use-speech-pipeline-analytics'
 import { Emotion, EMOTION_EmotionMotionName_value, EMOTION_Live2DWitchExpressionName_value, EMOTION_VRMExpressionName_value, EmotionThinkMotionName } from '../../constants/emotions'
 import { getDefaultStreamingModel, getDefinedProvider } from '../../libs/providers/providers'
@@ -43,6 +44,7 @@ import { useBackgroundStore } from '../../stores/background'
 import { useChatOrchestratorStore } from '../../stores/chat'
 import { useLlmStreamingControlStore } from '../../stores/llm-streaming-control'
 import { useAiriCardStore } from '../../stores/modules'
+import { useConsciousnessStore } from '../../stores/modules/consciousness'
 import { useSpeechStore } from '../../stores/modules/speech'
 import { useProvidersStore } from '../../stores/providers'
 import { useSettings } from '../../stores/settings'
@@ -106,13 +108,14 @@ useBargeIn(micStream, {
   abortStream: () => chatOrchestrator.abortActiveStream(),
 })
 
-const { onBeforeMessageComposed, onBeforeSend, onTokenLiteral, onTokenSpecial, onStreamEnd, onAssistantResponseEnd, onSubtitle } = useChatOrchestratorStore()
+const { onBeforeMessageComposed, onBeforeSend, onChatTurnComplete, onTokenLiteral, onTokenSpecial, onStreamEnd, onAssistantResponseEnd, onSubtitle } = useChatOrchestratorStore()
 const chatHookCleanups: Array<() => void> = []
 // WORKAROUND: clear previous handlers on unmount to avoid duplicate calls when this component remounts.
 //             We keep per-hook disposers instead of wiping the global chat hooks to play nicely with
 //             cross-window broadcast wiring.
 
 const providersStore = useProvidersStore()
+const { activeProvider, activeModel } = storeToRefs(useConsciousnessStore())
 useAuthProviderSync()
 const live2dStore = useLive2dParams()
 const showStage = ref(true)
@@ -816,6 +819,35 @@ chatHookCleanups.push(onAssistantResponseEnd(async (_message) => {
   // })
 
   // await db.value?.execute(`INSERT INTO memory_test (vec) VALUES (${JSON.stringify(res.embedding)});`)
+}))
+
+// 능동 발화: 유휴 시 neru가 스스로 말을 건다. 넛지는 system 씨앗으로 넣어 채팅창에 안 보이게 하고,
+// 그 외엔 평소 턴과 동일하게 스트리밍·발화된다(음성/립싱크/barge-in 재사용).
+const proactive = useProactiveSpeech({
+  isBusy: () => sending.value || nowSpeaking.value,
+  trigger: async () => {
+    const providerConfig = providersStore.getProviderConfig(activeProvider.value)
+    await chatOrchestrator.ingest(PROACTIVE_NUDGE, {
+      chatProvider: await providersStore.getProviderInstance(activeProvider.value) as ChatProvider,
+      model: activeModel.value,
+      providerConfig,
+      seedRole: 'system',
+    })
+  },
+})
+
+// 사용자가 실제로 전송하면 연속 카운터를 리셋한다(무응답 상한 해제).
+// onBeforeSend는 seedRole과 무관하게 모든 전송(능동 넛지 포함)에 대해 발생한다
+// (core-agent chat-orchestrator-runtime.ts의 emitBeforeSendHooks는 user-turn 가드 밖에 있음) —
+// 넛지 자신이 자기 카운터를 리셋해 상한이 무력화되지 않도록 넛지 텍스트로 걸러낸다.
+chatHookCleanups.push(onBeforeSend(async (message) => {
+  if (message === PROACTIVE_NUDGE)
+    return
+  proactive.recordUserActivity()
+}))
+// 어떤 턴이 끝나든(사용자든 능동이든) 유휴 타이머를 다시 무장한다.
+chatHookCleanups.push(onChatTurnComplete(async () => {
+  proactive.noteTurnComplete()
 }))
 
 // Mid-session provider / voice / model swaps would otherwise keep feeding

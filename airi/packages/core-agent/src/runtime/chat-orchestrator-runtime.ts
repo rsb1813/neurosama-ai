@@ -68,6 +68,12 @@ export interface ChatOrchestratorSendOptions {
   tools?: StreamOptions['tools']
   /** Original transport input metadata used by bridge/devtools observers. */
   input?: ChatStreamEventContext['input']
+  /**
+   * 씨앗 메시지 역할. `'system'`이면 사용자 발화가 아니라 '조용히 말 걸어' 넛지로 취급한다
+   * (렌더/클라우드 동기화에서 자동 제외되고, user-turn 훅/분석을 건너뛴다).
+   * @default 'user'
+   */
+  seedRole?: 'user' | 'system'
 }
 
 interface QueuedSend {
@@ -487,33 +493,67 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
       if (shouldAbort())
         return
 
+      const seedRole = options.seedRole ?? 'user'
       const userMessageId = createId()
-      const userMessage = {
-        role: 'user' as const,
-        content: finalContent,
-        createdAt: sendingCreatedAt,
-        id: userMessageId,
+      // seedRole별로 리터럴을 분리해야 role 판별 유니온이 유지된다: 하나의 객체에
+      // role: seedRole(='user'|'system' 유니온)로 넣으면 UserMessage/SystemMessage 어느 쪽에도
+      // 판별되지 않아 타입이 깨진다. system 브랜치는 SystemMessage.content가 string | TextContentPart[]만
+      // 허용해(@xsai/shared-chat) 이미지 등 첨부 파츠를 포함한 finalContent를 못 받으므로 원본
+      // sendingMessage(순수 텍스트)를 쓴다 — 능동 발화 넛지는 애초에 첨부가 없는 텍스트 씨앗이다.
+      // `satisfies`로 검증만 하고 어노테이션은 하지 않는다: `: ChatHistoryItem`으로 넓히면
+      // `id?: string`(옵셔널)로 되돌아가 onUserMessageAppended가 요구하는 `{ id: string }`과 불일치한다.
+      const userMessage = (seedRole === 'system'
+        ? {
+            role: 'system',
+            content: sendingMessage,
+            createdAt: sendingCreatedAt,
+            id: userMessageId,
+          }
+        : {
+            role: 'user',
+            content: finalContent,
+            createdAt: sendingCreatedAt,
+            id: userMessageId,
+          }) satisfies ChatHistoryItem
+      // system 씨앗(능동 발화 넛지)은 영속시키지 않는다 — 영속하면 이후 모든 정상 턴의 메시지 배열에
+      // 재전송돼 페르소나 오염/프록시 에러를 일으킨다. 이번 턴의 LLM 요청에만 일시적으로 얹는다.
+      if (userMessage.role === 'user')
+        deps.session.appendSessionMessage(sessionId, userMessage)
+
+      // system 씨앗(능동 발화 넛지)은 사용자 턴이 아니므로 user-turn 분석/훅을 타지 않는다.
+      // 렌더(history.vue)와 클라우드 동기화(isCloudSyncableMessage)는 role:'system'을 이미
+      // 걸러내므로 이 훅들을 건너뛰는 것만으로 UI/동기화 쪽 추가 변경 없이 숨겨진 턴이 된다.
+      // userMessage.role로 분기해야(seedRole이 아니라) TS가 message 인자를 UserMessage로 판별 좁힘한다.
+      if (userMessage.role === 'user') {
+        const userTurnIndex = deps.session.getSessionMessages(sessionId).filter(message => message.role === 'user').length
+
+        // Cloud sync v1: only the raw text part round-trips; image attachments
+        // and other non-text parts stay local.
+        deps.onUserMessageAppended?.({
+          sessionId,
+          message: userMessage,
+          messageText: sendingMessage,
+          source: sendSource,
+          model: options.model,
+          provider: activeProvider,
+          turnIndex: userTurnIndex,
+        })
       }
-      deps.session.appendSessionMessage(sessionId, userMessage)
-      const userTurnIndex = deps.session.getSessionMessages(sessionId).filter(message => message.role === 'user').length
 
-      // Cloud sync v1: only the raw text part round-trips; image attachments
-      // and other non-text parts stay local.
-      deps.onUserMessageAppended?.({
-        sessionId,
-        message: userMessage,
-        messageText: sendingMessage,
-        source: sendSource,
-        model: options.model,
-        provider: activeProvider,
-        turnIndex: userTurnIndex,
-      })
-
-      const sessionMessagesForSend = deps.session.getSessionMessages(sessionId)
-      deps.onUserTurnReady?.({
-        messageText: sendingMessage,
-        sessionMessages: sessionMessagesForSend,
-      })
+      // sessionMessagesForSend는 seedRole에 상관없이 이후 LLM 프롬프트 조립(buildProviderMessages)과
+      // 도구 호출 복원(toolCalls)에 쓰이므로 user-turn 가드 밖에 둔다.
+      // system 씨앗은 persistedMessages에 없으므로(위에서 append를 건너뜀) 여기서 이번 턴 전송용
+      // 배열에만 일시적으로 이어붙인다 — getSessionMessages 결과(영속 이력)에는 절대 섞이지 않는다.
+      const persistedMessages = deps.session.getSessionMessages(sessionId)
+      const sessionMessagesForSend = userMessage.role === 'system'
+        ? [...persistedMessages, userMessage]
+        : persistedMessages
+      if (userMessage.role === 'user') {
+        deps.onUserTurnReady?.({
+          messageText: sendingMessage,
+          sessionMessages: sessionMessagesForSend,
+        })
+      }
 
       // 스트리밍 speech 추출 상태. 각 <ko> 세그먼트가 완결되면 그 앞의 영어(태그 밖)를
       // 잘라 TTS로 보낸다. categorizer.filterToSpeech는 청크 경계가 태그와 겹칠 때 여는 태그
