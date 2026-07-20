@@ -6,6 +6,9 @@ import { preseedNeruProviders } from './neruPreseed'
 
 const STAGE_MODEL_KEY = 'settings/stage/model'
 const SEEDED_KEY = 'neru/stage-model-seeded'
+const LIVE2D_FPS_KEY = 'settings/live2d/max-fps'
+const LIVE2D_SCALE_KEY = 'settings/live2d/render-scale'
+const LIVE2D_PERFORMANCE_SEEDED_KEY = 'neru/live2d-performance-seeded'
 
 describe('preseedNeruProviders — provider opt-in', () => {
   beforeEach(() => {
@@ -82,5 +85,43 @@ describe('preseedNeruProviders — stage model (seed once)', () => {
     localStorage.setItem(STAGE_MODEL_KEY, 'preset-live2d-2')
     preseedNeruProviders()
     expect(localStorage.getItem(STAGE_MODEL_KEY)).toBe('preset-live2d-2')
+  })
+})
+
+describe('preseedNeruProviders — Live2D performance (seed once)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('keeps the original Live2D defaults unset on a fresh profile', () => {
+    preseedNeruProviders()
+
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBeNull()
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBeNull()
+    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBeNull()
+  })
+
+  it('restores values written by the Neru performance seed', () => {
+    localStorage.setItem(LIVE2D_FPS_KEY, '30')
+    localStorage.setItem(LIVE2D_SCALE_KEY, '1')
+    localStorage.setItem(LIVE2D_PERFORMANCE_SEEDED_KEY, 'true')
+
+    preseedNeruProviders()
+
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('0')
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('2')
+    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBeNull()
+  })
+
+  it('preserves values changed after the performance seed', () => {
+    localStorage.setItem(LIVE2D_FPS_KEY, '60')
+    localStorage.setItem(LIVE2D_SCALE_KEY, '1.5')
+    localStorage.setItem(LIVE2D_PERFORMANCE_SEEDED_KEY, 'true')
+
+    preseedNeruProviders()
+
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('60')
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1.5')
+    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBeNull()
   })
 })

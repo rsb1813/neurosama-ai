@@ -18,6 +18,8 @@ import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
+import CodexOAuthProviderSettings from '../../../../components/settings/CodexOAuthProviderSettings.vue'
+
 const route = useRoute()
 const providerId = route.params.providerId as string
 const providersStore = useProvidersStore()
@@ -90,37 +92,41 @@ function goToModelSelection() {
     :on-back="() => router.back()"
   >
     <ProviderSettingsContainer>
-      <ProviderBasicSettings
-        :title="t('settings.pages.providers.common.section.basic.title')"
-        :description="t('settings.pages.providers.common.section.basic.description')"
-        :on-reset="handleResetSettings"
-      >
-        <ProviderApiKeyInput
-          v-model="apiKey"
-          :provider-name="providerMetadata?.localizedName"
-          :placeholder="apiKeyPlaceholder"
-        />
-      </ProviderBasicSettings>
+      <CodexOAuthProviderSettings v-if="providerId === 'codex-oauth'" />
 
-      <ProviderAdvancedSettings :title="t('settings.pages.providers.common.section.advanced.title')">
-        <ProviderBaseUrlInput
-          v-model="baseUrl"
-          :placeholder="providerMetadata?.defaultOptions?.().baseUrl as string || 'Base URL of your provider'"
-        />
-      </ProviderAdvancedSettings>
+      <template v-else>
+        <ProviderBasicSettings
+          :title="t('settings.pages.providers.common.section.basic.title')"
+          :description="t('settings.pages.providers.common.section.basic.description')"
+          :on-reset="handleResetSettings"
+        >
+          <ProviderApiKeyInput
+            v-model="apiKey"
+            :provider-name="providerMetadata?.localizedName"
+            :placeholder="apiKeyPlaceholder"
+          />
+        </ProviderBasicSettings>
 
-      <ProviderValidationAlerts
-        :is-valid="isValid"
-        :is-validating="isValidating"
-        :validation-message="validationMessage"
-        :has-manual-validators="hasManualValidators"
-        :is-manual-testing="isManualTesting"
-        :manual-test-passed="manualTestPassed"
-        :manual-test-message="manualTestMessage"
-        :on-run-test="runManualTest"
-        :on-force-valid="forceValid"
-        :on-go-to-model-selection="goToModelSelection"
-      />
+        <ProviderAdvancedSettings :title="t('settings.pages.providers.common.section.advanced.title')">
+          <ProviderBaseUrlInput
+            v-model="baseUrl"
+            :placeholder="providerMetadata?.defaultOptions?.().baseUrl as string || 'Base URL of your provider'"
+          />
+        </ProviderAdvancedSettings>
+
+        <ProviderValidationAlerts
+          :is-valid="isValid"
+          :is-validating="isValidating"
+          :validation-message="validationMessage"
+          :has-manual-validators="hasManualValidators"
+          :is-manual-testing="isManualTesting"
+          :manual-test-passed="manualTestPassed"
+          :manual-test-message="manualTestMessage"
+          :on-run-test="runManualTest"
+          :on-force-valid="forceValid"
+          :on-go-to-model-selection="goToModelSelection"
+        />
+      </template>
     </ProviderSettingsContainer>
   </ProviderSettingsLayout>
 </template>

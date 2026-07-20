@@ -47,6 +47,7 @@ function createHarness() {
   const stream = vi.fn(async (_model: string, _chatProvider: ChatProvider, _messages: Message[], options?: {
     abortSignal?: AbortSignal
     onStreamEvent?: (event: StreamEvent) => Promise<void> | void
+    providerId?: string
   }) => {
     await options?.onStreamEvent?.({ type: 'text-delta', text: 'assistant reply' })
     await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
@@ -708,6 +709,23 @@ describe('createChatOrchestratorRuntime', () => {
     })
 
     expect(capturedSignal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('preserves an explicitly selected provider for the LLM stream', async () => {
+    const harness = createHarness()
+    let capturedProviderId: string | undefined
+    harness.stream.mockImplementationOnce(async (_model, _chatProvider, _messages, options) => {
+      capturedProviderId = options?.providerId
+      await options?.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
+    })
+
+    await harness.runtime.ingest('hello', {
+      model: 'gpt-test',
+      chatProvider: provider,
+      providerId: 'codex-oauth',
+    })
+
+    expect(capturedProviderId).toBe('codex-oauth')
   })
 
   /**

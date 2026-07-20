@@ -1,6 +1,6 @@
 // Codex app-server와 Device OAuth 계정의 런타임 수명주기를 관리한다.
-import type { CodexCliInspection, CodexJsonRpcClient, CodexLineIo, JsonRpcNotification } from './types'
 import type { CodexDeviceLogin, CodexRuntimeStatus } from '../../../shared/eventa/codex'
+import type { CodexCliInspection, CodexJsonRpcClient, CodexLineIo, JsonRpcNotification } from './types'
 
 import { inspectCodexCli, startCodexAppServer } from './cli'
 import { createCodexJsonRpcClient } from './json-rpc-client'
@@ -193,7 +193,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
       const probe = await client.request<unknown>('thread/start', {
         cwd: deps.workspaceRoot,
         ephemeral: true,
-        sandbox: 'readOnly',
+        sandbox: 'read-only',
         approvalPolicy: 'never',
         dynamicTools: [{
           type: 'function',

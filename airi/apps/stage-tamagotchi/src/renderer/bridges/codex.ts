@@ -1,29 +1,36 @@
 // Codex Electron 이벤트를 AIRI 스트림과 로컬 도구 실행으로 연결한다.
-import type { Message, Tool } from '@xsai/shared-chat'
 import type { LlmTransport, LlmTransportRequest } from '@proj-airi/stage-ui/stores/llm-transports'
+import type { Message, Tool } from '@xsai/shared-chat'
 
 import type {
   CodexBridgeEvent,
   CodexDynamicToolDescriptor,
   CodexJsonObject,
+  CodexRuntimeOverrides,
   CodexToolCallResolution,
   CodexTurnRequest,
 } from '../../shared/eventa/codex'
 
+import { errorMessageFrom } from '@moeru/std'
 import { registerLlmTransport } from '@proj-airi/stage-ui/stores/llm-transports'
 
 const THREAD_IDS_STORAGE_KEY = 'neru/codex/thread-ids'
+
+interface StoredThread {
+  threadId: string
+  signature: string
+}
 
 export interface CodexBridgeDeps {
   startTurn: (request: CodexTurnRequest) => Promise<{ threadId: string }>
   interruptTurn: (payload: { streamId: string }) => Promise<void>
   resolveToolCall: (payload: CodexToolCallResolution) => Promise<void>
   onEvent: (handler: (event: CodexBridgeEvent) => void | Promise<void>) => () => void
-  cwd: string
+  getRuntimeOverrides: () => CodexRuntimeOverrides
   developerInstructions: string
 }
 
-function readThreadIds(): Record<string, string> {
+function readThreadIds(): Record<string, unknown> {
   try {
     const value = JSON.parse(localStorage.getItem(THREAD_IDS_STORAGE_KEY) ?? '{}')
     return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {}
@@ -33,13 +40,38 @@ function readThreadIds(): Record<string, string> {
   }
 }
 
-function writeThreadId(sessionId: string | undefined, threadId: string) {
+function writeThreadId(sessionId: string | undefined, threadId: string, signature: string) {
   if (!sessionId)
     return
 
   const threadIds = readThreadIds()
-  threadIds[sessionId] = threadId
+  threadIds[sessionId] = { threadId, signature }
   localStorage.setItem(THREAD_IDS_STORAGE_KEY, JSON.stringify(threadIds))
+}
+
+function storedThread(value: unknown): StoredThread | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return undefined
+
+  const candidate = value as Partial<StoredThread>
+  if (typeof candidate.threadId !== 'string' || typeof candidate.signature !== 'string')
+    return undefined
+
+  return { threadId: candidate.threadId, signature: candidate.signature }
+}
+
+function developerInstructions(messages: Message[], fallback: string): string {
+  const systemMessage = messages.find(message => message.role === 'system')
+  return systemMessage && typeof systemMessage.content === 'string' && systemMessage.content.trim()
+    ? systemMessage.content
+    : fallback
+}
+
+async function threadSignature(instructions: string, model: string | undefined): Promise<string> {
+  const input = new TextEncoder().encode(JSON.stringify([model ?? null, instructions]))
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input))
+  const hex = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `v1:${hex}`
 }
 
 function messageText(messages: Message[]): string {
@@ -53,9 +85,15 @@ function messageText(messages: Message[]): string {
 }
 
 function jsonObject(value: unknown): CodexJsonObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as CodexJsonObject
-    : {}
+  try {
+    const parsed = JSON.parse(JSON.stringify(value))
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as CodexJsonObject
+      : {}
+  }
+  catch {
+    return {}
+  }
 }
 
 function dynamicTools(tools: Tool[]): CodexDynamicToolDescriptor[] {
@@ -96,7 +134,7 @@ async function executeToolCall(event: Extract<CodexBridgeEvent, { type: 'tool-ca
     await resolveToolCall({ callId: event.callId, result: { success: true, text: toolResultText(result) } })
   }
   catch (error) {
-    await resolveToolCall({ callId: event.callId, result: { success: false, text: error instanceof Error ? error.message : String(error) } })
+    await resolveToolCall({ callId: event.callId, result: { success: false, text: errorMessageFrom(error) ?? String(error) } })
   }
 }
 
@@ -121,10 +159,12 @@ export function initializeCodexBridge(deps: CodexBridgeDeps): { transport: LlmTr
       if (event.streamId !== streamId)
         return
 
-      if (event.type === 'text-delta')
+      if (event.type === 'text-delta') {
         await request.options.onStreamEvent?.({ type: 'text-delta', text: event.text })
-      else if (event.type === 'tool-call-request')
+      }
+      else if (event.type === 'tool-call-request') {
         await executeToolCall(event, tools, deps.resolveToolCall)
+      }
       else if (event.type === 'finish') {
         await request.options.onStreamEvent?.({ type: 'finish', finishReason: 'stop' })
         resolveTerminal()
@@ -143,16 +183,21 @@ export function initializeCodexBridge(deps: CodexBridgeDeps): { transport: LlmTr
     })
 
     try {
+      const overrides = deps.getRuntimeOverrides()
+      const instructions = developerInstructions(request.messages, deps.developerInstructions)
+      const signature = await threadSignature(instructions, overrides.model)
+      const previousThread = request.sessionId
+        ? storedThread(readThreadIds()[request.sessionId])
+        : undefined
       const result = await deps.startTurn({
         streamId,
-        threadId: request.sessionId ? readThreadIds()[request.sessionId] : undefined,
-        cwd: deps.cwd,
-        model: request.model,
-        developerInstructions: deps.developerInstructions,
+        threadId: previousThread?.signature === signature ? previousThread.threadId : undefined,
+        overrides,
+        developerInstructions: instructions,
         dynamicTools: dynamicTools(request.tools),
         userInput: messageText(request.messages),
       })
-      writeThreadId(request.sessionId, result.threadId)
+      writeThreadId(request.sessionId, result.threadId, signature)
       await terminal
     }
     finally {

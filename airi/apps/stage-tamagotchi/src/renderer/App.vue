@@ -9,11 +9,11 @@ import { NERU_SYSTEM_PROMPT } from '@proj-airi/stage-ui/constants/neru-persona'
 import { useSharedAnalyticsStore } from '@proj-airi/stage-ui/stores/analytics'
 import { useCharacterOrchestratorStore } from '@proj-airi/stage-ui/stores/character'
 import { useChatSessionStore } from '@proj-airi/stage-ui/stores/chat/session-store'
+import { useCodexAccountStore } from '@proj-airi/stage-ui/stores/codex-account'
 import { usePluginHostInspectorStore } from '@proj-airi/stage-ui/stores/devtools/plugin-host-debug'
 import { useDisplayModelsStore } from '@proj-airi/stage-ui/stores/display-models'
 import { useModsServerChannelStore } from '@proj-airi/stage-ui/stores/mods/api/channel-server'
 import { useContextBridgeStore } from '@proj-airi/stage-ui/stores/mods/api/context-bridge'
-import { useCodexAccountStore } from '@proj-airi/stage-ui/stores/codex-account'
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { useArtistryStore } from '@proj-airi/stage-ui/stores/modules/artistry'
 import { usePerfTracerBridgeStore } from '@proj-airi/stage-ui/stores/perf-tracer-bridge'
@@ -25,8 +25,8 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
-import ResizeHandler from './components/ResizeHandler.vue'
 import CodexApprovalDialog from './components/CodexApprovalDialog.vue'
+import ResizeHandler from './components/ResizeHandler.vue'
 
 import {
   electronGetServerChannelConfig,
@@ -41,12 +41,13 @@ import {
   codexBridgeEvent,
   codexCancelDeviceLogin,
   codexGetStatus,
-  codexLogout,
   codexInterruptTurn,
-  codexResolveToolCall,
+  codexListModels,
+  codexLogout,
   codexResolveApproval,
-  codexStartTurn,
+  codexResolveToolCall,
   codexStartDeviceLogin,
+  codexStartTurn,
   codexStatusChanged,
 } from '../shared/eventa/codex'
 import {
@@ -64,12 +65,12 @@ import {
   electronPluginUnload,
 } from '../shared/eventa/plugin/host'
 import { electronPluginToolsChanged } from '../shared/eventa/plugin/tools'
-import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeCodexBridge } from './bridges/codex'
+import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-callback'
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
 import { useLanguage } from './composables/use-language'
-import { useCodexApprovalsStore } from './stores/codex-approvals'
 import { createChatSyncWindowLifecycle, resolveInitialChatSyncRoutePath } from './stores/chat-sync-lifecycle'
+import { useCodexApprovalsStore } from './stores/codex-approvals'
 import { useTamagotchiMcpToolsStore } from './stores/mcp-tools'
 import { useTamagotchiPluginToolsStore } from './stores/plugin-tools'
 import { useServerChannelSettingsStore } from './stores/settings/server-channel'
@@ -121,6 +122,7 @@ function createFullStageRuntime() {
   const syncArtistryConfig = useElectronEventaInvoke(artistrySyncConfig)
   const startCodexTurn = useElectronEventaInvoke(codexStartTurn)
   const getCodexStatus = useElectronEventaInvoke(codexGetStatus)
+  const listCodexModels = useElectronEventaInvoke(codexListModels)
   const startCodexDeviceLogin = useElectronEventaInvoke(codexStartDeviceLogin)
   const cancelCodexDeviceLogin = useElectronEventaInvoke(codexCancelDeviceLogin)
   const logoutCodex = useElectronEventaInvoke(codexLogout)
@@ -132,6 +134,7 @@ function createFullStageRuntime() {
   const isWidgetsWindowRoute = () => route.path === '/widgets'
   codexAccountStore.setBridge({
     getStatus: () => getCodexStatus(),
+    listModels: () => listCodexModels(),
     startDeviceLogin: () => startCodexDeviceLogin(),
     cancelDeviceLogin: payload => cancelCodexDeviceLogin({ loginId: payload }),
     logout: () => logoutCodex(),
@@ -159,7 +162,7 @@ function createFullStageRuntime() {
       })
       return typeof dispose === 'function' ? dispose : () => {}
     },
-    cwd: '',
+    getRuntimeOverrides: () => ({ ...codexAccountStore.overrides }),
     developerInstructions: NERU_SYSTEM_PROMPT,
   })
 

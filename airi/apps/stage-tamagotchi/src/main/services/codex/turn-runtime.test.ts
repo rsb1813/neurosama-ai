@@ -81,7 +81,7 @@ function createRuntimeHarness(options: HarnessOptions = {}): RuntimeHarness {
 }
 
 function createRequest(overrides: Partial<CodexTurnRequest> = {}): CodexTurnRequest {
-  return { cwd: 'C:/repo', developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool], model: 'gpt-5-codex', streamId: 'stream-1', userInput: 'Hello, Neru.', ...overrides }
+  return { developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool], overrides: {}, streamId: 'stream-1', userInput: 'Hello, Neru.', ...overrides } as CodexTurnRequest
 }
 
 async function waitForTurnStart(harness: RuntimeHarness): Promise<void> {
@@ -101,21 +101,33 @@ async function beginTurn(harness: RuntimeHarness): Promise<{ running: Promise<{ 
 }
 
 describe('createCodexTurnRuntime', () => {
-  it('starts a workspace-scoped thread with top-level developer instructions and tools', async () => {
+  it('inherits runtime settings by omitting unset RPC fields', async () => {
     const harness = createRuntimeHarness()
     const running = harness.runtime.startTurn(harness.request, event => harness.events.push(event))
     await waitForTurnStart(harness)
-    expect(harness.calls).toContainEqual({ method: 'thread/start', params: { cwd: 'C:/repo', sandbox: 'workspaceWrite', approvalPolicy: 'unlessTrusted', developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool], model: 'gpt-5-codex' } })
+    expect(harness.calls).toContainEqual({ method: 'thread/start', params: { developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool] } })
     expect(harness.calls).toContainEqual({ method: 'turn/start', params: { threadId: 'thr-1', input: [{ type: 'text', text: 'Hello, Neru.' }] } })
     completeTurn(harness)
     await expect(running).resolves.toEqual({ threadId: 'thr-1' })
   })
 
-  it('resumes the stored thread and omits the configured-model sentinel', async () => {
+  it('sends only explicit runtime overrides', async () => {
     const harness = createRuntimeHarness()
-    const running = harness.runtime.startTurn(createRequest({ model: 'codex-configured', threadId: 'thr-saved' }), () => {})
+    const running = harness.runtime.startTurn(createRequest({
+      threadId: 'thr-saved',
+      overrides: {
+        model: 'gpt-x',
+        effort: 'high',
+        serviceTier: 'fast',
+        cwd: 'C:/repo',
+        sandbox: 'readOnly',
+        approvalPolicy: 'onRequest',
+        approvalsReviewer: 'auto_review',
+      },
+    } as Partial<CodexTurnRequest>), () => {})
     await waitForTurnStart(harness)
-    expect(harness.calls).toContainEqual({ method: 'thread/resume', params: { threadId: 'thr-saved', cwd: 'C:/repo', sandbox: 'workspaceWrite', approvalPolicy: 'unlessTrusted', developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool] } })
+    expect(harness.calls).toContainEqual({ method: 'thread/resume', params: { threadId: 'thr-saved', cwd: 'C:/repo', sandbox: 'read-only', approvalPolicy: 'on-request', approvalsReviewer: 'auto_review', developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool], model: 'gpt-x' } })
+    expect(harness.calls).toContainEqual({ method: 'turn/start', params: { threadId: 'thr-1', input: [{ type: 'text', text: 'Hello, Neru.' }], cwd: 'C:/repo', sandboxPolicy: { type: 'readOnly' }, approvalPolicy: 'on-request', approvalsReviewer: 'auto_review', model: 'gpt-x', effort: 'high', serviceTier: 'fast' } })
     completeTurn(harness)
     await running
   })

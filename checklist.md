@@ -2,6 +2,20 @@
 
 로드맵과 상세는 `.meridian/plans/neru-mvp-voice-core.md` 참조.
 
+## Codex CLI 지원 상태 오탐 수정 (2026-07-20)
+
+- [x] 실제 Codex CLI 경로와 버전 확인.
+- [x] app-server `initialize` 직접 재현.
+- [x] 기능 확인 실패를 자동 테스트로 재현.
+- [x] app-server 프로토콜 값을 최소 수정.
+- [x] 집중 테스트와 타입 검사 실행.
+- [x] 실제 CLI에서 기능 확인과 계정 조회 RPC 재검증.
+- [x] Electron과 동일한 Node 실행에서 WindowsApps `codex.exe`의 `EPERM` 재현.
+- [x] `cmd.exe` 경유 버전 확인과 app-server 파이프 동작 검증.
+- [x] Windows 실행 경계를 실패 테스트로 고정.
+- [ ] Electron 설정 화면에서 계정 상태 최종 확인.
+- [x] 변경 범위 자체 검토.
+
 ## 마일스톤 1 — 골격 + provider 인터페이스
 - [x] 이벤트/데이터 타입 정의 (`events.py`: State, SpeechStarted, Transcript, ReplyChunk, Shutdown)
 - [x] provider 추상 인터페이스 (STT/LLM/TTS/Avatar base) + OutputSink 프로토콜
@@ -133,8 +147,60 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [x] Codex app-server Device OAuth·thread·도구·승인 프로토콜 확인
 - [x] 제공자 선택 방식과 권한 경계 사용자 승인
 - [x] 설계 문서 작성과 자체 검토
-- [ ] 사용자의 작성된 설계 문서 검토
+- [x] 사용자의 작성된 설계 문서 검토
 - [x] 구현 계획 작성
 - [x] Task 1~8 구현과 집중 자동 테스트 완료
 - [ ] 실제 Codex Device Login·도구·승인 흐름 수동 검증
 - [~] 타입 검사: 기존 VAD/모델 모듈 누락 오류가 남아 전체 통과하지 않음
+
+---
+
+## Codex OAuth 실행 설정 보강 (2026-07-19)
+
+- [x] 현재 전용 설정 UI와 app-server 요청 경로 조사.
+- [x] 공식 app-server의 `model/list`, 모델별 추론 강도, thread·turn 덮어쓰기 계약 확인.
+- [x] 기본 미설정·Codex 설정 상속과 항목별 Neru 덮어쓰기 설계 승인.
+- [x] 사용자의 갱신된 설계 문서 검토.
+- [x] app-server 모델 카탈로그와 지원 옵션을 Electron 브리지로 노출.
+- [x] 제공자별 덮어쓰기 설정 저장소와 정규화 테스트 작성.
+- [x] Codex 전용 설정 UI에 모델·추론 강도·서비스 등급·작업 폴더·권한·승인 설정 추가.
+- [x] thread·turn 요청에서 상속 필드는 생략하고 명시적 덮어쓰기만 전달.
+- [x] 관련 단위 테스트, 앱 타입 검사, Electron 재시작 검증.
+- [x] 스크린샷으로 실제 데스크톱 제공자 경로가 기존 `settings/providers/chat/[providerId]`임을 확인.
+- [x] 기존 제공자 경로에서 API 키 폼 대신 Codex OAuth 전용 카드를 렌더링.
+- [x] 개발 서버 재로딩과 Electron 프로세스 종료를 구분해 튕김 증상을 재검증.
+
+---
+
+## Neru 데스크톱 렌더 성능 개선 (2026-07-20)
+
+- [x] Electron 프로세스별 CPU·메모리와 역할 확인.
+- [x] Codex 설정 반응성과 메인 Live2D 렌더 부하 분리.
+- [x] 자동 DevTools 렌더러 종료 전후 메모리 확인.
+- [x] 명시적 디버그 플래그에서만 DevTools를 여는 정책 테스트와 구현.
+- [x] AIRI 기본 Live2D 값을 30 FPS·1배 스케일로 1회 마이그레이션하는 테스트와 구현.
+- [x] 앱 재시작 후 메인 렌더러 CPU·메모리 전후 비교.
+- [x] 애드바이저 권고와 자체 검토 반영.
+- [x] 사용자 확인에 따라 Live2D 성능 프리시드 철회 및 기존 무제한 FPS·2배 렌더 복원.
+
+---
+
+## Codex OAuth 채팅 전송기 연결 복구 (2026-07-20)
+
+- [x] 실제 오류 스택과 실행 로그 확인.
+- [x] 채팅 동기화 계층과 LLM 스트림 사이의 제공자 식별자 유실 지점 확인.
+- [x] 요청 시점의 제공자 식별자를 보존하는 재현 테스트 작성과 실패 확인.
+- [x] 최소 수정 후 집중 테스트와 관련 회귀 테스트 통과.
+- [x] Electron IPC의 도구 스키마 복제 실패를 재현하고 순수 JSON 변환으로 수정.
+- [x] Electron 재시작 후 실제 Codex OAuth 채팅 전송 확인.
+
+---
+
+## Codex 캐릭터 프롬프트 연속성 (2026-07-20)
+
+- [x] 고정 프롬프트와 AIRI 조립 프롬프트의 전달 경로 비교.
+- [x] 프롬프트·모델 변경 시 thread 격리 방식 설계.
+- [x] 구현 계획 작성.
+- [x] 동적 시스템 메시지 전달 재현 테스트와 구현.
+- [x] thread 서명 저장·재사용·전환 테스트와 구현.
+- [ ] 집중 테스트와 실제 캐릭터 응답 검증.

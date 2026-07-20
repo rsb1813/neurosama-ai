@@ -2,6 +2,20 @@
 
 새 세션이 재파악 없이 이어갈 수 있도록 결정·근거·기각안을 계속 append.
 
+## Codex CLI 지원 상태 오탐 조사 (2026-07-20)
+
+- 사용자 화면은 `Codex CLI must be updated`와 `unsupported`를 표시했지만, 실제 CLI는 `0.144.6`이고 코드의 최소 버전 `0.144.4`보다 높습니다.
+- 같은 CLI에 보낸 app-server `initialize`는 성공했습니다. 따라서 설치·버전·초기화가 아니라 그 이후 기능 확인 또는 계정 조회 경로를 조사합니다.
+- 현재 매니저는 `thread/start`부터 `thread/unsubscribe`까지 발생하는 오류를 모두 기능 미지원으로 분류하므로, 이 범위의 일반 실행 오류도 버전 문제로 오인될 수 있습니다.
+- 수정 전 실패 테스트로 오분류를 고정하고, 지원 버전 판정과 런타임 실패를 분리하는 최소 변경을 우선합니다.
+- 실제 실패는 `thread/start`의 `sandbox: readOnly`였습니다. Codex CLI `0.144.6`의 thread 프로토콜은 `read-only`, `workspace-write`, `danger-full-access`를 요구합니다.
+- 같은 프로토콜의 승인 정책도 UI 값 `onRequest`, `unlessTrusted`를 각각 `on-request`, `untrusted`로 변환해야 합니다. turn의 `sandboxPolicy.type`은 기존 camelCase 계약을 유지합니다.
+- 수정된 실제 요청으로 `initialize`, `thread/start`, `thread/unsubscribe`, `account/read`가 모두 성공했습니다.
+- Codex 서비스 테스트 60개, 변경 파일 ESLint, `apps/stage-tamagotchi`의 `vue-tsc --noEmit`이 통과했습니다. 저장소 루트 타입 검사는 RTK가 `--filter`를 무시해 기존 전체 오류 310건을 보고했으며 이번 변경 검증에는 패키지 로컬 명령을 사용했습니다.
+- 재실행 후 스크린샷에서도 `unsupported`가 유지되었습니다. Electron과 같은 Node `execFile('codex')`를 재현하자 WindowsApps의 실행 별칭을 선택해 `spawn EPERM`이 발생했습니다.
+- PowerShell의 `codex`는 PATH 앞쪽 npm shim을 사용했기 때문에 앞선 직접 프로토콜 검증과 Electron 결과가 달랐습니다.
+- Windows에서는 고정된 `cmd.exe /d /s /c codex ...` 인수로 실행하면 npm shim이 선택됩니다. 실제 Node 검증에서 `codex-cli 0.144.6` 출력과 app-server `initialize` 응답 및 표준 입출력 파이프를 확인했습니다.
+
 ## 확정된 방향 (사용자 결정)
 - 언어 흐름: 사용자 **한국어 발화** → neru **영어 음성** 답변(Neuro-sama처럼) + 화면 **한국어 자막**.
 - 스택: 하이브리드 (Python 두뇌·음성 + TypeScript 프론트).
@@ -237,7 +251,7 @@
 - Codex 바이너리를 앱에 포함하거나 OAuth를 직접 구현하지 않는다. PATH에서 발견한 외부 Codex CLI의 공식 `app-server`를 Electron 메인 프로세스가 실행한다.
 - Device OAuth 토큰의 저장과 갱신은 Codex가 전담하며 Neru는 `auth.json`을 읽거나 토큰을 로그에 남기지 않는다.
 - Codex를 단순 텍스트 백엔드로 제한하지 않는다. 기존 AIRI 펑션 도구는 app-server `dynamicTools`로 연결하고 Codex 기본 파일·명령 도구도 유지한다.
-- 기본 실행 범위는 Neru 저장소의 workspace-write다. 범위 밖 파일, 추가 네트워크, 위험 명령은 app-server 승인 요청을 Neru 화면에 표시해 이번만 허용·세션 허용·거절 중 사용자가 선택한다.
+- 초기 구현은 Neru 저장소의 workspace-write를 기본 실행 범위로 삼았다. 이 결정은 아래의 `Codex OAuth 실행 설정 보강 결정`에서 기본 미설정·Codex 설정 상속으로 대체됐다.
 - 다른 제공자 실패 시 자동 폴백하지 않는다. OAuth 실패나 app-server 종료도 현재 설정을 보존하고 사용자가 명시적으로 재시도하거나 전환하게 한다.
 - 승인된 설계는 `docs/superpowers/specs/2026-07-19-neru-codex-oauth-provider-design.md`에 기록했다.
 - 구현 계획은 `docs/superpowers/plans/2026-07-19-neru-codex-oauth-provider.md`에 기록했다. 기존 xsAI 스트림을 대체하지 않고 `codex-oauth` provider ID만 별도 transport로 분기하며, Electron 메인의 app-server 매니저와 렌더러 사이에는 Eventa 직렬화 계약만 두는 구조다.
@@ -255,3 +269,70 @@
 - 네 상위 문서의 상대 Markdown 링크 검증 결과는 `all relative markdown links resolve`였다.
 - 상태 주장 스캔에서 발견한 완료·진행·보류 표기는 각 문서의 Git 근거와 일치했고, 오래된 상태 주장은 발견하지 못했다.
 - 웹 검색 병합 커밋 `080efde`가 존재함을 확인했다. proactive speech 팁 `3e3b8c4`는 `feat/neru-proactive-speech` 로컬 기능 브랜치에만 포함되고 `master`에는 포함되지 않았다.
+
+---
+
+## Codex OAuth 실행 설정 보강 결정 (2026-07-19)
+
+- 기존 구현은 모델을 `codex-configured` 센티널 하나로 고정하고 thread 시작 시 `sandbox: workspaceWrite`, `approvalPolicy: unlessTrusted`를 하드코딩한다.
+- 기본 동작은 Neru가 임의의 실행 설정을 강제하지 않고 사용자의 기존 Codex 설정을 상속하는 것으로 정했다.
+- 모델, 추론 강도, 서비스 등급, 작업 디렉터리, 샌드박스, 승인 정책, 승인 검토자는 각각 독립적으로 덮어쓸 수 있게 한다.
+- 상속을 선택한 값은 app-server RPC에서 생략하며, Neru는 사용자의 `config.toml`을 수정하지 않는다.
+- 모델과 지원 추론 강도는 하드코딩하지 않고 실행 중인 app-server의 `model/list` 응답을 사용한다.
+- Neru가 제공하는 동적 함수 도구는 항상 등록하되, Codex 자체 파일·명령 도구의 실행 범위는 상속되거나 명시적으로 덮어쓴 권한 설정을 따른다.
+- 개발 앱은 숨김 런처로 분리해 실행했으며 `http://localhost:5173`이 HTTP 200을 반환했다. 런타임 로그는 `C:\tmp\neru-desktop-out.log`와 `C:\tmp\neru-desktop-err.log`에 남는다.
+- 2026-07-20 스크린샷에서 실제 데스크톱이 기존 `settings/providers/chat/[providerId].vue`를 사용함을 확인했다. 이 경로는 모든 채팅 제공자에 API 키 폼을 무조건 렌더링했고, 전용 컴포넌트는 사용되지 않는 `v2` 경로에만 연결돼 있었다.
+- 같은 시점 로그에는 Electron 본체의 crash·quit가 없었다. Vite 의존성 최적화 뒤 렌더러 WebSocket이 정상 재로딩 코드 `1001`로 닫혔고, 3457 포트 중복으로 Neru 오디오 자식 프로세스만 code 3으로 종료됐다.
+- 실제 연쇄 튕김은 기능 코드 편집 중 Pinia HMR이 기존 `codex-account` 인스턴스에 새 `overrides` 상태를 추가하지 못해 `account.overrides`가 `undefined`가 된 것이 직접 원인이었다. 작업 트리의 Electron과 5173 개발 서버만 종료하고 다시 시작한 뒤 메인 프로세스 `RUNNING`, WebSocket 연결, HTTP 200을 확인했으며 같은 오류는 재발하지 않았다.
+- 기존 경로는 `codex-oauth`에서 전용 컴포넌트로 분기한다. 전용 화면은 Device OAuth 계정, `model/list` 기반 모델·추론 강도·서비스 티어, 작업 디렉터리·샌드박스·승인 정책·승인 검토자 덮어쓰기를 제공한다. 모든 선택값의 초기값은 미설정이며, 미설정 필드는 app-server 요청에서 생략해 Codex 설정을 상속한다.
+- 검증은 Codex 서비스·turn 런타임·렌더러 브리지·설정 경로 34개와 계정 저장소 2개 테스트, 변경 파일 ESLint, `stage-tamagotchi` `vue-tsc --noEmit`을 통과했다. `stage-pages` 단독 타입 검사는 기존 `models/inference-service-providers`, `models/characters` 누락에서만 5건 실패했다.
+
+---
+
+## Neru 데스크톱 렌더 성능 조사 (2026-07-20)
+
+- 작업 트리 Electron 41은 단일 메인 프로세스 PID 54868 아래 메인 렌더러 PID 46140, DevTools 렌더러 PID 32260, 저부하 렌더러 PID 56148과 GPU·오디오·네트워크 유틸리티를 실행했다. Windows 앱 목록의 Electron 40 루트 경로 표시는 실제 프로세스 명령행과 달라 오래된 앱 식별자로 판정했다.
+- 메인 렌더러 PID 46140은 누적 CPU 약 7,895초, working set 약 626~749MB, private memory 약 702MB였다. DevTools 렌더러 PID 32260은 working set 약 231MB였으며 종료 후 메인 앱과 Vite 서버는 유지됐다.
+- Codex 실행 설정 변경은 제공자 화면 마운트 시 1회 `model/list`를 호출하고, 채팅 turn 시작 시에만 override 객체를 복사한다. 지속적인 메인 렌더러 CPU 증가를 설명하는 반복 경로는 발견하지 못했다.
+- Live2D는 기본 `settings/live2d/max-fps = 0`과 `settings/live2d/render-scale = 2`로 Pixi ticker와 2배 내부 캔버스를 계속 렌더링한다. 현재 단일 가설은 자동 DevTools와 이 기본 렌더 정책이 개발 앱의 지속 부하를 만든다는 것이다.
+- Sol high 애드바이저의 4초 측정에서 메인 렌더러 CPU 시간은 5.94초 증가해 약 1.5코어를 점유했다. DevTools를 닫은 뒤에도 증가가 지속돼 DevTools는 메모리 증폭 요인, Live2D 렌더 정책은 지속 CPU의 P0 원인으로 분리했다.
+- Neru 성능 프리시드는 센티넬이 없고 값이 비어 있거나 알려진 AIRI 기본값 `0 FPS·2배 스케일`일 때만 `30 FPS·1배 스케일`을 적용한다. 이미 사용자 지정값이 있거나 센티넬 이후 사용자가 다시 무제한·2배로 선택한 경우는 보존한다.
+- 적용 후 같은 메인 렌더러에서 4.06초 동안 CPU 시간이 2.52초 증가해 변경 전 대비 지속 CPU 점유가 약 58% 감소했다. 별도 DevTools 렌더러 약 231MB도 제거했고, 명시적 `MAIN_APP_DEBUG` 또는 `APP_DEBUG`에서는 계속 열 수 있다.
+- `preserveDrawingBuffer` 비활성화와 설정 창 표시 중 스테이지 강제 정지는 캡처·데스크톱 펫 동작을 바꿀 수 있어 이번 범위에서 제외했다. 관련 테스트 44개, 변경 집중 테스트 10개, ESLint, stage-tamagotchi 타입 검사를 통과했다.
+- 이후 사용자가 체감 문제의 원인이 컴퓨터 쪽임을 확인하고 기존 렌더 품질 복원을 요청했다. Live2D 성능 프리시드는 제거하고, `neru/live2d-performance-seeded`가 존재하면서 값이 정확히 `30 FPS·1배`인 경우에만 `무제한 FPS·2배`로 되돌린다. 사용자가 직접 바꾼 값은 보존하며 DevTools 명시적 실행 정책은 유지한다.
+
+---
+
+## Codex OAuth 채팅 전송기 진단 (2026-07-20)
+
+- Device OAuth 호출은 `Device sign-in is already in progress.`까지 도달하므로 CLI 실행과 Electron 계정 브리지는 동작한다.
+- 채팅 실패 스택의 최상단은 `codex-oauth` 센티널 제공자의 `chat()`이다. 따라서 전용 LLM 전송기를 찾기 전에 일반 제공자 경로로 빠진 것이다.
+- 실행 중인 `core-agent/dist/index.mjs`에는 `providerId: activeProvider` 전달 코드가 있고 Vite의 브리지와 LLM 저장소도 동일한 `llm-transports.ts` 모듈을 참조한다. 오래된 빌드와 모듈 중복 가설은 제외했다.
+- 채팅 동기화 계층은 요청을 시작할 때 `activeProvider.value`가 `codex-oauth`임을 확인해 센티널 제공자를 가져온다. 그러나 코어 런타임은 실제 스트림 직전에 전역 상태를 다시 조회하며, 관찰된 실패에서는 이 값이 빈 문자열이 됐다.
+- 선택된 제공자 구현과 식별자가 서로 어긋나지 않도록 요청 시점에 확인한 `providerId`를 전송 옵션에 포함하고, 코어 런타임은 명시값을 우선하며 기존 전역 조회를 호환성 폴백으로 유지한다.
+- 커밋 `46eb2df` 적용 후 실제 채팅에서 같은 센티널 오류가 재현됐다. 따라서 식별자 누락만으로 단정한 이전 원인 설명은 불충분하다.
+- 다음 실행에서는 권한 창의 선택값 형태, LLM 전송기 조회 키, 렌더러별 등록 키를 함께 기록해 `Ref` 전달과 렌더러별 모듈 저장소 분리 가설을 구분한다.
+- 실측 결과 `providerId`는 문자열 `codex-oauth`, 등록 키도 같은 문자열이었지만 조회 로그는 실행되지 않았다. `useLLM.stream()`의 첫 문장인 `modelKey(model, chatProvider)`가 센티널의 `chat()`을 호출해 조회 전에 예외를 발생시키는 것이 최종 원인이다.
+- 사용자 요청 시점의 식별자 보존 수정은 유효하지만 충분하지 않았다. 커스텀 전송기 조회와 실행을 먼저 처리하고, `modelKey`는 일반 xsAI 경로에서만 계산하도록 순서를 바꾼다.
+- 전송기 순서 수정 후 실제 요청은 Electron `startTurn`까지 진입했지만 `An object could not be cloned.`로 실패했다. `tool.function.parameters`가 Vue 반응형 프록시인 재현 테스트에서 동일한 `DataCloneError`를 확인했다.
+- Codex app-server의 `dynamicTools.inputSchema`는 JSON Schema이므로 IPC 경계에서 JSON 직렬화·역직렬화해 순수 데이터로 정규화한다. 실행 함수 등 렌더러 전용 값은 기존처럼 IPC 요청에 포함하지 않는다.
+- 실제 `안녕?` 요청은 Codex 응답과 TTS 단계까지 도달해 전송 경로가 복구됐음을 확인했다. 다만 Sol low와 개발 서버 전체 리로드가 겹쳐 약 30초의 채팅 권한 타임아웃보다 응답이 늦게 도착했다.
+- 일반 대화 지연을 줄이기 위해 런타임 설정을 `gpt-5.6-terra`, 가장 낮은 추론 강도, `priority` 서비스 티어로 변경했다. 이 변경은 Neru 로컬 설정에 저장되며 코드 기본값을 강제하지 않는다.
+- TTS 실패는 강제 재시작 후 고아 오디오 프로세스가 3457 포트를 점유해 새 게이트웨이가 code 3으로 종료된 것이 원인이었다. 포트 점유 프로세스를 정리해 재시작한 뒤 앱 5173과 인증된 `/v1/models` 3457 응답이 모두 HTTP 200임을 확인했다.
+
+---
+
+## Codex 캐릭터 프롬프트 연속성 결정 (2026-07-20)
+
+- Codex app-server에는 고정 `NERU_SYSTEM_PROMPT`가 `developerInstructions`로 전달되지만, AIRI가 캐릭터 카드와 활성 도구 지침을 합쳐 만든 실제 시스템 메시지는 브리지의 마지막 사용자 발화 추출 과정에서 버려진다.
+- 요청의 현재 시스템 메시지를 우선하고 고정 Neru 프롬프트는 시스템 메시지가 없을 때만 폴백으로 사용한다.
+- 최종 시스템 지침과 실제 Codex 모델로 thread 서명을 만들고, 서명이 같을 때만 기존 thread를 재사용한다. 페르소나나 모델 변경 시 새 thread를 시작해 이전 응답 스타일의 영향을 차단한다.
+- 기존 문자열 thread 저장값은 서명이 없으므로 최초 요청에서 새 thread로 전환한다. 전체 AIRI 과거 대화 이식은 이번 범위에 포함하지 않는다.
+
+### 구현 및 자동 검증 결과
+
+- renderer bridge가 요청의 첫 번째 비어 있지 않은 `system` 메시지를 `developerInstructions`로 전달하며, 없으면 기존 `NERU_SYSTEM_PROMPT`를 사용하도록 구현했다.
+- 최종 developer instructions와 실제 Codex 모델 override를 SHA-256으로 서명해 `{ threadId, signature }` 형태로 저장한다. 같은 서명만 resume하고 프롬프트나 모델이 바뀌면 새 thread를 시작한다.
+- 기존 문자열 thread 저장값은 resume하지 않고, 다음 성공 요청에서 서명된 객체 형식으로 자동 교체한다.
+- bridge 집중 테스트 9개, stage-ui LLM 회귀 테스트 31개, stage-tamagotchi `vue-tsc --noEmit`이 통과했다.
+- 대상 ESLint에는 이번 변경으로 추가된 오류가 없고, 테스트 파일에 작업 전부터 있던 `style/max-statements-per-line`과 `test/prefer-lowercase-title` 오류 2개만 남아 있다.
