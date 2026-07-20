@@ -2,6 +2,17 @@
 
 로드맵과 상세는 `.meridian/plans/neru-mvp-voice-core.md` 참조.
 
+## Codex CLI 지원 상태 오탐 수정 (2026-07-20)
+
+- [x] 실제 Codex CLI 경로와 버전 확인.
+- [x] app-server `initialize` 직접 재현.
+- [x] 기능 확인 실패를 자동 테스트로 재현.
+- [x] app-server 프로토콜 값을 최소 수정.
+- [x] 집중 테스트와 타입 검사 실행.
+- [x] 실제 CLI에서 기능 확인과 계정 조회 RPC 재검증.
+- [ ] Electron 설정 화면에서 계정 상태 최종 확인.
+- [x] 변경 범위 자체 검토.
+
 ## 마일스톤 1 — 골격 + provider 인터페이스
 - [x] 이벤트/데이터 타입 정의 (`events.py`: State, SpeechStarted, Transcript, ReplyChunk, Shutdown)
 - [x] provider 추상 인터페이스 (STT/LLM/TTS/Avatar base) + OutputSink 프로토콜

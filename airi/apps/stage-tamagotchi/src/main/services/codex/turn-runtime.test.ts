@@ -126,8 +126,8 @@ describe('createCodexTurnRuntime', () => {
       },
     } as Partial<CodexTurnRequest>), () => {})
     await waitForTurnStart(harness)
-    expect(harness.calls).toContainEqual({ method: 'thread/resume', params: { threadId: 'thr-saved', cwd: 'C:/repo', sandbox: 'readOnly', approvalPolicy: 'onRequest', approvalsReviewer: 'auto_review', developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool], model: 'gpt-x' } })
-    expect(harness.calls).toContainEqual({ method: 'turn/start', params: { threadId: 'thr-1', input: [{ type: 'text', text: 'Hello, Neru.' }], cwd: 'C:/repo', sandboxPolicy: { type: 'readOnly' }, approvalPolicy: 'onRequest', approvalsReviewer: 'auto_review', model: 'gpt-x', effort: 'high', serviceTier: 'fast' } })
+    expect(harness.calls).toContainEqual({ method: 'thread/resume', params: { threadId: 'thr-saved', cwd: 'C:/repo', sandbox: 'read-only', approvalPolicy: 'on-request', approvalsReviewer: 'auto_review', developerInstructions: 'You are Neru.', dynamicTools: [dynamicTool], model: 'gpt-x' } })
+    expect(harness.calls).toContainEqual({ method: 'turn/start', params: { threadId: 'thr-1', input: [{ type: 'text', text: 'Hello, Neru.' }], cwd: 'C:/repo', sandboxPolicy: { type: 'readOnly' }, approvalPolicy: 'on-request', approvalsReviewer: 'auto_review', model: 'gpt-x', effort: 'high', serviceTier: 'fast' } })
     completeTurn(harness)
     await running
   })

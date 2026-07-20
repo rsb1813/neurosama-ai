@@ -3,6 +3,7 @@ import type {
   CodexApprovalDecision,
   CodexBridgeEvent,
   CodexJsonValue,
+  CodexRuntimeOverrides,
   CodexToolResult,
   CodexTurnRequest,
 } from '../../../shared/eventa/codex'
@@ -411,9 +412,9 @@ function createThreadParams(request: CodexTurnRequest): Record<string, unknown> 
   if (overrides.cwd !== undefined)
     params.cwd = overrides.cwd
   if (overrides.sandbox !== undefined)
-    params.sandbox = overrides.sandbox
+    params.sandbox = toSandboxMode(overrides.sandbox)
   if (overrides.approvalPolicy !== undefined)
-    params.approvalPolicy = overrides.approvalPolicy
+    params.approvalPolicy = toApprovalPolicy(overrides.approvalPolicy)
   if (overrides.approvalsReviewer !== undefined)
     params.approvalsReviewer = overrides.approvalsReviewer
   if (overrides.model !== undefined)
@@ -432,7 +433,7 @@ function createTurnParams(request: CodexTurnRequest, threadId: string): Record<s
   if (overrides.sandbox !== undefined)
     params.sandboxPolicy = { type: overrides.sandbox }
   if (overrides.approvalPolicy !== undefined)
-    params.approvalPolicy = overrides.approvalPolicy
+    params.approvalPolicy = toApprovalPolicy(overrides.approvalPolicy)
   if (overrides.approvalsReviewer !== undefined)
     params.approvalsReviewer = overrides.approvalsReviewer
   if (overrides.model !== undefined)
@@ -442,6 +443,22 @@ function createTurnParams(request: CodexTurnRequest, threadId: string): Record<s
   if (overrides.serviceTier !== undefined)
     params.serviceTier = overrides.serviceTier
   return params
+}
+
+function toSandboxMode(sandbox: NonNullable<CodexRuntimeOverrides['sandbox']>): string {
+  return {
+    readOnly: 'read-only',
+    workspaceWrite: 'workspace-write',
+    dangerFullAccess: 'danger-full-access',
+  }[sandbox]
+}
+
+function toApprovalPolicy(policy: NonNullable<CodexRuntimeOverrides['approvalPolicy']>): string {
+  return {
+    unlessTrusted: 'untrusted',
+    onRequest: 'on-request',
+    never: 'never',
+  }[policy]
 }
 
 function readThreadId(value: unknown): string | undefined {

@@ -2,6 +2,17 @@
 
 새 세션이 재파악 없이 이어갈 수 있도록 결정·근거·기각안을 계속 append.
 
+## Codex CLI 지원 상태 오탐 조사 (2026-07-20)
+
+- 사용자 화면은 `Codex CLI must be updated`와 `unsupported`를 표시했지만, 실제 CLI는 `0.144.6`이고 코드의 최소 버전 `0.144.4`보다 높습니다.
+- 같은 CLI에 보낸 app-server `initialize`는 성공했습니다. 따라서 설치·버전·초기화가 아니라 그 이후 기능 확인 또는 계정 조회 경로를 조사합니다.
+- 현재 매니저는 `thread/start`부터 `thread/unsubscribe`까지 발생하는 오류를 모두 기능 미지원으로 분류하므로, 이 범위의 일반 실행 오류도 버전 문제로 오인될 수 있습니다.
+- 수정 전 실패 테스트로 오분류를 고정하고, 지원 버전 판정과 런타임 실패를 분리하는 최소 변경을 우선합니다.
+- 실제 실패는 `thread/start`의 `sandbox: readOnly`였습니다. Codex CLI `0.144.6`의 thread 프로토콜은 `read-only`, `workspace-write`, `danger-full-access`를 요구합니다.
+- 같은 프로토콜의 승인 정책도 UI 값 `onRequest`, `unlessTrusted`를 각각 `on-request`, `untrusted`로 변환해야 합니다. turn의 `sandboxPolicy.type`은 기존 camelCase 계약을 유지합니다.
+- 수정된 실제 요청으로 `initialize`, `thread/start`, `thread/unsubscribe`, `account/read`가 모두 성공했습니다.
+- Codex 서비스 테스트 60개, 변경 파일 ESLint, `apps/stage-tamagotchi`의 `vue-tsc --noEmit`이 통과했습니다. 저장소 루트 타입 검사는 RTK가 `--filter`를 무시해 기존 전체 오류 310건을 보고했으며 이번 변경 검증에는 패키지 로컬 명령을 사용했습니다.
+
 ## 확정된 방향 (사용자 결정)
 - 언어 흐름: 사용자 **한국어 발화** → neru **영어 음성** 답변(Neuro-sama처럼) + 화면 **한국어 자막**.
 - 스택: 하이브리드 (Python 두뇌·음성 + TypeScript 프론트).

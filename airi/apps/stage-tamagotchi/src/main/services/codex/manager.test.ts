@@ -202,7 +202,7 @@ describe('createCodexManager', () => {
         params: {
           cwd: '/workspace/neru',
           ephemeral: true,
-          sandbox: 'readOnly',
+          sandbox: 'read-only',
           approvalPolicy: 'never',
           dynamicTools: [{
             type: 'function',
