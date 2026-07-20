@@ -5,7 +5,7 @@ import type { Ref } from 'vue'
 
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computed, ref } from 'vue'
+import { reactive, ref } from 'vue'
 
 const mockResolveLlmTools = vi.hoisted(() => vi.fn<(options?: { customTools?: (() => Promise<Tool[]>) | Tool[] }) => Promise<Tool[]>>())
 const mockWidgetsTools = vi.hoisted(() => vi.fn<() => Promise<Tool[]>>(async () => []))
@@ -153,9 +153,9 @@ vi.mock('@proj-airi/stage-ui/stores/providers', () => ({
 }))
 
 vi.mock('@proj-airi/stage-ui/stores/modules/consciousness', () => ({
-  useConsciousnessStore: () => ({
-    activeProvider: computed(() => 'provider-id'),
-    activeModel: computed(() => 'model-id'),
+  useConsciousnessStore: () => reactive({
+    activeProvider: ref('provider-id'),
+    activeModel: ref('model-id'),
   }),
 }))
 
@@ -277,6 +277,33 @@ describe('useChatSyncStore', async () => {
     expect(persistedMessages).toHaveLength(2)
     expect(persistedMessages[1]?.role).toBe('error')
     expect(persistedMessages[1]?.content).toContain('This model is not available in your region')
+
+    peer.close()
+    store.dispose()
+  })
+
+  it('passes the selected provider ID to authority ingest', async () => {
+    mockState.ingest.mockResolvedValueOnce(undefined)
+    const store = useChatSyncStore()
+    store.initialize('authority')
+
+    const peer = new MockBroadcastChannel('airi:stage-tamagotchi:chat-sync')
+    peer.postMessage({
+      type: 'command',
+      requestId: 'req-provider',
+      senderId: 'peer',
+      command: 'ingest',
+      payload: {
+        text: 'hello',
+        sessionId: 'session-1',
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(mockState.ingest).toHaveBeenCalledWith('hello', expect.objectContaining({
+        providerId: 'provider-id',
+      }), 'session-1')
+    })
 
     peer.close()
     store.dispose()

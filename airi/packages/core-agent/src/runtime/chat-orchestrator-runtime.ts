@@ -56,6 +56,8 @@ function isAbortError(error: unknown): boolean {
  * Options accepted by the chat orchestrator runtime for one user send.
  */
 export interface ChatOrchestratorSendOptions {
+  /** Provider identifier selected together with the concrete provider implementation. */
+  providerId?: string
   /** Provider model identifier used for the outbound LLM request. */
   model: string
   /** Concrete chat provider implementation selected by the caller. */
@@ -442,7 +444,7 @@ export function createChatOrchestratorRuntime(deps: ChatOrchestratorRuntimeDeps)
     }
     patchForegroundStream(sessionId, buildingMessage)
     const sendSource = options.input ? 'voice' : 'text'
-    const activeProvider = deps.getActiveProvider?.() ?? ''
+    const activeProvider = options.providerId ?? deps.getActiveProvider?.() ?? ''
     deps.onTrackFirstMessage?.()
     deps.onChatActivationStarted?.({
       sessionId,

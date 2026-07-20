@@ -300,3 +300,13 @@
 - 적용 후 같은 메인 렌더러에서 4.06초 동안 CPU 시간이 2.52초 증가해 변경 전 대비 지속 CPU 점유가 약 58% 감소했다. 별도 DevTools 렌더러 약 231MB도 제거했고, 명시적 `MAIN_APP_DEBUG` 또는 `APP_DEBUG`에서는 계속 열 수 있다.
 - `preserveDrawingBuffer` 비활성화와 설정 창 표시 중 스테이지 강제 정지는 캡처·데스크톱 펫 동작을 바꿀 수 있어 이번 범위에서 제외했다. 관련 테스트 44개, 변경 집중 테스트 10개, ESLint, stage-tamagotchi 타입 검사를 통과했다.
 - 이후 사용자가 체감 문제의 원인이 컴퓨터 쪽임을 확인하고 기존 렌더 품질 복원을 요청했다. Live2D 성능 프리시드는 제거하고, `neru/live2d-performance-seeded`가 존재하면서 값이 정확히 `30 FPS·1배`인 경우에만 `무제한 FPS·2배`로 되돌린다. 사용자가 직접 바꾼 값은 보존하며 DevTools 명시적 실행 정책은 유지한다.
+
+---
+
+## Codex OAuth 채팅 전송기 진단 (2026-07-20)
+
+- Device OAuth 호출은 `Device sign-in is already in progress.`까지 도달하므로 CLI 실행과 Electron 계정 브리지는 동작한다.
+- 채팅 실패 스택의 최상단은 `codex-oauth` 센티널 제공자의 `chat()`이다. 따라서 전용 LLM 전송기를 찾기 전에 일반 제공자 경로로 빠진 것이다.
+- 실행 중인 `core-agent/dist/index.mjs`에는 `providerId: activeProvider` 전달 코드가 있고 Vite의 브리지와 LLM 저장소도 동일한 `llm-transports.ts` 모듈을 참조한다. 오래된 빌드와 모듈 중복 가설은 제외했다.
+- 채팅 동기화 계층은 요청을 시작할 때 `activeProvider.value`가 `codex-oauth`임을 확인해 센티널 제공자를 가져온다. 그러나 코어 런타임은 실제 스트림 직전에 전역 상태를 다시 조회하며, 관찰된 실패에서는 이 값이 빈 문자열이 됐다.
+- 선택된 제공자 구현과 식별자가 서로 어긋나지 않도록 요청 시점에 확인한 `providerId`를 전송 옵션에 포함하고, 코어 런타임은 명시값을 우선하며 기존 전역 조회를 호환성 폴백으로 유지한다.

@@ -340,6 +340,7 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
     }
 
     await chatOrchestrator.ingest(payload.text, {
+      providerId,
       model: modelId,
       chatProvider,
       attachments: payload.attachments,
