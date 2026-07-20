@@ -18,7 +18,6 @@ export const useLLM = defineStore('llm', () => {
   const contentArrayCompatibility = ref<Map<string, boolean>>(new Map())
 
   async function stream(model: string, chatProvider: ChatProvider, messages: Message[], options?: StreamOptions) {
-    const key = modelKey(model, chatProvider)
     const { tools: customTools, ...streamOptions } = options ?? {}
     const builtinToolsResolver = () => resolveLlmTools({ customTools })
     const transport = getLlmTransport(streamOptions.providerId)
@@ -39,6 +38,7 @@ export const useLLM = defineStore('llm', () => {
     if (streamOptions.providerId === 'codex-oauth')
       throw new Error('Codex OAuth 전송기가 준비되지 않았습니다. 데스크톱 앱을 다시 시작하세요.')
 
+    const key = modelKey(model, chatProvider)
     const runStream = () => coreStreamFrom({
       model,
       chatProvider,

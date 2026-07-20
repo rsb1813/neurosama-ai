@@ -55,9 +55,15 @@ function messageText(messages: Message[]): string {
 }
 
 function jsonObject(value: unknown): CodexJsonObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as CodexJsonObject
-    : {}
+  try {
+    const parsed = JSON.parse(JSON.stringify(value))
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as CodexJsonObject
+      : {}
+  }
+  catch {
+    return {}
+  }
 }
 
 function dynamicTools(tools: Tool[]): CodexDynamicToolDescriptor[] {

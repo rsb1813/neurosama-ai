@@ -1,8 +1,9 @@
 // Codex Electron 이벤트를 AIRI 스트림과 도구 실행으로 변환하는 브리지를 검증한다.
-import type { CodexBridgeEvent, CodexTurnRequest } from '../../shared/eventa/codex'
 import type { Tool } from '@xsai/shared-chat'
+import type { CodexBridgeEvent, CodexTurnRequest } from '../../shared/eventa/codex'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { reactive } from 'vue'
 
 import { initializeCodexBridge } from './codex'
 
@@ -105,5 +106,35 @@ describe('Codex renderer bridge', () => {
     expect(request.overrides).toEqual({ model: 'gpt-x', effort: 'high' })
     await harness.emit({ type: 'finish', streamId: request.streamId, threadId: 'thread-1', turnId: 'turn-1' })
     await stream
+  })
+
+  it('sends cloneable tool schemas across the Electron IPC boundary', async () => {
+    const harness = createHarness()
+    harness.startTurn.mockImplementation(async (request) => {
+      structuredClone(request)
+      return { threadId: 'thread-1' }
+    })
+    const tool = {
+      function: {
+        name: 'remember',
+        description: 'Save memory.',
+        parameters: reactive({ type: 'object', properties: { text: { type: 'string' } } }),
+      },
+      execute: vi.fn(async () => 'saved'),
+    } as unknown as Tool
+    const stream = harness.bridge.transport({
+      providerId: 'codex-oauth',
+      sessionId: 'session-1',
+      model: 'codex-configured',
+      messages: [{ role: 'user', content: 'Remember this.' }],
+      tools: [tool],
+      options: {},
+    })
+
+    await vi.waitFor(() => expect(harness.startTurn).toHaveBeenCalledOnce())
+    const request = harness.startTurn.mock.calls[0][0]
+    await harness.emit({ type: 'finish', streamId: request.streamId, threadId: 'thread-1', turnId: 'turn-1' })
+
+    await expect(stream).resolves.toBeUndefined()
   })
 })

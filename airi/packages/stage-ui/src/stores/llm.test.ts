@@ -5,8 +5,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { isToolRelatedError, useLLM } from './llm'
-import { registerLlmTransport } from './llm-transports'
 import { useLlmToolsStore } from './llm-tools'
+import { registerLlmTransport } from './llm-transports'
 
 const {
   streamTextMock,
@@ -158,9 +158,14 @@ describe('isToolRelatedError', () => {
     const transport = vi.fn(async () => {})
     const unregister = registerLlmTransport('codex-oauth', transport)
     const messages = [{ role: 'user', content: 'hello' }] as Message[]
+    const sentinelProvider = {
+      chat: () => {
+        throw new Error('sentinel provider must not be called')
+      },
+    } as unknown as ChatProvider
 
     try {
-      await useLLM().stream('codex-configured', provider, messages, {
+      await useLLM().stream('codex-configured', sentinelProvider, messages, {
         providerId: 'codex-oauth',
         sessionId: 'session-1',
       })
