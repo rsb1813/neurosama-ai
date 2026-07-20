@@ -1,8 +1,8 @@
 <!-- Neru 제품 랜딩 페이지의 승인된 콘텐츠, 시각 체계, 구현 경계를 정의하는 설계 문서 -->
 # Neru Landing Page Design
 
-**Date:** 2026-07-19  
-**Status:** Approved in conversation; awaiting written-spec review  
+**Date:** 2026-07-19
+**Status:** Approved in conversation; awaiting written-spec review
 **Deliverable:** Local private preview only. No Sites deployment or public URL.
 
 ## Goal
