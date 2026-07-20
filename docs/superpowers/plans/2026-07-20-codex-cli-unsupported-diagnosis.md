@@ -10,6 +10,8 @@
 - Neru 최소 지원 버전은 `0.144.4`입니다.
 - 동일 CLI의 app-server `initialize` 요청은 정상 응답합니다.
 - 현재 매니저는 초기화 이후 기능 확인 중 발생하는 모든 오류를 CLI 버전 미지원으로 분류합니다.
+- Windows에서 Node의 `execFile('codex')`는 npm shim보다 WindowsApps 실행 별칭을 선택해 `EPERM`으로 실패합니다.
+- `cmd.exe /d /s /c codex ...`는 npm shim을 선택하며 버전 확인과 app-server 파이프 입출력이 모두 성공합니다.
 
 ## 작업 순서
 
@@ -17,6 +19,7 @@
 2. 실패 분류와 진단 정보를 최소 범위로 수정합니다. 검증은 집중 테스트 통과로 확인합니다.
 3. 실제 Electron 경로에서 상태와 계정 조회를 확인합니다. 검증은 UI 상태와 로그로 확인합니다.
 4. 관련 테스트, 타입 검사, 변경 범위 자체 검토를 수행합니다.
+5. Windows 실행 경계를 테스트로 고정하고, Windows에서만 `cmd.exe`를 통해 Codex를 실행합니다.
 
 ## 성공 기준
 

@@ -12,6 +12,9 @@
 - 같은 프로토콜의 승인 정책도 UI 값 `onRequest`, `unlessTrusted`를 각각 `on-request`, `untrusted`로 변환해야 합니다. turn의 `sandboxPolicy.type`은 기존 camelCase 계약을 유지합니다.
 - 수정된 실제 요청으로 `initialize`, `thread/start`, `thread/unsubscribe`, `account/read`가 모두 성공했습니다.
 - Codex 서비스 테스트 60개, 변경 파일 ESLint, `apps/stage-tamagotchi`의 `vue-tsc --noEmit`이 통과했습니다. 저장소 루트 타입 검사는 RTK가 `--filter`를 무시해 기존 전체 오류 310건을 보고했으며 이번 변경 검증에는 패키지 로컬 명령을 사용했습니다.
+- 재실행 후 스크린샷에서도 `unsupported`가 유지되었습니다. Electron과 같은 Node `execFile('codex')`를 재현하자 WindowsApps의 실행 별칭을 선택해 `spawn EPERM`이 발생했습니다.
+- PowerShell의 `codex`는 PATH 앞쪽 npm shim을 사용했기 때문에 앞선 직접 프로토콜 검증과 Electron 결과가 달랐습니다.
+- Windows에서는 고정된 `cmd.exe /d /s /c codex ...` 인수로 실행하면 npm shim이 선택됩니다. 실제 Node 검증에서 `codex-cli 0.144.6` 출력과 app-server `initialize` 응답 및 표준 입출력 파이프를 확인했습니다.
 
 ## 확정된 방향 (사용자 결정)
 - 언어 흐름: 사용자 **한국어 발화** → neru **영어 음성** 답변(Neuro-sama처럼) + 화면 **한국어 자막**.

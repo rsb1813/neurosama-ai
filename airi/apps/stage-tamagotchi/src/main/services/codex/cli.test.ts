@@ -3,7 +3,7 @@ import type { CodexCliExecutor } from './types'
 
 import { describe, expect, it } from 'vitest'
 
-import { inspectCodexCli } from './cli'
+import { codexCliCommand, inspectCodexCli } from './cli'
 
 function fakeExec(stdout: string): CodexCliExecutor {
   return async () => stdout
@@ -32,5 +32,18 @@ describe('inspectCodexCli', () => {
       supported: false,
       error: 'spawn codex ENOENT',
     })
+  })
+})
+
+describe('codexCliCommand', () => {
+  it('uses the Windows command interpreter so npm shims win over app execution aliases', () => {
+    expect(codexCliCommand('win32', 'C:/Windows/System32/cmd.exe')).toEqual({
+      executable: 'C:/Windows/System32/cmd.exe',
+      prefixArgs: ['/d', '/s', '/c', 'codex'],
+    })
+  })
+
+  it('executes Codex directly on non-Windows platforms', () => {
+    expect(codexCliCommand('linux')).toEqual({ executable: 'codex', prefixArgs: [] })
   })
 })

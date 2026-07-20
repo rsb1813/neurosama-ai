@@ -10,6 +10,9 @@
 - [x] app-server 프로토콜 값을 최소 수정.
 - [x] 집중 테스트와 타입 검사 실행.
 - [x] 실제 CLI에서 기능 확인과 계정 조회 RPC 재검증.
+- [x] Electron과 동일한 Node 실행에서 WindowsApps `codex.exe`의 `EPERM` 재현.
+- [x] `cmd.exe` 경유 버전 확인과 app-server 파이프 동작 검증.
+- [x] Windows 실행 경계를 실패 테스트로 고정.
 - [ ] Electron 설정 화면에서 계정 상태 최종 확인.
 - [x] 변경 범위 자체 검토.
 
