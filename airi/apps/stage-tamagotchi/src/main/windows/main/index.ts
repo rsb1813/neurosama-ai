@@ -19,7 +19,6 @@ import { fileURLToPath } from 'node:url'
 
 import clickDragPlugin from 'electron-click-drag-plugin'
 
-import { is } from '@electron-toolkit/utils'
 import { defineInvokeHandler } from '@moeru/eventa'
 import { createContext } from '@moeru/eventa/adapters/electron/main'
 import { initScreenCaptureForWindow } from '@proj-airi/electron-screen-capture/main'
@@ -35,6 +34,7 @@ import { onAppBeforeQuit } from '../../libs/bootkit/lifecycle'
 import { baseUrl, getElectronMainDirname, load } from '../../libs/electron/location'
 import { createConfig } from '../../libs/electron/persistence'
 import { transparentWindowConfig } from '../shared'
+import { shouldOpenMainDevtools } from './devtools-policy'
 import { setupMainWindowElectronInvokes } from './rpc/index.electron'
 
 const appConfigSchema = object({
@@ -108,8 +108,7 @@ export async function setupMainWindow(params: {
     allowClose = true
   })
 
-  // NOTICE: in development mode, open devtools by default
-  if (is.dev || env.MAIN_APP_DEBUG || env.APP_DEBUG) {
+  if (shouldOpenMainDevtools(env)) {
     try {
       window.webContents.openDevTools({ mode: 'detach' })
     }

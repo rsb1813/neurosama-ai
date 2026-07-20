@@ -6,6 +6,9 @@ import { preseedNeruProviders } from './neruPreseed'
 
 const STAGE_MODEL_KEY = 'settings/stage/model'
 const SEEDED_KEY = 'neru/stage-model-seeded'
+const LIVE2D_FPS_KEY = 'settings/live2d/max-fps'
+const LIVE2D_SCALE_KEY = 'settings/live2d/render-scale'
+const LIVE2D_PERFORMANCE_SEEDED_KEY = 'neru/live2d-performance-seeded'
 
 describe('preseedNeruProviders — provider opt-in', () => {
   beforeEach(() => {
@@ -82,5 +85,43 @@ describe('preseedNeruProviders — stage model (seed once)', () => {
     localStorage.setItem(STAGE_MODEL_KEY, 'preset-live2d-2')
     preseedNeruProviders()
     expect(localStorage.getItem(STAGE_MODEL_KEY)).toBe('preset-live2d-2')
+  })
+})
+
+describe('preseedNeruProviders — Live2D performance (seed once)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('seeds a 30 FPS and 1x render baseline on a fresh profile', () => {
+    preseedNeruProviders()
+
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('30')
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1')
+    expect(localStorage.getItem(LIVE2D_PERFORMANCE_SEEDED_KEY)).toBe('true')
+  })
+
+  it('migrates only the legacy AIRI defaults', () => {
+    localStorage.setItem(LIVE2D_FPS_KEY, '0')
+    localStorage.setItem(LIVE2D_SCALE_KEY, '2')
+
+    preseedNeruProviders()
+
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('30')
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1')
+  })
+
+  it('preserves custom values before and after the seed', () => {
+    localStorage.setItem(LIVE2D_FPS_KEY, '60')
+    localStorage.setItem(LIVE2D_SCALE_KEY, '1.5')
+    preseedNeruProviders()
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('60')
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('1.5')
+
+    localStorage.setItem(LIVE2D_FPS_KEY, '0')
+    localStorage.setItem(LIVE2D_SCALE_KEY, '2')
+    preseedNeruProviders()
+    expect(localStorage.getItem(LIVE2D_FPS_KEY)).toBe('0')
+    expect(localStorage.getItem(LIVE2D_SCALE_KEY)).toBe('2')
   })
 })

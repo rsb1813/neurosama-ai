@@ -80,6 +80,17 @@ export function preseedNeruProviders(): void {
   // 무력화된다(스칼라 기능 키라 provider 키처럼 매 기동 단언한다).
   assertRaw('settings/live2d/expression-enabled', 'true')
 
+  // 기존 AIRI 기본값만 한 번 낮춘다. 사용자가 이미 조정했거나 이후 다시 바꾼 값은 보존한다.
+  if (!localStorage.getItem('neru/live2d-performance-seeded')) {
+    const currentMaxFps = localStorage.getItem('settings/live2d/max-fps')
+    const currentRenderScale = localStorage.getItem('settings/live2d/render-scale')
+    if (currentMaxFps === null || currentMaxFps === '0')
+      assertRaw('settings/live2d/max-fps', '30')
+    if (currentRenderScale === null || currentRenderScale === '2')
+      assertRaw('settings/live2d/render-scale', '1')
+    assertRaw('neru/live2d-performance-seeded', 'true')
+  }
+
   // neru의 기본 아바타를 마녀 모델로 최초 1회만 시드한다 — 이후 사용자가 UI에서 바꾼 선택을 존중한다.
   // 대상 키(settings/stage/model)는 AIRI 스토어가 Hiyori 기본값을 써버려 "없을 때만" 판정이
   // 무력화되므로, 우리만 쓰는 별도 센티넬 키로 최초 1회 여부를 판정한다.
