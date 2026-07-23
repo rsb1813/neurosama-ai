@@ -346,3 +346,4 @@
 - Character 프롬프트, 스트리밍, `remember`를 포함한 함수 도구, 사용자 승인, 취소는 직접 전송 경로에서도 보존해야 한다.
 - app-server 전용 작업 디렉터리·샌드박스·파일·명령 권한 UI는 직접 전송의 지원 계약이 확인되지 않았으므로 제거한다. Neru 자체 도구의 권한과 승인은 유지한다.
 - 직접 OAuth와 전송은 OpenClaw 및 Codex 오픈소스 구현과의 호환 계약이다. 공개적으로 안정 문서화된 외부 표면은 app-server이므로, 프로토콜 변경 시 재로그인을 요구하고 API 키나 CLI 토큰으로 자동 대체하지 않는다.
+- 구현 계획은 OpenClaw 전체 런타임 대신 `@earendil-works/pi-ai`의 좁은 OpenAI Codex OAuth·Responses 클라이언트를 Electron main 어댑터 뒤에 둔다. 이 선택은 CLI·app-server 의존성을 없애면서 토큰 갱신과 스트리밍 프로토콜 복제를 줄인다.
