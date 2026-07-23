@@ -336,3 +336,13 @@
 - 기존 문자열 thread 저장값은 resume하지 않고, 다음 성공 요청에서 서명된 객체 형식으로 자동 교체한다.
 - bridge 집중 테스트 9개, stage-ui LLM 회귀 테스트 31개, stage-tamagotchi `vue-tsc --noEmit`이 통과했다.
 - 대상 ESLint에는 이번 변경으로 추가된 오류가 없고, 테스트 파일에 작업 전부터 있던 `style/max-statements-per-line`과 `test/prefer-lowercase-title` 오류 2개만 남아 있다.
+
+## Neru 직접 Codex OAuth 전환 결정 (2026-07-23)
+
+- 사용자는 기존 `codex app-server` 자식 프로세스 방식이 아니라 OpenClaw처럼 Neru가 직접 Device OAuth와 Codex 요청을 처리하는 방식을 명시적으로 선택했다.
+- `codex-oauth` 제공자 ID와 설정 진입점은 유지하고, Codex CLI 설치·버전·`auth.json`·app-server JSON-RPC에는 의존하지 않는다.
+- OAuth 토큰은 Electron main 프로세스의 Windows 사용자 범위 암호화 저장소에만 보관한다. renderer, Pinia, Eventa IPC, 평문 파일, 로그에는 토큰이나 OAuth 응답 본문을 전달하지 않는다.
+- 기존 CLI 로그인은 가져오지 않는다. 전환 뒤에는 Neru에서 새로 Device OAuth 로그인을 수행한다.
+- Character 프롬프트, 스트리밍, `remember`를 포함한 함수 도구, 사용자 승인, 취소는 직접 전송 경로에서도 보존해야 한다.
+- app-server 전용 작업 디렉터리·샌드박스·파일·명령 권한 UI는 직접 전송의 지원 계약이 확인되지 않았으므로 제거한다. Neru 자체 도구의 권한과 승인은 유지한다.
+- 직접 OAuth와 전송은 OpenClaw 및 Codex 오픈소스 구현과의 호환 계약이다. 공개적으로 안정 문서화된 외부 표면은 app-server이므로, 프로토콜 변경 시 재로그인을 요구하고 API 키나 CLI 토큰으로 자동 대체하지 않는다.
