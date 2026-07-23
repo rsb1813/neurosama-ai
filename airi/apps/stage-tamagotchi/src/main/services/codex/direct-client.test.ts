@@ -1,7 +1,7 @@
 // pi-ai 기반 Codex Device OAuth와 계정 상태 정규화를 검증합니다.
 import type { AssistantMessage, AssistantMessageEvent, AuthLoginCallbacks, Credential, CredentialStore, Model, OAuthCredential } from '@earendil-works/pi-ai'
 
-import type { CodexPiAiRuntime } from './direct-client'
+import type { CodexDirectRequest, CodexPiAiRuntime } from './direct-client'
 
 import { Buffer } from 'node:buffer'
 
@@ -100,6 +100,63 @@ describe('createCodexDirectClient', () => {
       serviceTier: 'priority',
     }))
   })
+
+  it('refreshes remote models once and streams with the selected remote model', async () => {
+    const credentials = createMemoryCredentialStore()
+    await credentials.modify('openai-codex', async () => credential(tokenWithAccountAndPlan('account-1', 'pro')))
+    const stream = vi.fn(() => eventStream([
+      { type: 'done', reason: 'toolUse', message: assistantMessage() },
+    ]))
+    const fetchFn = vi.fn(async () => modelResponse('gpt-5.6-terra'))
+    const client = createCodexDirectClient({
+      credentials,
+      runtime: createRuntime(vi.fn(), vi.fn(async () => ({})), stream),
+      fetchFn,
+    })
+
+    const models = await client.listModels()
+
+    expect(fetchFn).toHaveBeenCalledOnce()
+    expect(models).toEqual([{
+      id: 'gpt-5.6-terra',
+      name: 'GPT-5.6 Terra',
+      supportedReasoningEfforts: [{ value: 'high', label: 'high' }],
+      serviceTiers: ['auto', 'fast'],
+    }])
+
+    await client.stream(request({ model: 'gpt-5.6-terra' }), vi.fn(), new AbortController().signal)
+    expect(stream).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'gpt-5.6-terra' }),
+      expect.anything(),
+      expect.anything(),
+    )
+  })
+
+  it('keeps the last successful runtime catalog when refresh fails', async () => {
+    const credentials = createMemoryCredentialStore()
+    await credentials.modify('openai-codex', async () => credential(tokenWithAccountAndPlan('account-1', 'pro')))
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(modelResponse('gpt-5.6-terra'))
+      .mockResolvedValueOnce(new Response('', { status: 503 }))
+    const stream = vi.fn(() => eventStream([
+      { type: 'done', reason: 'toolUse', message: assistantMessage() },
+    ]))
+    const client = createCodexDirectClient({
+      credentials,
+      runtime: createRuntime(vi.fn(), vi.fn(async () => ({})), stream),
+      fetchFn,
+    })
+
+    await client.listModels()
+    await expect(client.listModels()).rejects.toThrow('HTTP 503')
+    await client.stream(request({ model: 'gpt-5.6-terra' }), vi.fn(), new AbortController().signal)
+
+    expect(stream).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'gpt-5.6-terra' }),
+      expect.anything(),
+      expect.anything(),
+    )
+  })
 })
 
 function createRuntime(
@@ -157,6 +214,37 @@ function tokenWithPlan(planType: string): string {
     'https://api.openai.com/auth': { chatgpt_plan_type: planType },
   })).toString('base64url')
   return `header.${payload}.signature`
+}
+
+function tokenWithAccountAndPlan(accountId: string, planType: string): string {
+  const payload = Buffer.from(JSON.stringify({
+    'https://api.openai.com/auth': {
+      chatgpt_account_id: accountId,
+      chatgpt_plan_type: planType,
+    },
+  })).toString('base64url')
+  return `header.${payload}.signature`
+}
+
+function modelResponse(id: string): Response {
+  return new Response(JSON.stringify({
+    models: [{
+      slug: id,
+      display_name: 'GPT-5.6 Terra',
+      visibility: 'list',
+      supported_reasoning_levels: [{ effort: 'high', description: 'High' }],
+    }],
+  }), { status: 200 })
+}
+
+function request(overrides: Partial<CodexDirectRequest> = {}): CodexDirectRequest {
+  return {
+    sessionId: 'stream-1',
+    systemPrompt: 'Stay in character.',
+    messages: [{ role: 'user', content: 'Hello', timestamp: 1 }],
+    tools: [],
+    ...overrides,
+  }
 }
 
 function assistantMessage(): AssistantMessage {

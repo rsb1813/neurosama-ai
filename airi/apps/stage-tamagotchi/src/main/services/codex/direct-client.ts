@@ -16,8 +16,10 @@ import type { CodexJsonObject, CodexJsonValue, CodexModel } from '../../../share
 
 import { Buffer } from 'node:buffer'
 
-import { createModels, getSupportedThinkingLevels } from '@earendil-works/pi-ai'
+import { createModels } from '@earendil-works/pi-ai'
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
+
+import { fetchRemoteCodexModels, toRuntimeModel } from './remote-models'
 
 const CODEX_PROVIDER_ID = 'openai-codex'
 const DEVICE_CODE_METHOD = 'device_code'
@@ -86,6 +88,7 @@ export interface CodexPiAiRuntime {
 export interface CodexDirectClientDeps {
   credentials: CredentialStore
   runtime?: CodexPiAiRuntime
+  fetchFn?: typeof fetch
 }
 
 /** 공식 Codex Device OAuth를 사용하고 토큰은 주입된 저장소에만 기록합니다. */
@@ -94,6 +97,8 @@ export function createCodexDirectClient(deps: CodexDirectClientDeps): CodexDirec
   const oauth = runtime.provider.auth.oauth
   if (oauth === undefined)
     throw new Error('Codex Device OAuth is unavailable.')
+  const bundledModels = [...runtime.provider.getModels()]
+  let activeModels = bundledModels
 
   return {
     async loginDevice(handlers) {
@@ -123,7 +128,7 @@ export function createCodexDirectClient(deps: CodexDirectClientDeps): CodexDirec
       return credential?.type === 'oauth' ? accountFromCredential(credential) : undefined
     },
     async refresh() {
-      const model = runtime.provider.getModels()[0]
+      const model = activeModels[0]
       if (model === undefined)
         throw new Error('No Codex model is available for token refresh.')
       const auth = await runtime.models.getAuth(model)
@@ -134,15 +139,36 @@ export function createCodexDirectClient(deps: CodexDirectClientDeps): CodexDirec
       await deps.credentials.delete(CODEX_PROVIDER_ID)
     },
     async listModels() {
-      return runtime.provider.getModels().map(model => ({
+      const refreshModel = activeModels[0]
+      if (refreshModel === undefined)
+        throw new Error('No Codex model is available for token refresh.')
+      const auth = await runtime.models.getAuth(refreshModel)
+      if (auth === undefined)
+        throw new Error('Codex OAuth credentials are unavailable.')
+
+      const credential = await deps.credentials.read(CODEX_PROVIDER_ID)
+      if (credential?.type !== 'oauth')
+        throw new Error('Codex OAuth credentials are unavailable.')
+      const remoteModels = await fetchRemoteCodexModels({
+        accessToken: credential.access,
+        fetchFn: deps.fetchFn,
+      })
+      const template = bundledModels.find(model => model.id === 'gpt-5.5') ?? bundledModels[0]
+      if (template === undefined)
+        throw new Error('No Codex model template is available.')
+
+      const nextModels = remoteModels.map(model => toRuntimeModel(model, template))
+      const nextViews = remoteModels.map(model => ({
         id: model.id,
         name: model.name,
-        supportedReasoningEfforts: getSupportedThinkingLevels(model).map(value => ({ value, label: value })),
+        supportedReasoningEfforts: model.reasoningEfforts.map(value => ({ value, label: value })),
         serviceTiers: ['auto', 'fast'],
       }))
+      activeModels = nextModels
+      return nextViews
     },
     async stream(request, sink, signal) {
-      const model = selectModel(runtime.provider.getModels(), request.model)
+      const model = selectModel(activeModels, request.model)
       let finalMessage: AssistantMessage | undefined
       const events = runtime.models.stream(model, {
         systemPrompt: request.systemPrompt,
