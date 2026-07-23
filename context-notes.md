@@ -355,3 +355,13 @@
 - 기존 Codex CLI 검사, app-server 자식 프로세스, JSON-RPC, thread 저장, app-server 승인 화면과 실행 옵션을 제거했다. 직접 경로의 함수 도구는 기존 AIRI 도구 실행 경계를 그대로 사용한다.
 - 모델과 성격 변경은 사용자 요청에 따라 별도 후속 작업으로 남겼다. 현재 구현은 설정된 모델과 동적 시스템 지침을 보존하며, 모델 미설정 시에만 직접 클라이언트의 호환 기본값을 사용한다.
 - Codex main/renderer 집중 테스트 24개와 stage-ui 관련 테스트 4개, 대상 ESLint, 문서 diff 검사를 통과했다. 전체 Electron 타입 검사는 오프라인 설치 뒤 생성되지 않은 AIRI 워크스페이스 패키지 선언 때문에 실패했지만, 변경한 Codex 파일로 좁힌 출력에는 새 타입 오류가 없었다. 실제 계정으로 새 Device OAuth 로그인과 라이브 응답은 앱 실행 후 별도로 확인해야 한다.
+
+## Device OAuth 브라우저 열기 결함 (2026-07-23)
+
+- 로그인 버튼 클릭 뒤 Electron main 프로세스의 외부 HTTPS 연결은 확인됐지만 새 브라우저 창은 생성되지 않았다.
+- 현재 구현은 기기 코드를 renderer에 반환할 뿐 `shell.openExternal` 같은 브라우저 열기 부작용을 소유하지 않는다.
+- 기기 코드가 발급되면 Electron main에서 공식 검증 URL을 기본 브라우저로 열고, renderer는 코드 발급 전에도 로그인 준비 중 상태를 즉시 보여 주도록 한다.
+- 브라우저에서의 사용자 코드 입력과 계정 승인은 사용자가 직접 수행한다.
+- manager에 주입한 Electron `shell.openExternal`을 기기 코드 공개 직후 호출하도록 구현했고, renderer에는 코드 발급 전 `loginStarting` 상태를 추가했다.
+- manager 집중 테스트 2개, stage-ui 계정 저장소 테스트 3개, 변경 파일 ESLint가 통과했다. 앱은 변경된 Electron main 프로세스로 재시작했으며 실제 브라우저 창 생성은 사용자의 다음 로그인 클릭으로 확인한다.
+- app-server 승인 저장소 제거 뒤 `App.vue` 정리 경로에 남아 있던 미정의 `codexApprovalsStore` 호출도 제거했다.

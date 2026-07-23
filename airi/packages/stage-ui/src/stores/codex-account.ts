@@ -55,6 +55,7 @@ const unknownStatus: CodexAccountStatus = {
 export const useCodexAccountStore = defineStore('codex-account', () => {
   const status = ref<CodexAccountStatus>({ ...unknownStatus })
   const login = ref<CodexDeviceLogin | null>(null)
+  const loginStarting = ref(false)
   const models = ref<CodexModel[]>([])
   const modelsLoading = ref(false)
   const modelsError = ref<string>()
@@ -83,7 +84,13 @@ export const useCodexAccountStore = defineStore('codex-account', () => {
     if (!bridge)
       throw new Error('Codex 계정 브리지가 준비되지 않았습니다.')
 
-    login.value = await bridge.startDeviceLogin()
+    loginStarting.value = true
+    try {
+      login.value = await bridge.startDeviceLogin()
+    }
+    finally {
+      loginStarting.value = false
+    }
   }
 
   async function cancelLogin() {
@@ -143,7 +150,7 @@ export const useCodexAccountStore = defineStore('codex-account', () => {
 
   watch(overrides, value => localStorage.setItem(overridesStorageKey, JSON.stringify(value)), { deep: true })
 
-  return { status, login, models, modelsLoading, modelsError, overrides, applyStatus, applyModels, refreshModels, setBridge, startLogin, cancelLogin, logout, selectCodex }
+  return { status, login, loginStarting, models, modelsLoading, modelsError, overrides, applyStatus, applyModels, refreshModels, setBridge, startLogin, cancelLogin, logout, selectCodex }
 })
 
 function readOverrides(): CodexRuntimeOverrides {

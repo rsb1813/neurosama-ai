@@ -104,8 +104,8 @@ function resetSettings() {
         <p class="text-sm text-neutral-500">
           연결 상태. {{ account.status.connection }}.
         </p>
-        <Button class="w-fit" size="sm" @click="account.startLogin">
-          Device OAuth 로그인
+        <Button class="w-fit" size="sm" :disabled="account.loginStarting" @click="account.startLogin">
+          {{ account.loginStarting ? '로그인 페이지를 준비하는 중입니다.' : 'Device OAuth 로그인' }}
         </Button>
       </template>
     </div>

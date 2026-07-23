@@ -8,6 +8,7 @@ export type { CodexDeviceLogin, CodexRuntimeStatus } from '../../../shared/event
 
 export interface CodexManagerDeps {
   client: CodexDirectClient
+  openExternal: (url: string) => Promise<void>
   createLoginId?: () => string
   now?: () => number
 }
@@ -137,6 +138,9 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
       verificationUrl: info.verificationUrl,
       userCode: info.userCode,
       expiresAt: now() + (info.expiresInSeconds ?? 900) * 1_000,
+    })
+    void deps.openExternal(info.verificationUrl).catch(() => {
+      updateStatus({ ...status, error: 'Device sign-in page could not be opened. Use the displayed link.' })
     })
   }
 

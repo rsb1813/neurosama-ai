@@ -299,7 +299,6 @@ function createFullStageRuntime() {
       pluginToolsStore.dispose()
       codexBridge.dispose()
       codexAccountStore.setBridge(undefined)
-      codexApprovalsStore.setBridge(undefined)
     },
   }
 }

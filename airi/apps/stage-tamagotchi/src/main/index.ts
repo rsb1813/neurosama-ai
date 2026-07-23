@@ -13,7 +13,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { Format, LogLevel, setGlobalFormat, setGlobalHookPostLog, setGlobalLogLevel, useLogg } from '@guiiai/logg'
 import { createContext } from '@moeru/eventa/adapters/electron/main'
 import { initScreenCaptureForMain } from '@proj-airi/electron-screen-capture/main'
-import { app, ipcMain, safeStorage } from 'electron'
+import { app, ipcMain, safeStorage, shell } from 'electron'
 import { noop } from 'es-toolkit'
 import { createLoggLogger, injeca, lifecycle } from 'injeca'
 import { isLinux } from 'std-env'
@@ -184,7 +184,7 @@ app.whenReady().then(async () => {
     })
     const controller = createCodexController({
       client,
-      manager: createCodexManager({ client }),
+      manager: createCodexManager({ client, openExternal: url => shell.openExternal(url) }),
     })
     onAppBeforeQuit(() => controller.stop())
     return controller

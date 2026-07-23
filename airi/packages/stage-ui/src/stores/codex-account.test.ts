@@ -49,6 +49,38 @@ describe('codex account store', () => {
     expect(consciousness.activeModel).toBe('codex-configured')
   })
 
+  it('reports that device login is starting before the user code arrives', async () => {
+    const store = useCodexAccountStore()
+    let resolveLogin!: (login: {
+      loginId: string
+      verificationUrl: string
+      userCode: string
+      expiresAt: number
+      type: 'chatgptDeviceCode'
+    }) => void
+    store.setBridge({
+      getStatus: async () => ({ connection: 'disconnected', authMode: null, planType: null, login: 'idle' }),
+      listModels: async () => [],
+      startDeviceLogin: () => new Promise(resolve => resolveLogin = resolve),
+      cancelDeviceLogin: vi.fn(async () => {}),
+      logout: vi.fn(async () => {}),
+      onStatus: () => () => {},
+    })
+
+    const pending = store.startLogin()
+    expect(store.loginStarting).toBe(true)
+
+    resolveLogin({
+      loginId: 'login-1',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD',
+      expiresAt: Date.now() + 900_000,
+      type: 'chatgptDeviceCode',
+    })
+    await pending
+    expect(store.loginStarting).toBe(false)
+  })
+
   it('keeps only model, effort, and service tier runtime overrides', () => {
     localStorage.setItem('neru/codex/runtime-overrides', JSON.stringify({
       model: 'gpt-5.4',

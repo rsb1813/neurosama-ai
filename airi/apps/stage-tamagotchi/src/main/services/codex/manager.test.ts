@@ -8,7 +8,8 @@ import { createCodexManager } from './manager'
 describe('createCodexManager', () => {
   it('returns the device code before login completes and never exposes tokens', async () => {
     const harness = createHarness()
-    const manager = createCodexManager({ client: harness.client, createLoginId: () => 'login-1', now: () => 1_000 })
+    const openExternal = vi.fn(async () => {})
+    const manager = createCodexManager({ client: harness.client, createLoginId: () => 'login-1', now: () => 1_000, openExternal })
 
     expect(await manager.ensureStarted()).toMatchObject({ connection: 'disconnected', login: 'idle' })
     const login = manager.startDeviceLogin()
@@ -21,6 +22,8 @@ describe('createCodexManager', () => {
       userCode: 'ABCD-EFGH',
       expiresAt: 901_000,
     })
+    expect(openExternal).toHaveBeenCalledOnce()
+    expect(openExternal).toHaveBeenCalledWith('https://auth.openai.com/codex/device')
     expect(manager.getStatus()).toMatchObject({ connection: 'disconnected', login: 'pending' })
     expect(JSON.stringify(manager.getStatus())).not.toContain('access-token')
 
@@ -31,7 +34,7 @@ describe('createCodexManager', () => {
 
   it('cancels only the matching login and logs out the stored account', async () => {
     const harness = createHarness({ authMode: 'chatgpt', planType: 'plus' })
-    const manager = createCodexManager({ client: harness.client, createLoginId: () => 'login-1' })
+    const manager = createCodexManager({ client: harness.client, createLoginId: () => 'login-1', openExternal: vi.fn(async () => {}) })
     await manager.ensureStarted()
     const login = manager.startDeviceLogin()
     harness.publishDeviceCode()
