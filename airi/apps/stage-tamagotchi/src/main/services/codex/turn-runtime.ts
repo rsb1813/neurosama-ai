@@ -1,9 +1,11 @@
 // 직접 Codex Responses 스트림과 renderer 도구 결과의 연속 처리를 관리합니다.
-import type { Message, Tool, ToolResultMessage } from '@earendil-works/pi-ai'
+import type { AssistantMessage, Message, Tool, ToolResultMessage, Usage } from '@earendil-works/pi-ai'
 
 import type {
   CodexApprovalDecision,
   CodexBridgeEvent,
+  CodexConversationMessage,
+  CodexJsonValue,
   CodexToolResult,
   CodexTurnRequest,
 } from '../../../shared/eventa/codex'
@@ -65,7 +67,7 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
     }
     const threadId = request.streamId
     const turnId = request.streamId
-    const messages: Message[] = [{ role: 'user', content: request.userInput, timestamp: now() }]
+    const messages = conversationMessages(request.messages, request.overrides.model, now)
     streams.set(request.streamId, active)
 
     try {
@@ -193,6 +195,83 @@ function createDirectRequest(request: CodexTurnRequest, messages: Message[]): Co
       description: tool.description,
       parameters: tool.inputSchema as Tool['parameters'],
     })),
+  }
+}
+
+function conversationMessages(
+  messages: CodexConversationMessage[],
+  model: string | undefined,
+  now: () => number,
+): Message[] {
+  const result: Message[] = []
+  const toolNames = new Map<string, string>()
+  for (const message of messages) {
+    if (message.role === 'system' || message.role === 'developer')
+      continue
+    if (message.role === 'user') {
+      result.push({ role: 'user', content: contentText(message.content), timestamp: now() })
+      continue
+    }
+    if (message.role === 'assistant') {
+      const content: AssistantMessage['content'] = []
+      const text = contentText(message.content)
+      if (text.length > 0)
+        content.push({ type: 'text', text })
+      for (const call of message.toolCalls ?? []) {
+        toolNames.set(call.id, call.name)
+        content.push({ type: 'toolCall', id: call.id, name: call.name, arguments: call.arguments })
+      }
+      result.push({
+        role: 'assistant',
+        content,
+        api: 'openai-codex-responses',
+        provider: 'openai-codex',
+        model: model ?? 'gpt-5.4',
+        usage: emptyUsage(),
+        stopReason: message.toolCalls?.length ? 'toolUse' : 'stop',
+        timestamp: now(),
+      })
+      continue
+    }
+    const callId = message.toolCallId
+    const toolName = callId === undefined ? undefined : toolNames.get(callId)
+    if (callId === undefined || toolName === undefined)
+      continue
+    result.push({
+      role: 'toolResult',
+      toolCallId: callId,
+      toolName,
+      content: [{ type: 'text', text: contentText(message.content) }],
+      isError: false,
+      timestamp: now(),
+    })
+  }
+  return result
+}
+
+function contentText(content: CodexJsonValue | undefined): string {
+  if (typeof content === 'string')
+    return content
+  if (Array.isArray(content)) {
+    const text = content.flatMap((entry) => {
+      if (typeof entry === 'object' && entry !== null && !Array.isArray(entry) && entry.type === 'text' && typeof entry.text === 'string')
+        return [entry.text]
+      return []
+    }).join('\n')
+    if (text.length > 0)
+      return text
+  }
+  return content === undefined ? '' : JSON.stringify(content)
+}
+
+function emptyUsage(): Usage {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   }
 }
 

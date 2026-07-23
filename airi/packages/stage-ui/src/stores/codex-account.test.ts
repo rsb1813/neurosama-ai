@@ -1,4 +1,4 @@
-// Codex 계정 브리지가 로그인 완료 뒤에만 제공자를 선택하는지 검증한다.
+// 직접 Codex OAuth 계정 상태와 실행 옵션 정규화를 검증합니다.
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,7 +10,7 @@ vi.mock('./modules/consciousness', () => ({
   useConsciousnessStore: () => consciousness,
 }))
 
-describe('Codex account store', () => {
+describe('codex account store', () => {
   beforeEach(() => {
     consciousness.activeProvider = ''
     consciousness.activeModel = ''
@@ -23,12 +23,18 @@ describe('Codex account store', () => {
     })
   })
 
-  it('does not activate Codex before login completion', async () => {
+  it('activates Codex only after a direct OAuth connection succeeds', async () => {
     const store = useCodexAccountStore()
-    const startDeviceLogin = vi.fn(async () => ({ loginId: 'login-1', verificationUrl: 'https://example.com', userCode: 'ABCD', type: 'chatgptDeviceCode' as const }))
     store.setBridge({
-      getStatus: async () => ({ cli: 'supported', process: 'running', authMode: null, planType: null, login: 'idle' }),
-      startDeviceLogin,
+      getStatus: async () => ({ connection: 'disconnected', authMode: null, planType: null, login: 'idle' }),
+      listModels: async () => [],
+      startDeviceLogin: async () => ({
+        loginId: 'login-1',
+        verificationUrl: 'https://auth.openai.com/codex/device',
+        userCode: 'ABCD',
+        expiresAt: Date.now() + 900_000,
+        type: 'chatgptDeviceCode',
+      }),
       cancelDeviceLogin: vi.fn(async () => {}),
       logout: vi.fn(async () => {}),
       onStatus: () => () => {},
@@ -37,27 +43,24 @@ describe('Codex account store', () => {
     await store.startLogin()
     expect(consciousness.activeProvider).not.toBe('codex-oauth')
 
-    store.applyStatus({ cli: 'supported', process: 'running', authMode: 'chatgpt', planType: 'plus', login: 'completed' })
+    store.applyStatus({ connection: 'connected', authMode: 'chatgpt', planType: 'plus', login: 'completed' })
     await store.selectCodex()
     expect(consciousness.activeProvider).toBe('codex-oauth')
     expect(consciousness.activeModel).toBe('codex-configured')
   })
 
-  it('normalizes unsupported saved model options back to Codex inheritance', () => {
+  it('keeps only model, effort, and service tier runtime overrides', () => {
+    localStorage.setItem('neru/codex/runtime-overrides', JSON.stringify({
+      model: 'gpt-5.4',
+      effort: 'high',
+      serviceTier: 'fast',
+      cwd: 'C:/legacy',
+      sandbox: 'dangerFullAccess',
+      approvalPolicy: 'never',
+    }))
+
     const store = useCodexAccountStore()
-    store.overrides.model = 'gpt-x'
-    store.overrides.effort = 'ultra'
-    store.overrides.serviceTier = 'fast'
 
-    store.applyModels([{
-      id: 'gpt-x',
-      name: 'GPT X',
-      supportedReasoningEfforts: [{ value: 'high', label: 'High' }],
-      serviceTiers: ['default'],
-    }])
-
-    expect(store.overrides.model).toBe('gpt-x')
-    expect(store.overrides.effort).toBeUndefined()
-    expect(store.overrides.serviceTier).toBeUndefined()
+    expect(store.overrides).toEqual({ model: 'gpt-5.4', effort: 'high', serviceTier: 'fast' })
   })
 })

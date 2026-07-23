@@ -4,8 +4,10 @@ import type { Message, Tool } from '@xsai/shared-chat'
 
 import type {
   CodexBridgeEvent,
+  CodexConversationMessage,
   CodexDynamicToolDescriptor,
   CodexJsonObject,
+  CodexJsonValue,
   CodexRuntimeOverrides,
   CodexToolCallResolution,
   CodexTurnRequest,
@@ -13,13 +15,6 @@ import type {
 
 import { errorMessageFrom } from '@moeru/std'
 import { registerLlmTransport } from '@proj-airi/stage-ui/stores/llm-transports'
-
-const THREAD_IDS_STORAGE_KEY = 'neru/codex/thread-ids'
-
-interface StoredThread {
-  threadId: string
-  signature: string
-}
 
 export interface CodexBridgeDeps {
   startTurn: (request: CodexTurnRequest) => Promise<{ threadId: string }>
@@ -30,36 +25,6 @@ export interface CodexBridgeDeps {
   developerInstructions: string
 }
 
-function readThreadIds(): Record<string, unknown> {
-  try {
-    const value = JSON.parse(localStorage.getItem(THREAD_IDS_STORAGE_KEY) ?? '{}')
-    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {}
-  }
-  catch {
-    return {}
-  }
-}
-
-function writeThreadId(sessionId: string | undefined, threadId: string, signature: string) {
-  if (!sessionId)
-    return
-
-  const threadIds = readThreadIds()
-  threadIds[sessionId] = { threadId, signature }
-  localStorage.setItem(THREAD_IDS_STORAGE_KEY, JSON.stringify(threadIds))
-}
-
-function storedThread(value: unknown): StoredThread | undefined {
-  if (value === null || typeof value !== 'object' || Array.isArray(value))
-    return undefined
-
-  const candidate = value as Partial<StoredThread>
-  if (typeof candidate.threadId !== 'string' || typeof candidate.signature !== 'string')
-    return undefined
-
-  return { threadId: candidate.threadId, signature: candidate.signature }
-}
-
 function developerInstructions(messages: Message[], fallback: string): string {
   const systemMessage = messages.find(message => message.role === 'system')
   return systemMessage && typeof systemMessage.content === 'string' && systemMessage.content.trim()
@@ -67,33 +32,9 @@ function developerInstructions(messages: Message[], fallback: string): string {
     : fallback
 }
 
-async function threadSignature(instructions: string, model: string | undefined): Promise<string> {
-  const input = new TextEncoder().encode(JSON.stringify([model ?? null, instructions]))
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input))
-  const hex = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')
-  return `v1:${hex}`
-}
-
-function messageText(messages: Message[]): string {
-  const lastUserMessage = messages.toReversed().find(message => message.role === 'user')
-  if (!lastUserMessage)
-    return ''
-
-  return typeof lastUserMessage.content === 'string'
-    ? lastUserMessage.content
-    : JSON.stringify(lastUserMessage.content)
-}
-
 function jsonObject(value: unknown): CodexJsonObject {
-  try {
-    const parsed = JSON.parse(JSON.stringify(value))
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as CodexJsonObject
-      : {}
-  }
-  catch {
-    return {}
-  }
+  const parsed = jsonValue(value)
+  return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
 }
 
 function dynamicTools(tools: Tool[]): CodexDynamicToolDescriptor[] {
@@ -103,6 +44,72 @@ function dynamicTools(tools: Tool[]): CodexDynamicToolDescriptor[] {
     description: tool.function.description ?? '',
     inputSchema: jsonObject(tool.function.parameters),
   }))
+}
+
+function jsonMessages(messages: Message[]): CodexConversationMessage[] {
+  return messages.flatMap<CodexConversationMessage>((message): CodexConversationMessage[] => {
+    const content = jsonValue(message.content)
+    if (message.role === 'assistant') {
+      return [{
+        role: message.role,
+        content,
+        toolCalls: message.tool_calls?.flatMap((call) => {
+          if (typeof call.id !== 'string' || typeof call.function?.name !== 'string')
+            return []
+          return [{
+            id: call.id,
+            name: call.function.name,
+            arguments: parseArguments(call.function.arguments),
+          }]
+        }),
+      }]
+    }
+    if (message.role === 'tool')
+      return [{ role: message.role, content, toolCallId: message.tool_call_id }]
+    return [{ role: message.role, content }]
+  })
+}
+
+function jsonValue(value: unknown): CodexJsonValue | undefined {
+  try {
+    if (value === undefined)
+      return undefined
+    const parsed: unknown = JSON.parse(JSON.stringify(value))
+    return readJsonValue(parsed)
+  }
+  catch {
+    return undefined
+  }
+}
+
+function readJsonValue(value: unknown): CodexJsonValue | undefined {
+  if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string')
+    return value
+  if (Array.isArray(value)) {
+    const entries = value.map(readJsonValue)
+    return entries.every(entry => entry !== undefined) ? entries as CodexJsonValue[] : undefined
+  }
+  if (typeof value !== 'object')
+    return undefined
+  const result: CodexJsonObject = {}
+  for (const [key, entry] of Object.entries(value)) {
+    const jsonEntry = readJsonValue(entry)
+    if (jsonEntry === undefined)
+      return undefined
+    result[key] = jsonEntry
+  }
+  return result
+}
+
+function parseArguments(value: string | undefined): CodexJsonObject {
+  if (value === undefined)
+    return {}
+  try {
+    return jsonObject(JSON.parse(value))
+  }
+  catch {
+    return {}
+  }
 }
 
 function toolResultText(result: unknown): string {
@@ -185,19 +192,13 @@ export function initializeCodexBridge(deps: CodexBridgeDeps): { transport: LlmTr
     try {
       const overrides = deps.getRuntimeOverrides()
       const instructions = developerInstructions(request.messages, deps.developerInstructions)
-      const signature = await threadSignature(instructions, overrides.model)
-      const previousThread = request.sessionId
-        ? storedThread(readThreadIds()[request.sessionId])
-        : undefined
-      const result = await deps.startTurn({
+      await deps.startTurn({
         streamId,
-        threadId: previousThread?.signature === signature ? previousThread.threadId : undefined,
         overrides,
         developerInstructions: instructions,
         dynamicTools: dynamicTools(request.tools),
-        userInput: messageText(request.messages),
+        messages: jsonMessages(request.messages),
       })
-      writeThreadId(request.sessionId, result.threadId, signature)
       await terminal
     }
     finally {

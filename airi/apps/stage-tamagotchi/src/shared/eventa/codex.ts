@@ -64,20 +64,30 @@ export interface CodexRuntimeOverrides {
   model?: string
   effort?: string
   serviceTier?: string
-  cwd?: string
-  sandbox?: 'readOnly' | 'workspaceWrite' | 'dangerFullAccess'
-  approvalPolicy?: 'unlessTrusted' | 'onRequest' | 'never'
-  approvalsReviewer?: 'user' | 'auto_review'
+}
+
+/** renderer 대화를 Electron main으로 복제 가능한 형태로 전달하는 메시지입니다. */
+export interface CodexConversationMessage {
+  role: 'assistant' | 'developer' | 'system' | 'tool' | 'user'
+  content?: CodexJsonValue
+  toolCalls?: CodexConversationToolCall[]
+  toolCallId?: string
+}
+
+/** 이전 assistant 메시지에 포함된 함수 호출입니다. */
+export interface CodexConversationToolCall {
+  id: string
+  name: string
+  arguments: CodexJsonObject
 }
 
 /** 하나의 Codex thread와 turn을 시작하는 렌더러 요청이다. */
 export interface CodexTurnRequest {
   streamId: string
-  threadId?: string
   overrides: CodexRuntimeOverrides
   developerInstructions: string
   dynamicTools: readonly CodexDynamicToolDescriptor[]
-  userInput: string
+  messages: CodexConversationMessage[]
 }
 
 /** 렌더러가 완료한 동적 도구 호출의 직렬화 결과다. */

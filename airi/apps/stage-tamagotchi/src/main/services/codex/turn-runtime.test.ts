@@ -120,6 +120,6 @@ function request(): CodexTurnRequest {
       description: 'Remember a fact',
       inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
     }],
-    userInput: 'Remember this.',
+    messages: [{ role: 'user', content: 'Remember this.' }],
   }
 }

@@ -1,16 +1,13 @@
-<!-- Codex Device OAuth 계정과 실행별 런타임 설정을 관리한다. -->
+<!-- Codex Device OAuth 계정과 직접 전송 설정을 관리합니다. -->
 <script setup lang="ts">
-import {
-  ProviderAdvancedSettings,
-  ProviderBasicSettings,
-} from '@proj-airi/stage-ui/components'
+import { ProviderBasicSettings } from '@proj-airi/stage-ui/components'
 import { useCodexAccountStore } from '@proj-airi/stage-ui/stores/codex-account'
-import { Button, FieldCombobox, FieldInput } from '@proj-airi/ui'
+import { Button, FieldCombobox } from '@proj-airi/ui'
 import { computed, onMounted } from 'vue'
 
 const inheritValue = '__codex_inherit__'
 const account = useCodexAccountStore()
-const canUseCodex = computed(() => account.status.authMode === 'chatgpt')
+const canUseCodex = computed(() => account.status.connection === 'connected' && account.status.authMode === 'chatgpt')
 const selectedModel = computed(() => account.models.find(model => model.id === account.overrides.model))
 
 const model = computed({
@@ -23,24 +20,17 @@ const model = computed({
 })
 const effort = optionalOverride('effort')
 const serviceTier = optionalOverride('serviceTier')
-const cwd = computed({
-  get: () => account.overrides.cwd ?? '',
-  set: (value: string) => account.overrides.cwd = value.trim().length === 0 ? undefined : value,
-})
-const sandbox = optionalOverride('sandbox')
-const approvalPolicy = optionalOverride('approvalPolicy')
-const approvalsReviewer = optionalOverride('approvalsReviewer')
 
 const modelOptions = computed(() => [
-  { label: 'Codex 설정 상속', value: inheritValue },
+  { label: 'Codex 기본값 사용', value: inheritValue },
   ...account.models.map(item => ({ label: item.name, value: item.id })),
 ])
 const effortOptions = computed(() => [
-  { label: 'Codex 설정 상속', value: inheritValue },
+  { label: 'Codex 기본값 사용', value: inheritValue },
   ...(selectedModel.value?.supportedReasoningEfforts ?? []).map(item => ({ label: item.label, value: item.value })),
 ])
 const serviceTierOptions = computed(() => [
-  { label: 'Codex 설정 상속', value: inheritValue },
+  { label: 'Codex 기본값 사용', value: inheritValue },
   ...(selectedModel.value?.serviceTiers ?? []).map(value => ({ label: value, value })),
 ])
 
@@ -50,10 +40,10 @@ function inherited(value: string) {
   return value === inheritValue ? undefined : value
 }
 
-function optionalOverride(key: 'effort' | 'serviceTier' | 'sandbox' | 'approvalPolicy' | 'approvalsReviewer') {
+function optionalOverride(key: 'effort' | 'serviceTier') {
   return computed({
     get: () => account.overrides[key] ?? inheritValue,
-    set: (value: string) => account.overrides[key] = inherited(value) as never,
+    set: (value: string) => account.overrides[key] = inherited(value),
   })
 }
 
@@ -66,7 +56,7 @@ function resetSettings() {
 <template>
   <ProviderBasicSettings
     title="기본"
-    description="ChatGPT 계정으로 로그인하고, 이 제공자에서 사용할 모델을 선택합니다."
+    description="ChatGPT 계정으로 로그인하고 Codex 응답에 사용할 모델을 선택합니다."
     :on-reset="resetSettings"
   >
     <div class="flex flex-col gap-3 rounded-lg bg-neutral-50 p-4 dark:bg-neutral-800">
@@ -75,7 +65,7 @@ function resetSettings() {
           Codex 계정
         </div>
         <p class="text-xs text-neutral-500 dark:text-neutral-400">
-          Codex CLI의 Device OAuth로 연결합니다. OAuth 토큰은 Neru 설정에 복사하지 않습니다.
+          Neru가 Device OAuth로 직접 연결합니다. OAuth 토큰은 Windows 사용자 범위로 암호화됩니다.
         </p>
       </div>
 
@@ -112,9 +102,9 @@ function resetSettings() {
 
       <template v-else>
         <p class="text-sm text-neutral-500">
-          CLI 상태. {{ account.status.cli }}.
+          연결 상태. {{ account.status.connection }}.
         </p>
-        <Button class="w-fit" size="sm" :disabled="account.status.cli === 'unsupported'" @click="account.startLogin">
+        <Button class="w-fit" size="sm" @click="account.startLogin">
           Device OAuth 로그인
         </Button>
       </template>
@@ -137,7 +127,7 @@ function resetSettings() {
       <FieldCombobox
         v-model="model"
         label="모델"
-        description="미설정 시 Codex의 현재 기본 모델을 사용합니다."
+        description="설정하지 않으면 Codex 기본 모델을 사용합니다."
         :options="modelOptions"
       />
       <FieldCombobox
@@ -151,52 +141,9 @@ function resetSettings() {
         v-if="serviceTierOptions.length > 1"
         v-model="serviceTier"
         label="서비스 티어"
-        description="미설정 시 Codex의 현재 서비스 티어를 사용합니다."
+        description="설정하지 않으면 Codex 기본 서비스 티어를 사용합니다."
         :options="serviceTierOptions"
       />
     </div>
   </ProviderBasicSettings>
-
-  <ProviderAdvancedSettings title="고급">
-    <div class="flex flex-col gap-4">
-      <FieldInput
-        v-model="cwd"
-        label="작업 디렉터리"
-        description="비워 두면 Codex 설정 또는 앱이 전달한 기본 작업 디렉터리를 사용합니다."
-        placeholder="Codex 설정 상속"
-      />
-      <FieldCombobox
-        v-model="sandbox"
-        label="샌드박스"
-        description="파일 시스템 접근 범위를 실행별로 덮어씁니다."
-        :options="[
-          { label: 'Codex 설정 상속', value: inheritValue },
-          { label: '읽기 전용', value: 'readOnly' },
-          { label: '워크스페이스 쓰기', value: 'workspaceWrite' },
-          { label: '전체 접근', value: 'dangerFullAccess' },
-        ]"
-      />
-      <FieldCombobox
-        v-model="approvalPolicy"
-        label="승인 정책"
-        description="명령 실행 전에 사용자 승인이 필요한 조건을 정합니다."
-        :options="[
-          { label: 'Codex 설정 상속', value: inheritValue },
-          { label: '신뢰되지 않은 명령만', value: 'unlessTrusted' },
-          { label: '요청 시', value: 'onRequest' },
-          { label: '승인 안 함', value: 'never' },
-        ]"
-      />
-      <FieldCombobox
-        v-model="approvalsReviewer"
-        label="승인 검토자"
-        description="사용자가 직접 검토할지 Codex 자동 검토를 사용할지 정합니다."
-        :options="[
-          { label: 'Codex 설정 상속', value: inheritValue },
-          { label: '사용자', value: 'user' },
-          { label: '자동 검토', value: 'auto_review' },
-        ]"
-      />
-    </div>
-  </ProviderAdvancedSettings>
 </template>

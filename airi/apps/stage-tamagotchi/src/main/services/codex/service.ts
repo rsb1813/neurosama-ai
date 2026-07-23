@@ -10,6 +10,7 @@ import type {
   CodexToolResult,
   CodexTurnRequest,
 } from '../../../shared/eventa/codex'
+import type { CodexDirectClient } from './direct-client'
 import type { CodexManager } from './manager'
 
 import { defineInvokeHandlers } from '@moeru/eventa'
@@ -46,9 +47,9 @@ export interface CodexController {
 }
 
 /** 하나의 app-server manager를 여러 Electron 창의 Eventa context에 안전하게 연결한다. */
-export function createCodexController(params: { manager: CodexManager }): CodexController {
+export function createCodexController(params: { client: CodexDirectClient, manager: CodexManager }): CodexController {
   const contexts = new Set<EventaContext>()
-  const runtime = createCodexTurnRuntime({ manager: params.manager })
+  const runtime = createCodexTurnRuntime({ client: params.client })
   const removeStatusListener = params.manager.onStatusChange((status) => {
     for (const context of contexts)
       context.emit(codexStatusChanged, status)
@@ -63,10 +64,7 @@ export function createCodexController(params: { manager: CodexManager }): CodexC
     getStatus: () => params.manager.getStatus(),
     listModels: async () => {
       await params.manager.ensureStarted()
-      const rpc = params.manager.getRpc()
-      if (rpc === undefined)
-        throw new Error('Codex app-server is unavailable.')
-      return readModels(await rpc.request('model/list', {}))
+      return params.client.listModels()
     },
     startDeviceLogin: () => params.manager.startDeviceLogin(),
     cancelLogin: loginId => params.manager.cancelLogin(loginId),
@@ -142,45 +140,4 @@ export function createCodexService(params: { context: EventaContext, controller:
   )
 
   return { dispose }
-}
-
-function readModels(value: unknown): CodexModel[] {
-  if (!isRecord(value) || !Array.isArray(value.data))
-    return []
-
-  return value.data.flatMap((entry) => {
-    if (!isRecord(entry))
-      return []
-    const id = readText(entry.model) ?? readText(entry.id)
-    if (id === undefined)
-      return []
-
-    const efforts = Array.isArray(entry.supportedReasoningEfforts)
-      ? entry.supportedReasoningEfforts.flatMap((effort) => {
-          if (typeof effort === 'string')
-            return [{ value: effort, label: effort }]
-          if (!isRecord(effort))
-            return []
-          const value = readText(effort.reasoningEffort) ?? readText(effort.value)
-          return value === undefined ? [] : [{ value, label: readText(effort.description) ?? readText(effort.label) ?? value }]
-        })
-      : []
-    const serviceTiers = Array.isArray(entry.serviceTiers)
-      ? entry.serviceTiers.flatMap(tier => typeof tier === 'string' ? [tier] : isRecord(tier) ? [readText(tier.value) ?? readText(tier.id)].filter((item): item is string => item !== undefined) : [])
-      : []
-    return [{
-      id,
-      name: readText(entry.displayName) ?? readText(entry.name) ?? id,
-      supportedReasoningEfforts: efforts,
-      serviceTiers,
-    }]
-  })
-}
-
-function readText(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

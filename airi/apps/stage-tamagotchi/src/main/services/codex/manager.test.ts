@@ -63,6 +63,7 @@ function createHarness(initialAccount?: CodexAccount) {
     refresh: vi.fn(async () => undefined),
     logout: vi.fn(async () => undefined),
     listModels: vi.fn(async () => []),
+    stream: vi.fn(),
   }
 
   return {
