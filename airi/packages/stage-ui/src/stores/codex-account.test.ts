@@ -1,4 +1,6 @@
 // 직접 Codex OAuth 계정 상태와 실행 옵션 정규화를 검증합니다.
+import type { CodexAccountBridge } from './codex-account'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -117,4 +119,44 @@ describe('codex account store', () => {
 
     expect(store.overrides).toEqual({ model: 'gpt-5.4', effort: 'high', serviceTier: 'fast' })
   })
+
+  it('refreshes models once per explicit request and preserves the displayed list on failure', async () => {
+    const listModels = vi.fn()
+      .mockResolvedValueOnce([{
+        id: 'gpt-5.6-terra',
+        name: 'GPT-5.6 Terra',
+        supportedReasoningEfforts: [],
+        serviceTiers: ['auto'],
+      }])
+      .mockRejectedValueOnce(new Error('network failed'))
+    const store = useCodexAccountStore()
+    store.setBridge(createBridge({ listModels }))
+
+    await store.refreshModels()
+    expect(listModels).toHaveBeenCalledTimes(1)
+    expect(store.models[0]?.id).toBe('gpt-5.6-terra')
+
+    await store.refreshModels()
+    expect(listModels).toHaveBeenCalledTimes(2)
+    expect(store.models[0]?.id).toBe('gpt-5.6-terra')
+    expect(store.modelsError).toBe('network failed')
+  })
 })
+
+function createBridge(overrides: Partial<CodexAccountBridge> = {}): CodexAccountBridge {
+  return {
+    getStatus: async () => ({ connection: 'connected', authMode: 'chatgpt', planType: 'pro', login: 'completed' }),
+    listModels: async () => [],
+    startDeviceLogin: async () => ({
+      loginId: 'login-1',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD-EFGH',
+      expiresAt: Date.now() + 900_000,
+      type: 'chatgptDeviceCode',
+    }),
+    cancelDeviceLogin: async () => {},
+    logout: async () => {},
+    onStatus: () => () => {},
+    ...overrides,
+  }
+}

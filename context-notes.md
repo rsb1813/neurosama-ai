@@ -378,3 +378,12 @@
 - 사용자는 새로고침 버튼을 누를 때 한 번만 요청하는 동작을 선택했다. 백그라운드 폴링, 자동 주기 갱신, 디스크 캐시는 추가하지 않는다.
 - 원격 조회 실패 시 마지막 정상 목록을 보존한다. 토큰과 계정 ID는 Electron main 경계를 벗어나지 않으며 로그에도 기록하지 않는다.
 - 의존성 업데이트만으로 해결하면 목록이 다시 낡을 수 있고, CLI 또는 app-server를 사용하면 제거한 프로세스 의존성이 돌아오므로 직접 조회 방식을 선택했다.
+
+### 구현 및 자동 검증 결과
+
+- Electron main의 `remote-models.ts`가 OAuth bearer 토큰과 `chatgpt-account-id`로 원격 모델 카탈로그를 요청한다. renderer에는 정규화한 모델 ID, 이름, 지원 추론 강도와 서비스 티어만 반환한다.
+- 원격 응답의 `visibility: list` 모델만 허용하고 현재 `pi-ai` 전송기가 지원하지 않는 `max` 추론 강도는 제외한다. `none`은 런타임 `off`에 대응한다.
+- 성공한 원격 모델은 직접 Responses 스트림의 실제 모델 객체로 사용한다. 이후 새로고침이 실패해도 직전 정상 런타임 모델은 유지된다.
+- 설정 화면의 `onMounted` 모델 조회를 제거했다. 사용자가 `모델 새로고침` 버튼을 누를 때만 bridge 호출과 모델 엔드포인트 요청이 각각 한 번 발생한다.
+- stage-tamagotchi 집중 테스트 7개와 stage-ui store 테스트 5개, 변경 파일 ESLint가 통과했다. stage-tamagotchi 타입 검사는 이번 변경 파일 오류 없이 기존 `@proj-airi/server-schema` 누락과 `CodexRuntimeStatus`의 `reauthenticationRequired` 상태 타입 불일치에서 실패했다.
+- 실제 계정에서 Terra가 표시되고 응답하는지는 변경된 Electron 앱을 재시작한 뒤 수동 검증해야 한다.

@@ -3,7 +3,7 @@
 import { ProviderBasicSettings } from '@proj-airi/stage-ui/components'
 import { useCodexAccountStore } from '@proj-airi/stage-ui/stores/codex-account'
 import { Button, FieldCombobox } from '@proj-airi/ui'
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 
 const inheritValue = '__codex_inherit__'
 const account = useCodexAccountStore()
@@ -33,8 +33,6 @@ const serviceTierOptions = computed(() => [
   { label: 'Codex 기본값 사용', value: inheritValue },
   ...(selectedModel.value?.serviceTiers ?? []).map(value => ({ label: value, value })),
 ])
-
-onMounted(() => void account.refreshModels())
 
 function inherited(value: string) {
   return value === inheritValue ? undefined : value
