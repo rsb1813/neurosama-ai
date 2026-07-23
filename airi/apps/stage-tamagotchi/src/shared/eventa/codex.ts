@@ -12,9 +12,7 @@ export interface CodexJsonObject {
 /** Codex CLI, app-server, 계정 인증의 렌더러용 상태 스냅샷이다. */
 export interface CodexRuntimeStatus {
   /** 설치 검사와 기능 프로브가 지원되는 CLI를 확인했는지 나타낸다. */
-  cli: 'unknown' | 'supported' | 'unsupported'
-  /** 단일 manager가 소유한 app-server 프로세스 상태다. */
-  process: 'stopped' | 'running'
+  connection: 'disconnected' | 'connected' | 'reauthenticationRequired'
   /** 로그인된 계정의 인증 방식이며 계정이 없으면 null이다. */
   authMode: string | null
   /** 로그인된 계정의 구독 플랜이며 계정이 없으면 null이다. */
@@ -35,6 +33,8 @@ export interface CodexDeviceLogin {
   userCode: string
   /** 현재 지원하는 Device OAuth 방식이다. */
   type: 'chatgptDeviceCode'
+  /** 사용자 코드가 만료되는 Unix epoch 밀리초입니다. */
+  expiresAt: number
 }
 
 /** app-server에 등록할 렌더러 소유 동적 도구의 직렬화 설명이다. */
