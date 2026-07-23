@@ -1,5 +1,5 @@
 // pi-ai 기반 Codex Device OAuth와 계정 상태 정규화를 검증합니다.
-import type { AuthLoginCallbacks, Credential, CredentialStore, Model, OAuthCredential } from '@earendil-works/pi-ai'
+import type { AssistantMessage, AssistantMessageEvent, AuthLoginCallbacks, Credential, CredentialStore, Model, OAuthCredential } from '@earendil-works/pi-ai'
 
 import type { CodexPiAiRuntime } from './direct-client'
 
@@ -61,11 +61,51 @@ describe('createCodexDirectClient', () => {
     await client.logout()
     expect(await client.readAccount()).toBeUndefined()
   })
+
+  it('normalizes text and completed tool calls from the direct Responses stream', async () => {
+    const final = assistantMessage()
+    const stream = vi.fn(() => eventStream([
+      { type: 'text_delta', contentIndex: 0, delta: 'Hello', partial: final },
+      {
+        type: 'toolcall_end',
+        contentIndex: 1,
+        toolCall: { type: 'toolCall', id: 'call-1', name: 'remember', arguments: { text: 'fact' } },
+        partial: final,
+      },
+      { type: 'done', reason: 'toolUse', message: final },
+    ]))
+    const client = createCodexDirectClient({
+      credentials: createMemoryCredentialStore(),
+      runtime: createRuntime(vi.fn(), vi.fn(), stream),
+    })
+    const events: unknown[] = []
+
+    await expect(client.stream({
+      model: 'gpt-5.4',
+      effort: 'high',
+      serviceTier: 'fast',
+      sessionId: 'stream-1',
+      systemPrompt: 'Stay in character.',
+      messages: [{ role: 'user', content: 'Hello', timestamp: 1 }],
+      tools: [],
+    }, event => events.push(event), new AbortController().signal)).resolves.toBe(final)
+
+    expect(events).toEqual([
+      { type: 'text-delta', text: 'Hello' },
+      { type: 'tool-call', callId: 'call-1', name: 'remember', arguments: { text: 'fact' } },
+    ])
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ id: 'gpt-5.4' }), expect.anything(), expect.objectContaining({
+      transport: 'sse',
+      reasoningEffort: 'high',
+      serviceTier: 'priority',
+    }))
+  })
 })
 
 function createRuntime(
   login: (callbacks: AuthLoginCallbacks) => Promise<OAuthCredential>,
   getAuth = vi.fn(),
+  stream = vi.fn(),
 ): CodexPiAiRuntime {
   const model: Model<'openai-codex-responses'> = {
     id: 'gpt-5.4',
@@ -85,7 +125,7 @@ function createRuntime(
       auth: { oauth: { login } },
       getModels: () => [model],
     },
-    models: { getAuth },
+    models: { getAuth, stream },
   }
 }
 
@@ -117,4 +157,29 @@ function tokenWithPlan(planType: string): string {
     'https://api.openai.com/auth': { chatgpt_plan_type: planType },
   })).toString('base64url')
   return `header.${payload}.signature`
+}
+
+function assistantMessage(): AssistantMessage {
+  return {
+    role: 'assistant',
+    content: [],
+    api: 'openai-codex-responses',
+    provider: 'openai-codex',
+    model: 'gpt-5.4',
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: 'toolUse',
+    timestamp: 1,
+  }
+}
+
+async function* eventStream(events: AssistantMessageEvent[]): AsyncIterable<AssistantMessageEvent> {
+  for (const event of events)
+    yield event
 }

@@ -1,7 +1,18 @@
 // pi-ai의 Codex OAuth와 모델 API를 Neru 내부 계약으로 정규화합니다.
-import type { Api, AuthLoginCallbacks, CredentialStore, Model, OAuthCredential } from '@earendil-works/pi-ai'
+import type {
+  AssistantMessage,
+  AssistantMessageEvent,
+  AuthLoginCallbacks,
+  Context,
+  CredentialStore,
+  Message,
+  Model,
+  OAuthCredential,
+  Tool,
+} from '@earendil-works/pi-ai'
+import type { OpenAICodexResponsesOptions } from '@earendil-works/pi-ai/api/openai-codex-responses'
 
-import type { CodexModel } from '../../../shared/eventa/codex'
+import type { CodexJsonObject, CodexJsonValue, CodexModel } from '../../../shared/eventa/codex'
 
 import { Buffer } from 'node:buffer'
 
@@ -35,7 +46,22 @@ export interface CodexDirectClient {
   refresh: () => Promise<void>
   logout: () => Promise<void>
   listModels: () => Promise<CodexModel[]>
+  stream: (request: CodexDirectRequest, sink: (event: CodexDirectEvent) => void, signal: AbortSignal) => Promise<AssistantMessage>
 }
+
+export interface CodexDirectRequest {
+  model?: string
+  effort?: string
+  serviceTier?: string
+  sessionId: string
+  systemPrompt: string
+  messages: Message[]
+  tools: Tool[]
+}
+
+export type CodexDirectEvent
+  = | { type: 'text-delta', text: string }
+    | { type: 'tool-call', callId: string, name: string, arguments: CodexJsonObject }
 
 interface CodexOAuth {
   login: (callbacks: AuthLoginCallbacks) => Promise<OAuthCredential>
@@ -45,10 +71,15 @@ export interface CodexPiAiRuntime {
   provider: {
     id: string
     auth: { oauth?: CodexOAuth }
-    getModels: () => readonly Model<Api>[]
+    getModels: () => readonly Model<'openai-codex-responses'>[]
   }
   models: {
-    getAuth: (model: Model<Api>) => Promise<unknown>
+    getAuth: (model: Model<'openai-codex-responses'>) => Promise<unknown>
+    stream: (
+      model: Model<'openai-codex-responses'>,
+      context: Context,
+      options: OpenAICodexResponsesOptions,
+    ) => AsyncIterable<AssistantMessageEvent>
   }
 }
 
@@ -107,8 +138,45 @@ export function createCodexDirectClient(deps: CodexDirectClientDeps): CodexDirec
         id: model.id,
         name: model.name,
         supportedReasoningEfforts: getSupportedThinkingLevels(model).map(value => ({ value, label: value })),
-        serviceTiers: [],
+        serviceTiers: ['auto', 'fast'],
       }))
+    },
+    async stream(request, sink, signal) {
+      const model = selectModel(runtime.provider.getModels(), request.model)
+      let finalMessage: AssistantMessage | undefined
+      const events = runtime.models.stream(model, {
+        systemPrompt: request.systemPrompt,
+        messages: request.messages,
+        tools: request.tools,
+      }, {
+        signal,
+        transport: 'sse',
+        sessionId: request.sessionId,
+        reasoningEffort: toReasoningEffort(request.effort),
+        serviceTier: toServiceTier(request.serviceTier),
+      })
+      for await (const event of events) {
+        if (event.type === 'text_delta') {
+          sink({ type: 'text-delta', text: event.delta })
+        }
+        else if (event.type === 'toolcall_end') {
+          sink({
+            type: 'tool-call',
+            callId: event.toolCall.id,
+            name: event.toolCall.name,
+            arguments: toJsonObject(event.toolCall.arguments) ?? {},
+          })
+        }
+        else if (event.type === 'done') {
+          finalMessage = event.message
+        }
+        else if (event.type === 'error') {
+          throw new Error(event.error.errorMessage ?? 'Codex response failed.')
+        }
+      }
+      if (finalMessage === undefined)
+        throw new Error('Codex response ended without a completion.')
+      return finalMessage
     },
   }
 }
@@ -117,7 +185,65 @@ function createPiAiRuntime(credentials: CredentialStore): CodexPiAiRuntime {
   const models = createModels({ credentials })
   const provider = openaiCodexProvider()
   models.setProvider(provider)
-  return { models, provider }
+  return {
+    provider,
+    models: {
+      getAuth: model => models.getAuth(model),
+      stream: (model, context, options) => models.stream(model, context, options),
+    },
+  }
+}
+
+function selectModel(
+  models: readonly Model<'openai-codex-responses'>[],
+  requestedId: string | undefined,
+): Model<'openai-codex-responses'> {
+  const model = models.find(candidate => candidate.id === requestedId)
+    ?? models.find(candidate => candidate.id === 'gpt-5.4')
+    ?? models[0]
+  if (model === undefined)
+    throw new Error('No Codex model is available.')
+  return model
+}
+
+function toReasoningEffort(value: string | undefined): OpenAICodexResponsesOptions['reasoningEffort'] {
+  if (value === 'off')
+    return 'none'
+  if (value === 'none' || value === 'minimal' || value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh')
+    return value
+  return undefined
+}
+
+function toServiceTier(value: string | undefined): OpenAICodexResponsesOptions['serviceTier'] {
+  if (value === 'fast')
+    return 'priority'
+  if (value === 'auto' || value === 'default' || value === 'flex' || value === 'priority')
+    return value
+  return undefined
+}
+
+function toJsonValue(value: unknown): CodexJsonValue | undefined {
+  if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string')
+    return value
+  if (Array.isArray(value)) {
+    const entries = value.map(toJsonValue)
+    return entries.every(entry => entry !== undefined) ? entries as CodexJsonValue[] : undefined
+  }
+  if (!isRecord(value))
+    return undefined
+  const result: Record<string, CodexJsonValue> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    const jsonEntry = toJsonValue(entry)
+    if (jsonEntry === undefined)
+      return undefined
+    result[key] = jsonEntry
+  }
+  return result
+}
+
+function toJsonObject(value: unknown): CodexJsonObject | undefined {
+  const json = toJsonValue(value)
+  return isRecord(json) ? json as CodexJsonObject : undefined
 }
 
 function accountFromCredential(credential: OAuthCredential): CodexAccount {
