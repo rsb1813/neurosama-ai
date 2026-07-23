@@ -2,7 +2,6 @@
 import type { AssistantMessage, Message, Tool, ToolResultMessage, Usage } from '@earendil-works/pi-ai'
 
 import type {
-  CodexApprovalDecision,
   CodexBridgeEvent,
   CodexConversationMessage,
   CodexJsonValue,
@@ -12,7 +11,6 @@ import type {
 import type { CodexDirectClient, CodexDirectEvent, CodexDirectRequest } from './direct-client'
 
 export type {
-  CodexApprovalDecision,
   CodexBridgeEvent,
   CodexDynamicToolDescriptor,
   CodexToolResult,
@@ -25,10 +23,9 @@ export interface CodexTurnRuntimeDeps {
 }
 
 export interface CodexTurnRuntime {
-  startTurn: (request: CodexTurnRequest, sink: (event: CodexBridgeEvent) => void) => Promise<{ threadId: string }>
+  startTurn: (request: CodexTurnRequest, sink: (event: CodexBridgeEvent) => void) => Promise<void>
   interrupt: (streamId: string) => Promise<void>
   resolveToolCall: (callId: string, result: CodexToolResult) => void
-  resolveApproval: (requestId: string, decision: CodexApprovalDecision) => void
 }
 
 interface ActiveStream {
@@ -55,7 +52,7 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
   async function startTurn(
     request: CodexTurnRequest,
     sink: (event: CodexBridgeEvent) => void,
-  ): Promise<{ threadId: string }> {
+  ): Promise<void> {
     if (streams.has(request.streamId))
       throw new Error('Codex stream is already active.')
 
@@ -65,8 +62,6 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
       pendingCallIds: new Set(),
       sink,
     }
-    const threadId = request.streamId
-    const turnId = request.streamId
     const messages = conversationMessages(request.messages, request.overrides.model, now)
     streams.set(request.streamId, active)
 
@@ -75,13 +70,13 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
         const calls: PendingToolCall[] = []
         const directRequest = createDirectRequest(request, messages)
         const assistant = await deps.client.stream(directRequest, (event) => {
-          handleDirectEvent(active, event, calls, threadId, turnId)
+          handleDirectEvent(active, event, calls)
         }, active.abort.signal)
         messages.push(assistant)
 
         if (calls.length === 0) {
-          sink({ type: 'finish', streamId: request.streamId, threadId, turnId })
-          return { threadId }
+          sink({ type: 'finish', streamId: request.streamId })
+          return
         }
 
         const results = await Promise.all(calls.map(call => call.promise))
@@ -96,10 +91,10 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
     }
     catch {
       if (active.abort.signal.aborted) {
-        sink({ type: 'interrupted', streamId: request.streamId, threadId, turnId })
-        return { threadId }
+        sink({ type: 'interrupted', streamId: request.streamId })
+        return
       }
-      sink({ type: 'error', streamId: request.streamId, threadId, turnId, message: 'Codex turn failed.' })
+      sink({ type: 'error', streamId: request.streamId, message: 'Codex turn failed.' })
       throw new Error('Codex turn failed.')
     }
     finally {
@@ -111,11 +106,9 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
     active: ActiveStream,
     event: CodexDirectEvent,
     calls: PendingToolCall[],
-    threadId: string,
-    turnId: string,
   ): void {
     if (event.type === 'text-delta') {
-      active.sink({ type: 'text-delta', streamId: active.streamId, threadId, turnId, text: event.text })
+      active.sink({ type: 'text-delta', streamId: active.streamId, text: event.text })
       return
     }
     if (pendingToolCalls.has(event.callId))
@@ -135,8 +128,6 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
     active.sink({
       type: 'tool-call-request',
       streamId: active.streamId,
-      threadId,
-      turnId,
       callId: event.callId,
       tool: event.name,
       arguments: event.arguments,
@@ -160,10 +151,6 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
     pending.resolve(result)
   }
 
-  function resolveApproval(_requestId: string, _decision: CodexApprovalDecision): void {
-    // 직접 Responses 경로에는 app-server 승인 요청이 없습니다.
-  }
-
   function cleanupStream(active: ActiveStream): void {
     streams.delete(active.streamId)
     rejectPending(active, new Error('Codex stream ended before the tool result arrived.'))
@@ -179,7 +166,7 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
     }
   }
 
-  return { startTurn, interrupt, resolveToolCall, resolveApproval }
+  return { startTurn, interrupt, resolveToolCall }
 }
 
 function createDirectRequest(request: CodexTurnRequest, messages: Message[]): CodexDirectRequest {

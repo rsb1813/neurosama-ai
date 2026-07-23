@@ -17,7 +17,7 @@ import { errorMessageFrom } from '@moeru/std'
 import { registerLlmTransport } from '@proj-airi/stage-ui/stores/llm-transports'
 
 export interface CodexBridgeDeps {
-  startTurn: (request: CodexTurnRequest) => Promise<{ threadId: string }>
+  startTurn: (request: CodexTurnRequest) => Promise<void>
   interruptTurn: (payload: { streamId: string }) => Promise<void>
   resolveToolCall: (payload: CodexToolCallResolution) => Promise<void>
   onEvent: (handler: (event: CodexBridgeEvent) => void | Promise<void>) => () => void
@@ -183,9 +183,6 @@ export function initializeCodexBridge(deps: CodexBridgeDeps): { transport: LlmTr
       else if (event.type === 'error') {
         await request.options.onStreamEvent?.({ type: 'error', error: new Error(event.message) })
         rejectTerminal(new Error(event.message))
-      }
-      else if (event.type === 'thread-resume-failed') {
-        rejectTerminal(new Error('Codex thread could not be resumed.'))
       }
     })
 

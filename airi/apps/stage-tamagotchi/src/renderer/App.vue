@@ -25,7 +25,6 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 
-import CodexApprovalDialog from './components/CodexApprovalDialog.vue'
 import ResizeHandler from './components/ResizeHandler.vue'
 
 import {
@@ -44,7 +43,6 @@ import {
   codexInterruptTurn,
   codexListModels,
   codexLogout,
-  codexResolveApproval,
   codexResolveToolCall,
   codexStartDeviceLogin,
   codexStartTurn,
@@ -70,7 +68,6 @@ import { initializeElectronAuthCallbackBridge } from './bridges/electron-auth-ca
 import { initializeStageThreeRuntimeTraceBridge } from './bridges/stage-three-runtime-trace'
 import { useLanguage } from './composables/use-language'
 import { createChatSyncWindowLifecycle, resolveInitialChatSyncRoutePath } from './stores/chat-sync-lifecycle'
-import { useCodexApprovalsStore } from './stores/codex-approvals'
 import { useTamagotchiMcpToolsStore } from './stores/mcp-tools'
 import { useTamagotchiPluginToolsStore } from './stores/plugin-tools'
 import { useServerChannelSettingsStore } from './stores/settings/server-channel'
@@ -105,7 +102,6 @@ function createFullStageRuntime() {
   const stageWindowLifecycleStore = useStageWindowLifecycleStore()
   const settingsAudioDeviceStore = useSettingsAudioDevice()
   const codexAccountStore = useCodexAccountStore()
-  const codexApprovalsStore = useCodexApprovalsStore()
   const artistryStore = useArtistryStore()
   const { activeProvider, artistryGlobals, activeModel, defaultPromptPrefix, providerOptions } = storeToRefs(artistryStore)
   const getServerChannelConfig = useElectronEventaInvoke(electronGetServerChannelConfig)
@@ -128,7 +124,6 @@ function createFullStageRuntime() {
   const logoutCodex = useElectronEventaInvoke(codexLogout)
   const interruptCodexTurn = useElectronEventaInvoke(codexInterruptTurn)
   const resolveCodexToolCall = useElectronEventaInvoke(codexResolveToolCall)
-  const resolveCodexApproval = useElectronEventaInvoke(codexResolveApproval)
   const isAuxiliaryChatRoute = initialWindowRoutePath === '/chat'
   const isGodotStageRoute = () => route.path === '/' || route.path.startsWith('/settings')
   const isWidgetsWindowRoute = () => route.path === '/widgets'
@@ -145,11 +140,6 @@ function createFullStageRuntime() {
       })
       return typeof dispose === 'function' ? dispose : () => {}
     },
-  })
-  codexApprovalsStore.setBridge(payload => resolveCodexApproval(payload))
-  context.value.on(codexBridgeEvent, (event) => {
-    if (event.body?.type === 'approval-request')
-      codexApprovalsStore.enqueue(event.body)
   })
   const codexBridge = initializeCodexBridge({
     startTurn: payload => startCodexTurn(payload),
@@ -374,7 +364,6 @@ onUnmounted(() => {
     <Toaster />
   </ToasterRoot>
   <ResizeHandler v-if="!isSpotlightWindowRoute" />
-  <CodexApprovalDialog />
   <RouterView />
 </template>
 

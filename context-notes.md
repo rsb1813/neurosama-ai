@@ -347,3 +347,11 @@
 - app-server 전용 작업 디렉터리·샌드박스·파일·명령 권한 UI는 직접 전송의 지원 계약이 확인되지 않았으므로 제거한다. Neru 자체 도구의 권한과 승인은 유지한다.
 - 직접 OAuth와 전송은 OpenClaw 및 Codex 오픈소스 구현과의 호환 계약이다. 공개적으로 안정 문서화된 외부 표면은 app-server이므로, 프로토콜 변경 시 재로그인을 요구하고 API 키나 CLI 토큰으로 자동 대체하지 않는다.
 - 구현 계획은 OpenClaw 전체 런타임 대신 `@earendil-works/pi-ai`의 좁은 OpenAI Codex OAuth·Responses 클라이언트를 Electron main 어댑터 뒤에 둔다. 이 선택은 CLI·app-server 의존성을 없애면서 토큰 갱신과 스트리밍 프로토콜 복제를 줄인다.
+
+### 구현 결과
+
+- Device OAuth 콜백과 Responses 스트림은 Electron main 안에서만 실행한다. OAuth 자격 증명 파일 전체를 Electron `safeStorage`로 암호화하고 임시 파일 교체와 직렬화된 갱신으로 저장한다.
+- renderer는 현재 AIRI 시스템 지침, 전체 JSON 안전 대화 이력, 함수 도구 설명만 Eventa로 전달한다. OAuth 토큰과 원시 인증 응답은 renderer 경계를 통과하지 않는다.
+- 기존 Codex CLI 검사, app-server 자식 프로세스, JSON-RPC, thread 저장, app-server 승인 화면과 실행 옵션을 제거했다. 직접 경로의 함수 도구는 기존 AIRI 도구 실행 경계를 그대로 사용한다.
+- 모델과 성격 변경은 사용자 요청에 따라 별도 후속 작업으로 남겼다. 현재 구현은 설정된 모델과 동적 시스템 지침을 보존하며, 모델 미설정 시에만 직접 클라이언트의 호환 기본값을 사용한다.
+- Codex main/renderer 집중 테스트 24개와 stage-ui 관련 테스트 4개, 대상 ESLint, 문서 diff 검사를 통과했다. 전체 Electron 타입 검사는 오프라인 설치 뒤 생성되지 않은 AIRI 워크스페이스 패키지 선언 때문에 실패했지만, 변경한 Codex 파일로 좁힌 출력에는 새 타입 오류가 없었다. 실제 계정으로 새 Device OAuth 로그인과 라이브 응답은 앱 실행 후 별도로 확인해야 한다.

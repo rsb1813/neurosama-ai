@@ -3,7 +3,6 @@ import type { createContext } from '@moeru/eventa/adapters/electron/main'
 import type { BrowserWindow } from 'electron'
 
 import type {
-  CodexApprovalDecision,
   CodexBridgeEvent,
   CodexModel,
   CodexRuntimeStatus,
@@ -22,7 +21,6 @@ import {
   codexInterruptTurn,
   codexListModels,
   codexLogout,
-  codexResolveApproval,
   codexResolveToolCall,
   codexStartDeviceLogin,
   codexStartTurn,
@@ -39,14 +37,13 @@ export interface CodexController {
   startDeviceLogin: () => ReturnType<CodexManager['startDeviceLogin']>
   cancelLogin: (loginId: string) => ReturnType<CodexManager['cancelLogin']>
   logout: () => ReturnType<CodexManager['logout']>
-  startTurn: (request: CodexTurnRequest, sink: (event: CodexBridgeEvent) => void) => Promise<{ threadId: string }>
+  startTurn: (request: CodexTurnRequest, sink: (event: CodexBridgeEvent) => void) => Promise<void>
   interrupt: (streamId: string) => Promise<void>
   resolveToolCall: (callId: string, result: CodexToolResult) => void
-  resolveApproval: (requestId: string, decision: CodexApprovalDecision) => void
   stop: () => Promise<void>
 }
 
-/** 하나의 app-server manager를 여러 Electron 창의 Eventa context에 안전하게 연결한다. */
+/** 하나의 직접 OAuth manager를 여러 Electron 창의 Eventa context에 안전하게 연결합니다. */
 export function createCodexController(params: { client: CodexDirectClient, manager: CodexManager }): CodexController {
   const contexts = new Set<EventaContext>()
   const runtime = createCodexTurnRuntime({ client: params.client })
@@ -72,7 +69,6 @@ export function createCodexController(params: { client: CodexDirectClient, manag
     startTurn: (request, sink) => runtime.startTurn(request, sink),
     interrupt: streamId => runtime.interrupt(streamId),
     resolveToolCall: (callId, result) => runtime.resolveToolCall(callId, result),
-    resolveApproval: (requestId, decision) => runtime.resolveApproval(requestId, decision),
     stop: () => {
       stopPromise ??= Promise.resolve()
         .then(() => params.manager.stop())
@@ -113,7 +109,6 @@ export function createCodexService(params: { context: EventaContext, controller:
       startTurn: codexStartTurn,
       interruptTurn: codexInterruptTurn,
       resolveToolCall: codexResolveToolCall,
-      resolveApproval: codexResolveApproval,
     },
     {
       getStatus: () => params.controller.getStatus(),
@@ -135,7 +130,6 @@ export function createCodexService(params: { context: EventaContext, controller:
       },
       interruptTurn: payload => params.controller.interrupt(payload.streamId),
       resolveToolCall: payload => params.controller.resolveToolCall(payload.callId, payload.result),
-      resolveApproval: payload => params.controller.resolveApproval(payload.requestId, payload.decision),
     },
   )
 

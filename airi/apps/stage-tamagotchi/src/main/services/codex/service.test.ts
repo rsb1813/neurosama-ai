@@ -1,7 +1,7 @@
 // Codex Eventa 서비스의 창별 바인딩과 단일 controller 수명을 검증한다.
 import type { createContext } from '@moeru/eventa/adapters/electron/main'
 
-import type { CodexApprovalDecision, CodexBridgeEvent, CodexRuntimeStatus, CodexToolResult, CodexTurnRequest } from '../../../shared/eventa/codex'
+import type { CodexBridgeEvent, CodexRuntimeStatus, CodexToolResult, CodexTurnRequest } from '../../../shared/eventa/codex'
 import type { CodexDirectClient } from './direct-client'
 import type { CodexManager } from './manager'
 
@@ -34,10 +34,9 @@ interface CodexInvokeHandlers {
   startDeviceLogin: () => Promise<{ loginId: string, verificationUrl: string, userCode: string, type: 'chatgptDeviceCode', expiresAt: number }>
   cancelDeviceLogin: (payload: { loginId: string }) => Promise<void>
   logout: () => Promise<void>
-  startTurn: (payload: CodexTurnRequest) => Promise<{ threadId: string }>
+  startTurn: (payload: CodexTurnRequest) => Promise<void>
   interruptTurn: (payload: { streamId: string }) => Promise<void>
   resolveToolCall: (payload: { callId: string, result: CodexToolResult }) => void
-  resolveApproval: (payload: { requestId: string, decision: CodexApprovalDecision }) => void
 }
 
 interface ServiceHarness {
@@ -56,7 +55,6 @@ interface ServiceHarness {
   }
   runtime: {
     interrupt: ReturnType<typeof vi.fn>
-    resolveApproval: ReturnType<typeof vi.fn>
     resolveToolCall: ReturnType<typeof vi.fn>
     startTurn: ReturnType<typeof vi.fn>
   }
@@ -114,9 +112,8 @@ function createHarness(): ServiceHarness {
   } as unknown as CodexDirectClient
   const runtime = {
     interrupt: vi.fn(async () => {}),
-    resolveApproval: vi.fn(),
     resolveToolCall: vi.fn(),
-    startTurn: vi.fn(async () => ({ threadId: 'thread-1' })),
+    startTurn: vi.fn(async () => {}),
   }
   createCodexTurnRuntimeMock.mockReturnValue(runtime)
   const controller = createCodexController({ client, manager })
@@ -183,20 +180,17 @@ describe('codex Eventa service', () => {
     expect(harness.clientSpies.listModels).toHaveBeenCalledOnce()
   })
 
-  it('routes turn, interrupt, tool result and approval decision invokes to the shared runtime', async () => {
+  it('routes turn, interrupt and tool result invokes to the shared runtime', async () => {
     const harness = createHarness()
     const toolResult: CodexToolResult = { success: true, text: 'done' }
-    const approval: CodexApprovalDecision = { type: 'acceptForSession' }
 
     await harness.handlers.startTurn(turnRequest)
     await harness.handlers.interruptTurn({ streamId: 'stream-1' })
     harness.handlers.resolveToolCall({ callId: 'call-1', result: toolResult })
-    harness.handlers.resolveApproval({ requestId: 'approval-1', decision: approval })
 
     expect(harness.runtime.startTurn).toHaveBeenCalledOnce()
     expect(harness.runtime.interrupt).toHaveBeenCalledWith('stream-1')
     expect(harness.runtime.resolveToolCall).toHaveBeenCalledWith('call-1', toolResult)
-    expect(harness.runtime.resolveApproval).toHaveBeenCalledWith('approval-1', approval)
   })
 
   it('emits a turn bridge event only to the context that started the turn', async () => {
@@ -210,11 +204,10 @@ describe('codex Eventa service', () => {
     let sink: ((event: CodexBridgeEvent) => void) | undefined
     harness.runtime.startTurn.mockImplementationOnce(async (_request: CodexTurnRequest, nextSink: (event: CodexBridgeEvent) => void) => {
       sink = nextSink
-      return { threadId: 'thread-1' }
     })
 
     await firstHandlers.startTurn(turnRequest)
-    sink?.({ type: 'text-delta', streamId: 'stream-1', threadId: 'thread-1', turnId: 'turn-1', text: 'Hi' })
+    sink?.({ type: 'text-delta', streamId: 'stream-1', text: 'Hi' })
 
     expect(first.emit).toHaveBeenCalledOnce()
     expect(second.emit).not.toHaveBeenCalled()

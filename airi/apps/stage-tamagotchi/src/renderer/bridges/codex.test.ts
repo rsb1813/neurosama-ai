@@ -10,7 +10,7 @@ import { initializeCodexBridge } from './codex'
 
 function createHarness(runtimeOverrides: CodexRuntimeOverrides = { model: 'gpt-5.4', effort: 'high' }) {
   let handler: ((event: CodexBridgeEvent) => void | Promise<void>) | undefined
-  const startTurn = vi.fn(async (_request: CodexTurnRequest) => ({ threadId: 'local-stream' }))
+  const startTurn = vi.fn(async (_request: CodexTurnRequest) => {})
   const resolveToolCall = vi.fn(async () => {})
   const onStreamEvent = vi.fn(async () => {})
   const interruptTurn = vi.fn(async () => {})
@@ -75,7 +75,7 @@ describe('codex renderer bridge', () => {
     expect(request).not.toHaveProperty('userInput')
     expect(localStorage.getItem('neru/codex/thread-ids')).toBeNull()
 
-    await harness.emit({ type: 'finish', streamId: request.streamId, threadId: request.streamId, turnId: request.streamId })
+    await harness.emit({ type: 'finish', streamId: request.streamId })
     await stream
     expect(harness.onStreamEvent).toHaveBeenCalledWith({ type: 'finish', finishReason: 'stop' })
   })
@@ -96,8 +96,8 @@ describe('codex renderer bridge', () => {
 
     await vi.waitFor(() => expect(harness.startTurn).toHaveBeenCalledOnce())
     const request = harness.startTurn.mock.calls[0][0]
-    await harness.emit({ type: 'tool-call-request', streamId: request.streamId, threadId: request.streamId, turnId: request.streamId, callId: 'call-1', tool: 'remember', arguments: { text: 'x' } })
-    await harness.emit({ type: 'finish', streamId: request.streamId, threadId: request.streamId, turnId: request.streamId })
+    await harness.emit({ type: 'tool-call-request', streamId: request.streamId, callId: 'call-1', tool: 'remember', arguments: { text: 'x' } })
+    await harness.emit({ type: 'finish', streamId: request.streamId })
     await stream
 
     expect(tool.execute).toHaveBeenCalledWith({ text: 'x' }, expect.any(Object))
@@ -108,7 +108,6 @@ describe('codex renderer bridge', () => {
     const harness = createHarness()
     harness.startTurn.mockImplementation(async (request) => {
       structuredClone(request)
-      return { threadId: request.streamId }
     })
     const tool = {
       function: {
@@ -128,7 +127,7 @@ describe('codex renderer bridge', () => {
 
     await vi.waitFor(() => expect(harness.startTurn).toHaveBeenCalledOnce())
     const request = harness.startTurn.mock.calls[0][0]
-    await harness.emit({ type: 'finish', streamId: request.streamId, threadId: request.streamId, turnId: request.streamId })
+    await harness.emit({ type: 'finish', streamId: request.streamId })
     await expect(stream).resolves.toBeUndefined()
   })
 
@@ -147,7 +146,7 @@ describe('codex renderer bridge', () => {
     await vi.waitFor(() => expect(harness.startTurn).toHaveBeenCalledOnce())
     expect(harness.interruptTurn).toHaveBeenCalledOnce()
     const request = harness.startTurn.mock.calls[0][0]
-    await harness.emit({ type: 'interrupted', streamId: request.streamId, threadId: request.streamId, turnId: request.streamId })
+    await harness.emit({ type: 'interrupted', streamId: request.streamId })
     await stream
   })
 })
