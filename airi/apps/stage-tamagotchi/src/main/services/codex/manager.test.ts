@@ -50,6 +50,18 @@ describe('createCodexManager', () => {
     expect(harness.client.logout).toHaveBeenCalledOnce()
     expect(manager.getStatus()).toMatchObject({ connection: 'disconnected', authMode: null, planType: null })
   })
+
+  it('returns the existing device code when the settings renderer reconnects', async () => {
+    const harness = createHarness()
+    const manager = createCodexManager({ client: harness.client, createLoginId: () => 'login-1', openExternal: vi.fn(async () => {}) })
+
+    const firstLogin = manager.startDeviceLogin()
+    harness.publishDeviceCode()
+    const expected = await firstLogin
+
+    await expect(manager.startDeviceLogin()).resolves.toEqual(expected)
+    expect(harness.client.loginDevice).toHaveBeenCalledOnce()
+  })
 })
 
 function createHarness(initialAccount?: CodexAccount) {

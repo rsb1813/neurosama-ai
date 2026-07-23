@@ -81,6 +81,28 @@ describe('codex account store', () => {
     expect(store.loginStarting).toBe(false)
   })
 
+  it('restores the pending device code when the renderer reconnects', async () => {
+    const store = useCodexAccountStore()
+    const startDeviceLogin = vi.fn(async () => ({
+      loginId: 'login-1',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      userCode: 'ABCD-EFGH',
+      expiresAt: Date.now() + 900_000,
+      type: 'chatgptDeviceCode' as const,
+    }))
+    store.setBridge({
+      getStatus: async () => ({ connection: 'disconnected', authMode: null, planType: null, login: 'pending' }),
+      listModels: async () => [],
+      startDeviceLogin,
+      cancelDeviceLogin: vi.fn(async () => {}),
+      logout: vi.fn(async () => {}),
+      onStatus: () => () => {},
+    })
+
+    await vi.waitFor(() => expect(store.login?.userCode).toBe('ABCD-EFGH'))
+    expect(startDeviceLogin).toHaveBeenCalledOnce()
+  })
+
   it('keeps only model, effort, and service tier runtime overrides', () => {
     localStorage.setItem('neru/codex/runtime-overrides', JSON.stringify({
       model: 'gpt-5.4',

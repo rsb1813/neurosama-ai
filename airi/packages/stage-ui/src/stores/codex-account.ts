@@ -77,7 +77,11 @@ export const useCodexAccountStore = defineStore('codex-account', () => {
       applyStatus({ ...unknownStatus })
       return
     }
-    void next.getStatus().then(applyStatus).catch(error => applyStatus({ ...unknownStatus, error: errorMessageFrom(error) ?? String(error) }))
+    void next.getStatus().then(async (nextStatus) => {
+      applyStatus(nextStatus)
+      if (nextStatus.login === 'pending')
+        await startLogin()
+    }).catch(error => applyStatus({ ...unknownStatus, error: errorMessageFrom(error) ?? String(error) }))
   }
 
   async function startLogin() {

@@ -26,6 +26,7 @@ export interface CodexManager {
 interface ActiveLogin {
   id: string
   abort: AbortController
+  code: Promise<CodexDeviceLogin>
   codePublished: boolean
   resolveCode: (login: CodexDeviceLogin) => void
   rejectCode: (error: Error) => void
@@ -91,7 +92,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
 
   function startDeviceLogin(): Promise<CodexDeviceLogin> {
     if (activeLogin !== undefined)
-      throw new Error('Device sign-in is already in progress.')
+      return activeLogin.code
 
     const id = createLoginId()
     const abort = new AbortController()
@@ -101,7 +102,7 @@ export function createCodexManager(deps: CodexManagerDeps): CodexManager {
       resolveCode = resolve
       rejectCode = reject
     })
-    const login: ActiveLogin = { id, abort, codePublished: false, resolveCode, rejectCode }
+    const login: ActiveLogin = { id, abort, code, codePublished: false, resolveCode, rejectCode }
     activeLogin = login
     updateStatus({ ...status, login: 'pending', error: undefined })
 

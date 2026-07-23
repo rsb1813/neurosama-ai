@@ -365,3 +365,7 @@
 - manager에 주입한 Electron `shell.openExternal`을 기기 코드 공개 직후 호출하도록 구현했고, renderer에는 코드 발급 전 `loginStarting` 상태를 추가했다.
 - manager 집중 테스트 2개, stage-ui 계정 저장소 테스트 3개, 변경 파일 ESLint가 통과했다. 앱은 변경된 Electron main 프로세스로 재시작했으며 실제 브라우저 창 생성은 사용자의 다음 로그인 클릭으로 확인한다.
 - app-server 승인 저장소 제거 뒤 `App.vue` 정리 경로에 남아 있던 미정의 `codexApprovalsStore` 호출도 제거했다.
+- 실제 로그인 중 설정 renderer가 새 프로세스로 생성된 뒤 화면에서 기기 코드가 사라졌다. manager는 진행 중 로그인을 유지하지만 renderer의 `account.login`은 메모리 상태라 재생성 시 소실되는 것이 원인이다.
+- `startDeviceLogin`을 진행 중 로그인에 대해 멱등화하고, 새 renderer가 `pending` 상태를 읽으면 같은 로그인 코드를 다시 받아 화면을 복구해야 한다.
+- manager가 진행 중 코드 Promise를 보관해 재호출에 반환하고, 새 renderer는 `getStatus()`가 `pending`이면 `startLogin()`으로 같은 코드를 복구하도록 구현했다.
+- manager 테스트 3개와 stage-ui 계정 테스트 4개, 대상 ESLint가 통과했다.
