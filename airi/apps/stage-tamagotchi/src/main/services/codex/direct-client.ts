@@ -243,7 +243,9 @@ function toReasoningEffort(value: string | undefined): OpenAICodexResponsesOptio
 function toServiceTier(value: string | undefined): OpenAICodexResponsesOptions['serviceTier'] {
   if (value === 'fast')
     return 'priority'
-  if (value === 'auto' || value === 'default' || value === 'flex' || value === 'priority')
+  if (value === 'auto')
+    return undefined
+  if (value === 'default' || value === 'flex' || value === 'priority')
     return value
   return undefined
 }

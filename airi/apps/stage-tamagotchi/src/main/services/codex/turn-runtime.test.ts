@@ -56,6 +56,24 @@ describe('createCodexTurnRuntime', () => {
     expect(events.at(-1)).toMatchObject({ type: 'interrupted' })
     expect(events.some(event => event.type === 'error')).toBe(false)
   })
+
+  it('preserves the underlying Codex error message for diagnosis', async () => {
+    const client = createBaseClient()
+    client.stream = vi.fn(async () => {
+      throw new Error('Requested model is unavailable.')
+    })
+    const events: CodexBridgeEvent[] = []
+    const runtime = createCodexTurnRuntime({ client })
+
+    await expect(
+      runtime.startTurn(request(), event => events.push(event)),
+    ).rejects.toThrow('Requested model is unavailable.')
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      message: 'Requested model is unavailable.',
+    })
+  })
 })
 
 function createHarness(eventBatches: CodexDirectEvent[][]) {

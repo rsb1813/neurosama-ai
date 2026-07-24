@@ -10,6 +10,8 @@ import type {
 } from '../../../shared/eventa/codex'
 import type { CodexDirectClient, CodexDirectEvent, CodexDirectRequest } from './direct-client'
 
+import { errorMessageFrom } from '@moeru/std'
+
 export type {
   CodexBridgeEvent,
   CodexDynamicToolDescriptor,
@@ -89,13 +91,14 @@ export function createCodexTurnRuntime(deps: CodexTurnRuntimeDeps): CodexTurnRun
         }
       }
     }
-    catch {
+    catch (error) {
       if (active.abort.signal.aborted) {
         sink({ type: 'interrupted', streamId: request.streamId })
         return
       }
-      sink({ type: 'error', streamId: request.streamId, message: 'Codex turn failed.' })
-      throw new Error('Codex turn failed.')
+      const message = errorMessageFrom(error) ?? 'Codex turn failed.'
+      sink({ type: 'error', streamId: request.streamId, message })
+      throw new Error(message)
     }
     finally {
       cleanupStream(active)

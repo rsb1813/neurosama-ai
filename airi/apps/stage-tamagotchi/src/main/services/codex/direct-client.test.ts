@@ -101,6 +101,24 @@ describe('createCodexDirectClient', () => {
     }))
   })
 
+  it('omits the service tier when the UI selects auto', async () => {
+    const stream = vi.fn(() => eventStream([
+      { type: 'done', reason: 'stop', message: assistantMessage() },
+    ]))
+    const client = createCodexDirectClient({
+      credentials: createMemoryCredentialStore(),
+      runtime: createRuntime(vi.fn(), vi.fn(), stream),
+    })
+
+    await client.stream(request({ serviceTier: 'auto' }), vi.fn(), new AbortController().signal)
+
+    expect(stream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ serviceTier: undefined }),
+    )
+  })
+
   it('refreshes remote models once and streams with the selected remote model', async () => {
     const credentials = createMemoryCredentialStore()
     await credentials.modify('openai-codex', async () => credential(tokenWithAccountAndPlan('account-1', 'pro')))

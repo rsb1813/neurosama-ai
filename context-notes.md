@@ -388,6 +388,20 @@
 - stage-tamagotchi 집중 테스트 7개와 stage-ui store 테스트 5개, 변경 파일 ESLint가 통과했다. stage-tamagotchi 타입 검사는 이번 변경 파일 오류 없이 기존 `@proj-airi/server-schema` 누락과 `CodexRuntimeStatus`의 `reauthenticationRequired` 상태 타입 불일치에서 실패했다.
 - 실제 계정에서 Terra가 표시되고 응답하는지는 변경된 Electron 앱을 재시작한 뒤 수동 검증해야 한다.
 
+## Codex turn 실패 복구 결정 (2026-07-24)
+
+- renderer에 표시되던 `Codex turn failed.`는 `turn-runtime.ts`가 하위 오류를 무조건 일반 문구로 교체해서 발생한 진단 손실이었다.
+- turn runtime은 취소가 아닌 실패의 원본 메시지를 Eventa 오류 이벤트와 예외에 보존한다. 메시지를 얻을 수 없는 값에만 기존 일반 문구를 사용한다.
+- 수정된 오류 전달로 실제 서버 응답 `Unsupported service_tier: auto`를 확인했다.
+- UI의 `auto`는 명시적인 서버 티어가 아니라 기본 동작을 뜻하므로 Codex Responses 요청에서는 `serviceTier`를 생략한다. `fast`는 기존처럼 `priority`로 변환한다.
+- 이 결정은 서비스 티어 기본값을 강제하지 않는다는 기존 사용자 결정과 일치한다.
+
+### 검증 결과
+
+- Codex main 집중 테스트 6파일 25개와 변경 파일 ESLint, `git diff --check`가 통과했다.
+- 수정된 Electron 앱에서 기존 `안녕?` 요청을 다시 처리해 실제 응답을 수신했다.
+- 전체 워크스페이스 타입 검사는 기존 다수 오류에 더해 새 테스트의 mock 추론 오류 1건을 드러냈고, 새 오류는 assertion 형태를 수정해 제거했다. 전체 타입 검사는 패키지 필터가 적용되지 않아 기존 306개 오류 때문에 여전히 실패한다.
+
 ## 자동 발화 1회 및 쓰레기통 새 세션 결정 (2026-07-24)
 
 - 직접 Codex 전송은 서버의 이전 thread를 재사용하지 않지만, 현재 AIRI 세션의 전체 채팅 이력을 매 요청에 전달한다.
