@@ -255,7 +255,7 @@ async function handleToolCallRerun(payload: { message: ChatHistoryItem, index: n
 
 async function handleCleanupMessages() {
   const messageCount = messages.value.filter(message => message.role !== 'system').length
-  await chatSyncStore.requestCleanup()
+  await chatSyncStore.requestNewSession(chatSession.activeSessionId)
   trackChatMessagesCleared({
     source: 'chat_controls',
     message_count: messageCount,

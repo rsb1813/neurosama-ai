@@ -23,7 +23,8 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - **Web search — MERGED** via PR #26. A self-hosted SearXNG JSON API is accessed through a main-process IPC service, avoiding renderer-to-localhost CORS; the builtin `webSearch` LLM tool is always on and degrades gracefully when search is unavailable. Manual runtime verification succeeded.
 
 **Local work awaiting integration:**
-- **Proactive speech (#3)** on `feat/neru-proactive-speech` at `3e3b8c4`. Implementation and automated verification are complete: 26 tests and three package typechecks passed in the Claude session. Remaining gate: restart the app, wait 45 seconds idle, verify spontaneous speech, verify no more than two unanswered nudges, then send a user message and verify it resets the counter. After that, push and open a PR.
+- **Direct Codex OAuth** on `codex/direct-codex-oauth`. Neru now performs Device OAuth and Codex Responses streaming directly from Electron main, stores the credential with Windows user-scope encryption, carries the full AIRI conversation and function tools, and no longer requires the Codex CLI or app-server. The model refresh button now fetches the account-specific remote Codex catalog once and uses the selected remote model for the live stream; opening settings no longer fetches automatically. This branch also limits unanswered proactive speech to one turn and makes the desktop chat trash button permanently replace the current session with a fresh one. Automated focused tests are complete; restarted-app behavior remains to be verified before integration.
+- **Proactive speech (#3)** on `feat/neru-proactive-speech` at `3e3b8c4`. The implementation was integrated into the direct OAuth branch, where the unanswered default was reduced from two turns to one. Remaining gate: restart the app, wait 45 seconds idle, verify exactly one spontaneous speech turn without further repetition, then send a user message and verify it resets the counter.
 
 **Key Decisions:**
 - Audio setup = headphones → no AEC needed for barge-in MVP.
@@ -40,6 +41,7 @@ Single system = vendored Project AIRI fork (`airi/`). GPU voice tech in `airi/se
 - **Memory lost-update is guarded only for a single writer window**: the `remember` tool serializes read-modify-write on a renderer module-level promise chain, and the main-process write is serialized too — but that prevents *file corruption*, not *cross-window lost-update*. Fine for today's single chat window; if a second window ever writes MEMORY.md, move the append into the main process (atomic read-append-write) or the last writer will silently clobber the other's bullet.
 
 **Next Steps:**
-1. Validate proactive speech at runtime, then push `feat/neru-proactive-speech` and open its PR: after an app restart, wait 45 seconds idle for spontaneous speech, confirm at most two unanswered nudges, and confirm a user message resets the counter.
-2. Human: manual mic verification of barge-in (headphones): speak while neru talks → audio stops ~300ms; speak while thinking → generation cancels; speak while idle → normal turn.
-3. Later: bilingual persistence gap fix, caption overlay, cross-window expression panel, or #4 chat integration.
+1. Run `codex/direct-codex-oauth`, complete a fresh Device OAuth login, and verify one normal response plus one `remember` tool call before integration.
+2. Validate proactive speech and fresh-session cleanup at runtime: after an app restart, wait 45 seconds idle for one spontaneous speech turn, confirm no second unanswered turn occurs, send a user message and confirm the counter resets, then press the chat trash button and confirm the prior conversation does not reappear.
+3. Human: manual mic verification of barge-in (headphones): speak while neru talks → audio stops ~300ms; speak while thinking → generation cancels; speak while idle → normal turn.
+4. Later: bilingual persistence gap fix, caption overlay, cross-window expression panel, or #4 chat integration.

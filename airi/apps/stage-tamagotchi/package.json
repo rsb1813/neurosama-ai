@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@date-fns/utc": "catalog:",
+    "@earendil-works/pi-ai": "catalog:",
     "@fontsource-variable/comfortaa": "catalog:",
     "@fontsource-variable/dm-sans": "catalog:",
     "@fontsource-variable/jura": "catalog:",

@@ -336,3 +336,87 @@
 - 기존 문자열 thread 저장값은 resume하지 않고, 다음 성공 요청에서 서명된 객체 형식으로 자동 교체한다.
 - bridge 집중 테스트 9개, stage-ui LLM 회귀 테스트 31개, stage-tamagotchi `vue-tsc --noEmit`이 통과했다.
 - 대상 ESLint에는 이번 변경으로 추가된 오류가 없고, 테스트 파일에 작업 전부터 있던 `style/max-statements-per-line`과 `test/prefer-lowercase-title` 오류 2개만 남아 있다.
+
+## Neru 직접 Codex OAuth 전환 결정 (2026-07-23)
+
+- 사용자는 기존 `codex app-server` 자식 프로세스 방식이 아니라 OpenClaw처럼 Neru가 직접 Device OAuth와 Codex 요청을 처리하는 방식을 명시적으로 선택했다.
+- `codex-oauth` 제공자 ID와 설정 진입점은 유지하고, Codex CLI 설치·버전·`auth.json`·app-server JSON-RPC에는 의존하지 않는다.
+- OAuth 토큰은 Electron main 프로세스의 Windows 사용자 범위 암호화 저장소에만 보관한다. renderer, Pinia, Eventa IPC, 평문 파일, 로그에는 토큰이나 OAuth 응답 본문을 전달하지 않는다.
+- 기존 CLI 로그인은 가져오지 않는다. 전환 뒤에는 Neru에서 새로 Device OAuth 로그인을 수행한다.
+- Character 프롬프트, 스트리밍, `remember`를 포함한 함수 도구, 사용자 승인, 취소는 직접 전송 경로에서도 보존해야 한다.
+- app-server 전용 작업 디렉터리·샌드박스·파일·명령 권한 UI는 직접 전송의 지원 계약이 확인되지 않았으므로 제거한다. Neru 자체 도구의 권한과 승인은 유지한다.
+- 직접 OAuth와 전송은 OpenClaw 및 Codex 오픈소스 구현과의 호환 계약이다. 공개적으로 안정 문서화된 외부 표면은 app-server이므로, 프로토콜 변경 시 재로그인을 요구하고 API 키나 CLI 토큰으로 자동 대체하지 않는다.
+- 구현 계획은 OpenClaw 전체 런타임 대신 `@earendil-works/pi-ai`의 좁은 OpenAI Codex OAuth·Responses 클라이언트를 Electron main 어댑터 뒤에 둔다. 이 선택은 CLI·app-server 의존성을 없애면서 토큰 갱신과 스트리밍 프로토콜 복제를 줄인다.
+
+### 구현 결과
+
+- Device OAuth 콜백과 Responses 스트림은 Electron main 안에서만 실행한다. OAuth 자격 증명 파일 전체를 Electron `safeStorage`로 암호화하고 임시 파일 교체와 직렬화된 갱신으로 저장한다.
+- renderer는 현재 AIRI 시스템 지침, 전체 JSON 안전 대화 이력, 함수 도구 설명만 Eventa로 전달한다. OAuth 토큰과 원시 인증 응답은 renderer 경계를 통과하지 않는다.
+- 기존 Codex CLI 검사, app-server 자식 프로세스, JSON-RPC, thread 저장, app-server 승인 화면과 실행 옵션을 제거했다. 직접 경로의 함수 도구는 기존 AIRI 도구 실행 경계를 그대로 사용한다.
+- 모델과 성격 변경은 사용자 요청에 따라 별도 후속 작업으로 남겼다. 현재 구현은 설정된 모델과 동적 시스템 지침을 보존하며, 모델 미설정 시에만 직접 클라이언트의 호환 기본값을 사용한다.
+- Codex main/renderer 집중 테스트 24개와 stage-ui 관련 테스트 4개, 대상 ESLint, 문서 diff 검사를 통과했다. 전체 Electron 타입 검사는 오프라인 설치 뒤 생성되지 않은 AIRI 워크스페이스 패키지 선언 때문에 실패했지만, 변경한 Codex 파일로 좁힌 출력에는 새 타입 오류가 없었다. 실제 계정으로 새 Device OAuth 로그인과 라이브 응답은 앱 실행 후 별도로 확인해야 한다.
+
+## Device OAuth 브라우저 열기 결함 (2026-07-23)
+
+- 로그인 버튼 클릭 뒤 Electron main 프로세스의 외부 HTTPS 연결은 확인됐지만 새 브라우저 창은 생성되지 않았다.
+- 현재 구현은 기기 코드를 renderer에 반환할 뿐 `shell.openExternal` 같은 브라우저 열기 부작용을 소유하지 않는다.
+- 기기 코드가 발급되면 Electron main에서 공식 검증 URL을 기본 브라우저로 열고, renderer는 코드 발급 전에도 로그인 준비 중 상태를 즉시 보여 주도록 한다.
+- 브라우저에서의 사용자 코드 입력과 계정 승인은 사용자가 직접 수행한다.
+- manager에 주입한 Electron `shell.openExternal`을 기기 코드 공개 직후 호출하도록 구현했고, renderer에는 코드 발급 전 `loginStarting` 상태를 추가했다.
+- manager 집중 테스트 2개, stage-ui 계정 저장소 테스트 3개, 변경 파일 ESLint가 통과했다. 앱은 변경된 Electron main 프로세스로 재시작했으며 실제 브라우저 창 생성은 사용자의 다음 로그인 클릭으로 확인한다.
+- app-server 승인 저장소 제거 뒤 `App.vue` 정리 경로에 남아 있던 미정의 `codexApprovalsStore` 호출도 제거했다.
+- 실제 로그인 중 설정 renderer가 새 프로세스로 생성된 뒤 화면에서 기기 코드가 사라졌다. manager는 진행 중 로그인을 유지하지만 renderer의 `account.login`은 메모리 상태라 재생성 시 소실되는 것이 원인이다.
+- `startDeviceLogin`을 진행 중 로그인에 대해 멱등화하고, 새 renderer가 `pending` 상태를 읽으면 같은 로그인 코드를 다시 받아 화면을 복구해야 한다.
+- manager가 진행 중 코드 Promise를 보관해 재호출에 반환하고, 새 renderer는 `getStatus()`가 `pending`이면 `startLogin()`으로 같은 코드를 복구하도록 구현했다.
+- manager 테스트 3개와 stage-ui 계정 테스트 4개, 대상 ESLint가 통과했다.
+
+## Codex 원격 모델 새로고침 결정 (2026-07-24)
+
+- `pi-ai` 0.80.2의 Codex 모델 목록은 정적이며 GPT-5.6 모델을 포함하지 않는다. 현재 `listModels()`는 이 목록을 그대로 반환하므로 계정 권한과 무관하게 Terra가 표시될 수 없다.
+- 공식 Codex 구현은 공급자 기본 URL 아래 `models?client_version=<version>`을 호출해 원격 카탈로그를 갱신한다. Neru도 같은 계정 전용 엔드포인트를 직접 OAuth 자격 증명으로 호출한다.
+- 최초 `client_version`은 공식 GPT-5.6 Codex 지원 최소 버전인 `0.144.0`으로 고정한다. 지원하지 않는 미래 계약을 받기 위해 임의의 높은 버전을 가장하지 않는다.
+- 사용자는 새로고침 버튼을 누를 때 한 번만 요청하는 동작을 선택했다. 백그라운드 폴링, 자동 주기 갱신, 디스크 캐시는 추가하지 않는다.
+- 원격 조회 실패 시 마지막 정상 목록을 보존한다. 토큰과 계정 ID는 Electron main 경계를 벗어나지 않으며 로그에도 기록하지 않는다.
+- 의존성 업데이트만으로 해결하면 목록이 다시 낡을 수 있고, CLI 또는 app-server를 사용하면 제거한 프로세스 의존성이 돌아오므로 직접 조회 방식을 선택했다.
+
+### 구현 및 자동 검증 결과
+
+- Electron main의 `remote-models.ts`가 OAuth bearer 토큰과 `chatgpt-account-id`로 원격 모델 카탈로그를 요청한다. renderer에는 정규화한 모델 ID, 이름, 지원 추론 강도와 서비스 티어만 반환한다.
+- 원격 응답의 `visibility: list` 모델만 허용하고 현재 `pi-ai` 전송기가 지원하지 않는 `max` 추론 강도는 제외한다. `none`은 런타임 `off`에 대응한다.
+- 성공한 원격 모델은 직접 Responses 스트림의 실제 모델 객체로 사용한다. 이후 새로고침이 실패해도 직전 정상 런타임 모델은 유지된다.
+- 설정 화면의 `onMounted` 모델 조회를 제거했다. 사용자가 `모델 새로고침` 버튼을 누를 때만 bridge 호출과 모델 엔드포인트 요청이 각각 한 번 발생한다.
+- stage-tamagotchi 집중 테스트 7개와 stage-ui store 테스트 5개, 변경 파일 ESLint가 통과했다. stage-tamagotchi 타입 검사는 이번 변경 파일 오류 없이 기존 `@proj-airi/server-schema` 누락과 `CodexRuntimeStatus`의 `reauthenticationRequired` 상태 타입 불일치에서 실패했다.
+- 실제 계정에서 Terra가 표시되고 응답하는지는 변경된 Electron 앱을 재시작한 뒤 수동 검증해야 한다.
+
+## Codex turn 실패 복구 결정 (2026-07-24)
+
+- renderer에 표시되던 `Codex turn failed.`는 `turn-runtime.ts`가 하위 오류를 무조건 일반 문구로 교체해서 발생한 진단 손실이었다.
+- turn runtime은 취소가 아닌 실패의 원본 메시지를 Eventa 오류 이벤트와 예외에 보존한다. 메시지를 얻을 수 없는 값에만 기존 일반 문구를 사용한다.
+- 수정된 오류 전달로 실제 서버 응답 `Unsupported service_tier: auto`를 확인했다.
+- UI의 `auto`는 명시적인 서버 티어가 아니라 기본 동작을 뜻하므로 Codex Responses 요청에서는 `serviceTier`를 생략한다. `fast`는 기존처럼 `priority`로 변환한다.
+- 이 결정은 서비스 티어 기본값을 강제하지 않는다는 기존 사용자 결정과 일치한다.
+
+### 검증 결과
+
+- Codex main 집중 테스트 6파일 25개와 변경 파일 ESLint, `git diff --check`가 통과했다.
+- 수정된 Electron 앱에서 기존 `안녕?` 요청을 다시 처리해 실제 응답을 수신했다.
+- 전체 워크스페이스 타입 검사는 기존 다수 오류에 더해 새 테스트의 mock 추론 오류 1건을 드러냈고, 새 오류는 assertion 형태를 수정해 제거했다. 전체 타입 검사는 패키지 필터가 적용되지 않아 기존 306개 오류 때문에 여전히 실패한다.
+
+## 자동 발화 1회 및 쓰레기통 새 세션 결정 (2026-07-24)
+
+- 직접 Codex 전송은 서버의 이전 thread를 재사용하지 않지만, 현재 AIRI 세션의 전체 채팅 이력을 매 요청에 전달한다.
+- IndexedDB에서 사용자 입력 없이 약 45초 간격으로 이어진 세 번의 자기소개 응답을 확인했다. 자동 발화 기본 연속 횟수 2가 반복을 허용하고 있었다.
+- 자동 발화는 사용자 입력 한 번 뒤 최대 한 번만 실행하며, 새 사용자 활동이 생겨야 다시 한 번 실행할 수 있다.
+- 쓰레기통 버튼은 메시지만 비우지 않고 현재 세션을 영구 삭제한 뒤 같은 캐릭터의 새 세션을 활성화한다. 성공 뒤 다른 과거 세션으로 자동 복귀하지 않는다.
+- 새 세션을 먼저 만들고 활성화한 뒤 이전 세션을 삭제한다. 새 세션 생성이 실패하면 기존 세션을 보존한다.
+- 멀티 윈도우에서는 follower가 명령만 보내고 authority가 세션 교체를 한 번 수행한다.
+- 시스템 프롬프트와 캐릭터 설정은 사용자가 별도로 교체할 예정이므로 이번 변경 범위에서 제외한다.
+
+### 구현 및 자동 검증 결과
+
+- 자동 발화 스케줄러의 생략 시 기본값을 1로 낮췄다. 사용자 활동이 기록되면 카운터가 초기화되어 다시 한 번 발화할 수 있다.
+- 세션 저장소의 `replaceSession`은 같은 캐릭터의 새 세션을 먼저 생성·활성화하고 이전 세션을 영구 삭제한다. 따라서 생성 실패 전에는 기존 세션을 삭제하지 않는다.
+- 데스크톱 쓰레기통 버튼은 `new-session` chat-sync 명령을 사용한다. follower 창에서는 authority가 세션 교체를 정확히 한 번 수행하고 완료 뒤 응답한다.
+- 모바일과 웹이 사용하는 기존 `cleanupMessages` API는 요청 범위 밖 회귀를 막기 위해 유지했다.
+- stage-ui 집중 테스트 11개와 stage-tamagotchi chat-sync 테스트 11개, 변경 파일 ESLint가 통과했다.
+- 두 패키지 타입 검사는 이번 변경과 무관한 기존 `@proj-airi/server-schema` 누락 1건과 `CodexRuntimeStatus`의 `reauthenticationRequired` 불일치 2건에서 실패했다.

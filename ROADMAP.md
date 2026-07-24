@@ -21,7 +21,8 @@ by a Live2D avatar.
 [Project AIRI](https://github.com/moeru-ai/airi) (avatar, chat, orchestration,
 subtitles) + neru's own local **GPU voice stack** (`airi/services/neru-audio`:
 Chatterbox TTS + faster-whisper STT, OpenAI-compatible) + a pre-existing local
-OpenAI-compatible **LLM proxy** at `localhost:3456` (not our code — we point at it).
+OpenAI-compatible **LLM proxy** at `localhost:3456` (not our code — we point at it),
+or an optional direct Codex Device OAuth connection handled by Electron main.
 
 Each numbered subproject below gets its own spec → plan → implementation cycle.
 We build **one vertical slice end-to-end, then expand**; the roadmap remains sequential while completed side capabilities are tracked independently.
@@ -88,6 +89,7 @@ Korean mic
 | TTS | ElevenLabs (cloud) | **Chatterbox**, local on RTX 5080 |
 | STT | faster-whisper (local) | faster-whisper large-v3 (kept), wrapped in `neru-audio` |
 | LLM | Claude cloud API | pre-existing **local OpenAI-compatible proxy** at `:3456` |
+| Optional Codex chat | not planned | direct Device OAuth + Responses streaming, with Windows user-scope encrypted credentials and no CLI dependency |
 | Voice/subtitle split | `{speech_en, subtitle_ko}` JSON fields | inline **`<ko>…</ko>`** markers parsed by the categoriser |
 | Packaging | Python `neru/` app | single **Electron** app (`airi/apps/stage-tamagotchi`) + `neru-audio` service |
 

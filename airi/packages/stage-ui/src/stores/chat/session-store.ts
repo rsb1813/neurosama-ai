@@ -423,6 +423,13 @@ export const useChatSessionStore = defineStore('chat-session', () => {
     return sessionId
   }
 
+  async function replaceSession(sessionId = activeSessionId.value) {
+    const characterId = sessionMetas.value[sessionId]?.characterId ?? getCurrentCharacterId()
+    const nextSessionId = await createSession(characterId, { setActive: true })
+    await deleteSession(sessionId)
+    return nextSessionId
+  }
+
   /**
    * Permanently remove a session from the local index + IDB and, when the
    * session is cloud-mapped and the user is signed in, soft-delete the
@@ -1440,6 +1447,7 @@ export const useChatSessionStore = defineStore('chat-session', () => {
     exportSessions,
     importSessions,
     createSession,
+    replaceSession,
     loadSession,
     deleteSession,
 

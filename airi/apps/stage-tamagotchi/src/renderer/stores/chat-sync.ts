@@ -88,7 +88,7 @@ type ChatSyncMessage
     | ChatCommandMessage<'spotlight-ingest', SpotlightIngestPayload>
     | ChatCommandMessage<'retry', RetryCommandPayload>
     | ChatCommandMessage<'tool-call-rerun', ToolCallRerunPayload<ToolsetId>>
-    | ChatCommandMessage<'cleanup', { sessionId?: string }>
+    | ChatCommandMessage<'new-session', { sessionId?: string }>
     | ChatCommandMessage<'delete-message', { sessionId?: string, messageId?: string, index?: number }>
     | ({ type: 'response', requestId: string, authorityId: string } & ChatResponsePayload)
 
@@ -184,7 +184,7 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
   const chatSession = useChatSessionStore()
   const chatStream = useChatStreamStore()
   const chatOrchestrator = useChatOrchestratorStore()
-  const { cleanupMessages } = useChatMaintenanceStore()
+  const { startNewSession } = useChatMaintenanceStore()
   const providersStore = useProvidersStore()
   const consciousnessStore = useConsciousnessStore()
   const { activeProvider, activeModel } = storeToRefs(consciousnessStore)
@@ -465,8 +465,8 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
         case 'tool-call-rerun':
           await executeToolCallRerunCommand(message.payload)
           break
-        case 'cleanup':
-          cleanupMessages(message.payload.sessionId)
+        case 'new-session':
+          await startNewSession(message.payload.sessionId)
           break
         case 'delete-message':
           executeDeleteMessage(message.payload)
@@ -677,9 +677,9 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
     })
   }
 
-  async function requestCleanup(sessionId?: string) {
+  async function requestNewSession(sessionId?: string) {
     if (mode.value === 'authority') {
-      cleanupMessages(sessionId)
+      await startNewSession(sessionId)
       return
     }
 
@@ -687,7 +687,7 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
       type: 'command',
       requestId: createRequestId(),
       senderId: instanceId,
-      command: 'cleanup',
+      command: 'new-session',
       payload: { sessionId },
     })
   }
@@ -725,7 +725,7 @@ export const useChatSyncStore = defineStore('stage-tamagotchi:chat-sync', () => 
     requestSpotlightIngest,
     requestRetry,
     requestToolCallRerun,
-    requestCleanup,
+    requestNewSession,
     requestDeleteMessage,
   }
 })

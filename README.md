@@ -54,7 +54,7 @@ rest is the AIRI fork.
 | `airi/` (Project AIRI fork) | Desktop app: avatar, chat UI, orchestration, subtitles | Vue 3 · Electron · pnpm monorepo |
 | `airi/services/neru-audio/` | OpenAI-compatible GPU voice gateway on `127.0.0.1:3457` | Python · FastAPI · Chatterbox TTS · faster-whisper STT |
 | Local LLM proxy (optional) | User-configured OpenAI-compatible chat endpoint | e.g. `localhost:3456` |
-| Codex (OAuth) (optional) | Desktop Codex app-server through Device OAuth | PATH `codex` CLI |
+| Codex (OAuth) (optional) | Direct Device OAuth and Codex Responses streaming | Electron main + encrypted local credential store |
 
 The desktop app (`airi/apps/stage-tamagotchi`, Electron) **auto-spawns** the
 gateway in development. LLM, STT, and TTS providers are selectable in Settings;
@@ -80,7 +80,7 @@ neurosama-ai/
 - Node.js + [pnpm](https://pnpm.io/) (the AIRI monorepo)
 - Python 3.11 + [uv](https://docs.astral.sh/uv/) (the gateway)
 - An NVIDIA GPU with CUDA (developed on an RTX 5080 / Blackwell, `torch 2.9.0+cu128`)
-- The local OpenAI-compatible LLM proxy running on `localhost:3456`
+- A configured chat provider, either the optional local OpenAI-compatible proxy or Codex (OAuth)
 
 **Run the desktop app** (from `airi/`):
 

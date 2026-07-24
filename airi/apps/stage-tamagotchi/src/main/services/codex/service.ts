@@ -3,13 +3,13 @@ import type { createContext } from '@moeru/eventa/adapters/electron/main'
 import type { BrowserWindow } from 'electron'
 
 import type {
-  CodexApprovalDecision,
   CodexBridgeEvent,
   CodexModel,
   CodexRuntimeStatus,
   CodexToolResult,
   CodexTurnRequest,
 } from '../../../shared/eventa/codex'
+import type { CodexDirectClient } from './direct-client'
 import type { CodexManager } from './manager'
 
 import { defineInvokeHandlers } from '@moeru/eventa'
@@ -21,7 +21,6 @@ import {
   codexInterruptTurn,
   codexListModels,
   codexLogout,
-  codexResolveApproval,
   codexResolveToolCall,
   codexStartDeviceLogin,
   codexStartTurn,
@@ -38,17 +37,16 @@ export interface CodexController {
   startDeviceLogin: () => ReturnType<CodexManager['startDeviceLogin']>
   cancelLogin: (loginId: string) => ReturnType<CodexManager['cancelLogin']>
   logout: () => ReturnType<CodexManager['logout']>
-  startTurn: (request: CodexTurnRequest, sink: (event: CodexBridgeEvent) => void) => Promise<{ threadId: string }>
+  startTurn: (request: CodexTurnRequest, sink: (event: CodexBridgeEvent) => void) => Promise<void>
   interrupt: (streamId: string) => Promise<void>
   resolveToolCall: (callId: string, result: CodexToolResult) => void
-  resolveApproval: (requestId: string, decision: CodexApprovalDecision) => void
   stop: () => Promise<void>
 }
 
-/** 하나의 app-server manager를 여러 Electron 창의 Eventa context에 안전하게 연결한다. */
-export function createCodexController(params: { manager: CodexManager }): CodexController {
+/** 하나의 직접 OAuth manager를 여러 Electron 창의 Eventa context에 안전하게 연결합니다. */
+export function createCodexController(params: { client: CodexDirectClient, manager: CodexManager }): CodexController {
   const contexts = new Set<EventaContext>()
-  const runtime = createCodexTurnRuntime({ manager: params.manager })
+  const runtime = createCodexTurnRuntime({ client: params.client })
   const removeStatusListener = params.manager.onStatusChange((status) => {
     for (const context of contexts)
       context.emit(codexStatusChanged, status)
@@ -63,10 +61,7 @@ export function createCodexController(params: { manager: CodexManager }): CodexC
     getStatus: () => params.manager.getStatus(),
     listModels: async () => {
       await params.manager.ensureStarted()
-      const rpc = params.manager.getRpc()
-      if (rpc === undefined)
-        throw new Error('Codex app-server is unavailable.')
-      return readModels(await rpc.request('model/list', {}))
+      return params.client.listModels()
     },
     startDeviceLogin: () => params.manager.startDeviceLogin(),
     cancelLogin: loginId => params.manager.cancelLogin(loginId),
@@ -74,7 +69,6 @@ export function createCodexController(params: { manager: CodexManager }): CodexC
     startTurn: (request, sink) => runtime.startTurn(request, sink),
     interrupt: streamId => runtime.interrupt(streamId),
     resolveToolCall: (callId, result) => runtime.resolveToolCall(callId, result),
-    resolveApproval: (requestId, decision) => runtime.resolveApproval(requestId, decision),
     stop: () => {
       stopPromise ??= Promise.resolve()
         .then(() => params.manager.stop())
@@ -115,7 +109,6 @@ export function createCodexService(params: { context: EventaContext, controller:
       startTurn: codexStartTurn,
       interruptTurn: codexInterruptTurn,
       resolveToolCall: codexResolveToolCall,
-      resolveApproval: codexResolveApproval,
     },
     {
       getStatus: () => params.controller.getStatus(),
@@ -137,50 +130,8 @@ export function createCodexService(params: { context: EventaContext, controller:
       },
       interruptTurn: payload => params.controller.interrupt(payload.streamId),
       resolveToolCall: payload => params.controller.resolveToolCall(payload.callId, payload.result),
-      resolveApproval: payload => params.controller.resolveApproval(payload.requestId, payload.decision),
     },
   )
 
   return { dispose }
-}
-
-function readModels(value: unknown): CodexModel[] {
-  if (!isRecord(value) || !Array.isArray(value.data))
-    return []
-
-  return value.data.flatMap((entry) => {
-    if (!isRecord(entry))
-      return []
-    const id = readText(entry.model) ?? readText(entry.id)
-    if (id === undefined)
-      return []
-
-    const efforts = Array.isArray(entry.supportedReasoningEfforts)
-      ? entry.supportedReasoningEfforts.flatMap((effort) => {
-          if (typeof effort === 'string')
-            return [{ value: effort, label: effort }]
-          if (!isRecord(effort))
-            return []
-          const value = readText(effort.reasoningEffort) ?? readText(effort.value)
-          return value === undefined ? [] : [{ value, label: readText(effort.description) ?? readText(effort.label) ?? value }]
-        })
-      : []
-    const serviceTiers = Array.isArray(entry.serviceTiers)
-      ? entry.serviceTiers.flatMap(tier => typeof tier === 'string' ? [tier] : isRecord(tier) ? [readText(tier.value) ?? readText(tier.id)].filter((item): item is string => item !== undefined) : [])
-      : []
-    return [{
-      id,
-      name: readText(entry.displayName) ?? readText(entry.name) ?? id,
-      supportedReasoningEfforts: efforts,
-      serviceTiers,
-    }]
-  })
-}
-
-function readText(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

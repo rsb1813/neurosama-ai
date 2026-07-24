@@ -6,8 +6,7 @@ import { reactive, ref, watch } from 'vue'
 import { useConsciousnessStore } from './modules/consciousness'
 
 export interface CodexAccountStatus {
-  cli: 'unknown' | 'supported' | 'unsupported'
-  process: 'stopped' | 'running'
+  connection: 'disconnected' | 'connected'
   authMode: string | null
   planType: string | null
   login: 'idle' | 'pending' | 'completed' | 'failed'
@@ -19,6 +18,7 @@ export interface CodexDeviceLogin {
   verificationUrl: string
   userCode: string
   type: 'chatgptDeviceCode'
+  expiresAt: number
 }
 
 export interface CodexAccountBridge {
@@ -41,17 +41,12 @@ export interface CodexRuntimeOverrides {
   model?: string
   effort?: string
   serviceTier?: string
-  cwd?: string
-  sandbox?: 'readOnly' | 'workspaceWrite' | 'dangerFullAccess'
-  approvalPolicy?: 'unlessTrusted' | 'onRequest' | 'never'
-  approvalsReviewer?: 'user' | 'auto_review'
 }
 
 const overridesStorageKey = 'neru/codex/runtime-overrides'
 
 const unknownStatus: CodexAccountStatus = {
-  cli: 'unknown',
-  process: 'stopped',
+  connection: 'disconnected',
   authMode: null,
   planType: null,
   login: 'idle',
@@ -60,6 +55,7 @@ const unknownStatus: CodexAccountStatus = {
 export const useCodexAccountStore = defineStore('codex-account', () => {
   const status = ref<CodexAccountStatus>({ ...unknownStatus })
   const login = ref<CodexDeviceLogin | null>(null)
+  const loginStarting = ref(false)
   const models = ref<CodexModel[]>([])
   const modelsLoading = ref(false)
   const modelsError = ref<string>()
@@ -81,14 +77,24 @@ export const useCodexAccountStore = defineStore('codex-account', () => {
       applyStatus({ ...unknownStatus })
       return
     }
-    void next.getStatus().then(applyStatus).catch(error => applyStatus({ ...unknownStatus, error: errorMessageFrom(error) ?? String(error) }))
+    void next.getStatus().then(async (nextStatus) => {
+      applyStatus(nextStatus)
+      if (nextStatus.login === 'pending')
+        await startLogin()
+    }).catch(error => applyStatus({ ...unknownStatus, error: errorMessageFrom(error) ?? String(error) }))
   }
 
   async function startLogin() {
     if (!bridge)
       throw new Error('Codex 계정 브리지가 준비되지 않았습니다.')
 
-    login.value = await bridge.startDeviceLogin()
+    loginStarting.value = true
+    try {
+      login.value = await bridge.startDeviceLogin()
+    }
+    finally {
+      loginStarting.value = false
+    }
   }
 
   async function cancelLogin() {
@@ -138,7 +144,7 @@ export const useCodexAccountStore = defineStore('codex-account', () => {
   }
 
   async function selectCodex() {
-    if (status.value.authMode !== 'chatgpt')
+    if (status.value.connection !== 'connected' || status.value.authMode !== 'chatgpt')
       throw new Error('ChatGPT 계정 로그인이 완료된 뒤 Codex를 선택할 수 있습니다.')
 
     const consciousness = useConsciousnessStore()
@@ -148,15 +154,27 @@ export const useCodexAccountStore = defineStore('codex-account', () => {
 
   watch(overrides, value => localStorage.setItem(overridesStorageKey, JSON.stringify(value)), { deep: true })
 
-  return { status, login, models, modelsLoading, modelsError, overrides, applyStatus, applyModels, refreshModels, setBridge, startLogin, cancelLogin, logout, selectCodex }
+  return { status, login, loginStarting, models, modelsLoading, modelsError, overrides, applyStatus, applyModels, refreshModels, setBridge, startLogin, cancelLogin, logout, selectCodex }
 })
 
 function readOverrides(): CodexRuntimeOverrides {
   try {
-    const value = JSON.parse(localStorage.getItem(overridesStorageKey) ?? '{}')
-    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {}
+    const value: unknown = JSON.parse(localStorage.getItem(overridesStorageKey) ?? '{}')
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+      return {}
+
+    const record = value as Record<string, unknown>
+    return {
+      model: readString(record.model),
+      effort: readString(record.effort),
+      serviceTier: readString(record.serviceTier),
+    }
   }
   catch {
     return {}
   }
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
 }

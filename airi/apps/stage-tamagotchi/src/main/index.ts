@@ -4,7 +4,7 @@ import type { FileLoggerHandle } from './app/file-logger'
 
 import process, { env, platform } from 'node:process'
 
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import messages from '@proj-airi/i18n/locales'
@@ -13,7 +13,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { Format, LogLevel, setGlobalFormat, setGlobalHookPostLog, setGlobalLogLevel, useLogg } from '@guiiai/logg'
 import { createContext } from '@moeru/eventa/adapters/electron/main'
 import { initScreenCaptureForMain } from '@proj-airi/electron-screen-capture/main'
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, safeStorage, shell } from 'electron'
 import { noop } from 'es-toolkit'
 import { createLoggLogger, injeca, lifecycle } from 'injeca'
 import { isLinux } from 'std-env'
@@ -35,6 +35,8 @@ import { setupBuiltInServer } from './services/airi/http-server'
 import { setupMcpStdioManager } from './services/airi/mcp-servers'
 import { setupExtensionHost } from './services/airi/plugins'
 import { setupArtistryBridge } from './services/airi/widgets/artistry-bridge'
+import { createCodexCredentialStore } from './services/codex/credential-store'
+import { createCodexDirectClient } from './services/codex/direct-client'
 import { createCodexManager } from './services/codex/manager'
 import { createCodexController } from './services/codex/service'
 import { setupAutoUpdater } from './services/electron/auto-updater'
@@ -174,11 +176,15 @@ app.whenReady().then(async () => {
   })
 
   const codexController = injeca.provide('services:codex-controller', () => {
-    const controller = createCodexController({
-      manager: createCodexManager({
-        appVersion: app.getVersion(),
-        workspaceRoot: process.cwd(),
+    const client = createCodexDirectClient({
+      credentials: createCodexCredentialStore({
+        filePath: join(app.getPath('userData'), 'neru-codex-oauth.bin'),
+        safeStorage,
       }),
+    })
+    const controller = createCodexController({
+      client,
+      manager: createCodexManager({ client, openExternal: url => shell.openExternal(url) }),
     })
     onAppBeforeQuit(() => controller.stop())
     return controller
