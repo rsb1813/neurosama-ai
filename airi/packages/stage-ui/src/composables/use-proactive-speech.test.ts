@@ -28,7 +28,7 @@ function fakeTimers() {
 function makeOpts(over: Partial<Parameters<typeof createProactiveScheduler>[0]> = {}) {
   const t = fakeTimers()
   const trigger = vi.fn(async () => {})
-  return { t, trigger, opts: { idleDelayMs: 1000, maxConsecutive: 2, enabled: true, isBusy: () => false, trigger, setTimer: t.setTimer, clearTimer: t.clearTimer, ...over } }
+  return { t, trigger, opts: { idleDelayMs: 1000, enabled: true, isBusy: () => false, trigger, setTimer: t.setTimer, clearTimer: t.clearTimer, ...over } }
 }
 
 // trigger()의 프로미스 체인(.catch().finally())이 settle되고 스케줄러가 arm()으로
@@ -72,6 +72,24 @@ describe('createProactiveScheduler', () => {
     t.fireLatest()
     await settle()
     expect(trigger).toHaveBeenCalledTimes(2)
+  })
+
+  it('defaults to one un-answered fire and resets after user activity', async () => {
+    const { t, trigger, opts } = makeOpts()
+    const c = createProactiveScheduler(opts)
+
+    t.fireLatest()
+    await settle()
+    expect(trigger).toHaveBeenCalledTimes(1)
+    expect(t.pending()).toBe(0)
+
+    c.recordUserActivity()
+    expect(t.pending()).toBe(1)
+
+    t.fireLatest()
+    await settle()
+    expect(trigger).toHaveBeenCalledTimes(2)
+    expect(t.pending()).toBe(0)
   })
 
   it('recordUserActivity resets the counter and re-enables firing', async () => {

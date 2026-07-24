@@ -294,3 +294,21 @@ describe('chat-session-store · loadSession vs concurrent deleteSession', () => 
     expect(store.sessionMetas['sess-1']).toBeUndefined()
   })
 })
+
+describe('chat-session-store · replaceSession', () => {
+  it('activates a fresh session before permanently deleting the current session', async () => {
+    const store = useChatSessionStore()
+    const oldSessionId = await store.createSession('default')
+    store.appendSessionMessage(oldSessionId, { role: 'assistant', content: 'old reply', id: 'old-message' } as any)
+
+    const newSessionId = await store.replaceSession(oldSessionId)
+
+    expect(newSessionId).not.toBe(oldSessionId)
+    expect(store.activeSessionId).toBe(newSessionId)
+    expect(store.sessionMetas[oldSessionId]).toBeUndefined()
+    expect(store.sessionMessages[oldSessionId]).toBeUndefined()
+    expect(store.getSessionMessages(newSessionId)).toHaveLength(1)
+    expect(store.getSessionMessages(newSessionId)[0]?.role).toBe('system')
+    expect(deleteSessionRepoMock).toHaveBeenCalledWith(oldSessionId)
+  })
+})

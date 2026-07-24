@@ -246,8 +246,8 @@ M-C·M-D(개별 TTS/STT 브릿지 서버 2개 계획)를 대체 — `airi/servic
 - [x] 반복 자기소개가 같은 채팅 세션의 자동 발화에서 발생함을 확인.
 - [x] 자동 발화 기본 1회와 현재 세션 영구 삭제 후 새 세션 생성 설계 승인.
 - [x] 설계 문서와 상세 구현 계획 작성.
-- [ ] 자동 발화 기본 1회 회귀 테스트 RED/GREEN.
-- [ ] 현재 세션 삭제 후 새 세션 활성화 회귀 테스트 RED/GREEN.
-- [ ] follower 요청이 authority에서 한 번만 실행되는 chat-sync 테스트 RED/GREEN.
-- [ ] 집중 테스트, ESLint, 타입 검사, diff 검증.
+- [x] 자동 발화 기본 1회 회귀 테스트 RED/GREEN.
+- [x] 현재 세션 삭제 후 새 세션 활성화 회귀 테스트 RED/GREEN.
+- [x] follower 요청이 authority에서 한 번만 실행되는 chat-sync 테스트 RED/GREEN.
+- [~] 집중 테스트 22개와 변경 파일 ESLint 통과. 타입 검사는 기존 `server-schema` 누락과 Codex 상태 타입 불일치에서 실패.
 - [ ] 재시작한 앱에서 수동 검증.

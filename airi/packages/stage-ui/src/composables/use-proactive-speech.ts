@@ -8,7 +8,7 @@ export const PROACTIVE_NUDGE = 'The room has gone quiet. Say something on your o
 export interface ProactiveSpeechOptions {
   /** 유휴 판정까지의 시간(ms). @default 45000 */
   idleDelayMs?: number
-  /** 무응답 연속 능동 발화 상한. @default 2 */
+  /** 무응답 연속 능동 발화 상한. @default 1 */
   maxConsecutive?: number
   /** 기능 on/off. @default true */
   enabled?: boolean
@@ -32,7 +32,7 @@ export interface ProactiveSpeechController {
 
 export function createProactiveScheduler(options: ProactiveSpeechOptions): ProactiveSpeechController {
   const idleDelayMs = options.idleDelayMs ?? 45000
-  const maxConsecutive = options.maxConsecutive ?? 2
+  const maxConsecutive = options.maxConsecutive ?? 1
   const enabled = options.enabled ?? true
   const setTimer = options.setTimer ?? ((cb, ms) => setTimeout(cb, ms))
   const clearTimer = options.clearTimer ?? (h => clearTimeout(h as ReturnType<typeof setTimeout>))

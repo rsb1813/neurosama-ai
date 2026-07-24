@@ -107,6 +107,7 @@ interface MockState {
   setSessionMessages: ReturnType<typeof vi.fn>
   getSessionMessages: ReturnType<typeof vi.fn>
   ingest: ReturnType<typeof vi.fn>
+  startNewSession: ReturnType<typeof vi.fn>
 }
 
 let mockState: MockState
@@ -142,7 +143,7 @@ vi.mock('@proj-airi/stage-ui/stores/chat', () => ({
 
 vi.mock('@proj-airi/stage-ui/stores/chat/maintenance', () => ({
   useChatMaintenanceStore: () => ({
-    cleanupMessages: vi.fn(),
+    startNewSession: mockState.startNewSession,
   }),
 }))
 
@@ -223,6 +224,7 @@ describe('useChatSyncStore', async () => {
     const ingest = vi.fn(async () => {
       throw new Error('Remote sent 403 response: {"error":{"message":"This model is not available in your region.","code":403}}')
     })
+    const startNewSession = vi.fn(async () => 'session-2')
 
     mockResolveLlmTools.mockReset()
     mockResolveLlmTools.mockResolvedValue([])
@@ -241,6 +243,7 @@ describe('useChatSyncStore', async () => {
       setSessionMessages,
       getSessionMessages,
       ingest,
+      startNewSession,
     }
 
     vi.stubGlobal('BroadcastChannel', MockBroadcastChannel)
@@ -492,6 +495,18 @@ describe('useChatSyncStore', async () => {
     expect(mockState.ingest).toHaveBeenCalledWith('hello spotlight', expect.objectContaining({
       tools: expect.any(Function),
     }), 'session-1')
+
+    authorityStore.dispose()
+    followerStore.dispose()
+  })
+
+  it('runs a follower new-session request exactly once in the authority window', async () => {
+    const { authorityStore, followerStore } = initializeAuthorityAndFollower()
+
+    await followerStore.requestNewSession('session-1')
+
+    expect(mockState.startNewSession).toHaveBeenCalledTimes(1)
+    expect(mockState.startNewSession).toHaveBeenCalledWith('session-1')
 
     authorityStore.dispose()
     followerStore.dispose()
